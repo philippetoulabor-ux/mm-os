@@ -3,6 +3,7 @@
 import { APPS, isDesktopAtDefaultLayout, webAssetAppId } from "@/lib/apps";
 import { webAssetManifest } from "@/lib/webAssetManifest";
 import { useDesktop } from "@/context/DesktopContext";
+import { NotesAppView } from "@/components/NotesAppView";
 
 function SettingsPanel() {
   const {
@@ -107,7 +108,7 @@ function FinderView() {
               <button
                 type="button"
                 onClick={() => openOrFocus(webAssetAppId(dir))}
-                className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-zinc-300 transition-colors hover:bg-white/10 hover:text-white"
+                className="flex w-full min-w-0 items-center gap-2 rounded-lg px-2 py-2 text-left text-zinc-300 transition-colors hover:bg-white/10 hover:text-white"
               >
                 <span aria-hidden>📁</span>
                 <span className="truncate">{dir}</span>
@@ -137,7 +138,7 @@ function AssetSubfolderView({ dir, basePath = "/web" }) {
             <li key={file}>
               <a
                 href={fileHref(basePath, dir, file)}
-                className="block rounded px-1 text-sky-400 hover:bg-white/10 hover:underline"
+                className="block min-w-0 truncate rounded px-1 py-0.5 text-sky-400 hover:bg-white/10 hover:underline"
                 target="_blank"
                 rel="noreferrer"
               >
@@ -154,20 +155,16 @@ function AssetSubfolderView({ dir, basePath = "/web" }) {
 export function AppContent({ appId }) {
   const app = APPS[appId];
   if (app?.assetDir) {
-    return <AssetSubfolderView dir={app.assetDir} basePath="/web" />;
+    return (
+      <AssetSubfolderView dir={app.assetDir} basePath="/web" />
+    );
   }
 
   switch (appId) {
     case "finder":
       return <FinderView />;
     case "notes":
-      return (
-        <textarea
-          className="h-full w-full resize-none bg-amber-50/95 p-4 text-sm text-zinc-800 outline-none placeholder:text-zinc-400"
-          placeholder="Type a note…"
-          defaultValue="Welcome to mm-os Notes.\n\nDouble-click icons or use the dock to open apps."
-        />
-      );
+      return <NotesAppView />;
     case "settings":
       return <SettingsPanel />;
     default:

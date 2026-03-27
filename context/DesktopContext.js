@@ -10,6 +10,7 @@ import {
   useState,
 } from "react";
 import { APPS, getDefaultDesktopIconPositions } from "@/lib/apps";
+import { getMentionToken } from "@/lib/noteRefs";
 
 /** Höhe des Site-Headers (kompaktes Logo + Padding); Näherung für Fenster-Layout */
 const SITE_HEADER_H = 180;
@@ -55,6 +56,10 @@ export function DesktopProvider({ children }) {
   );
   const skipDesktopIconPersist = useRef(true);
   const zCounter = useRef(20);
+  /** Ein Notiz-Dokument (Absätze durch \\n\\n); ältere Absätze werden in der UI durchgestrichen. */
+  const [notesText, setNotesText] = useState("");
+  /** Einmaliges Vorausfüllen der Notes-App (z. B. aus Finder „Notiz zu Ordner“). */
+  const [notesComposerPreset, setNotesComposerPreset] = useState(null);
 
   useEffect(() => {
     try {
@@ -206,7 +211,30 @@ export function DesktopProvider({ children }) {
   const MIN_WIN_W = 240;
   const MIN_WIN_H = 160;
 
-  /** Vollständiges Fenster-Rechteck; nötig für Resize an linker/obere Kante */
+  /** Hängt einen Absatz an (z. B. Schnellnotiz-Leiste); Referenz als @-Token. */
+  const appendNote = useCallback((body, { appId, fileName = null } = {}) => {
+    if (!appId) return;
+    const trimmed = typeof body === "string" ? body.trim() : "";
+    const mention = getMentionToken(appId, fileName);
+    const line = [trimmed, mention].filter(Boolean).join(" ");
+    if (!line) return;
+    setNotesText((prev) => (prev ? `${prev}\n\n${line}` : line));
+  }, []);
+
+  const presetNotesComposer = useCallback((appId, fileName = null) => {
+    if (!appId) return;
+    setNotesComposerPreset({ appId, fileName: fileName || null });
+  }, []);
+
+  const consumeNotesComposerPreset = useCallback(() => {
+    let taken = null;
+    setNotesComposerPreset((prev) => {
+      taken = prev;
+      return null;
+    });
+    return taken;
+  }, []);
+
   const setWindowBounds = useCallback((id, bounds) => {
     if (typeof window === "undefined") return;
     setWindows((prev) =>
@@ -239,6 +267,12 @@ export function DesktopProvider({ children }) {
       resetDesktopIconPositions,
       darkMode,
       setDarkMode,
+      notesText,
+      setNotesText,
+      appendNote,
+      presetNotesComposer,
+      consumeNotesComposerPreset,
+      notesComposerPreset,
       /** Fenster-Koordinaten beziehen sich auf den Desktop unter dem Header; min y ≈ 0 */
       menuBarHeight: 0,
       siteHeaderHeight: SITE_HEADER_H,
@@ -258,6 +292,12 @@ export function DesktopProvider({ children }) {
       resetDesktopIconPositions,
       darkMode,
       setDarkMode,
+      notesText,
+      setNotesText,
+      appendNote,
+      presetNotesComposer,
+      consumeNotesComposerPreset,
+      notesComposerPreset,
     ]
   );
 

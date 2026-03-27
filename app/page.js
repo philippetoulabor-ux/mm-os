@@ -3,8 +3,9 @@ import { DesktopShell } from "@/components/DesktopShell";
 export default function Home() {
   return (
     <div
+      className="mm-os-page-root"
       style={{
-        minHeight: "100dvh",
+        minHeight: "max(100dvh, 400px)",
         backgroundColor: "var(--mm-desktop-bg)",
       }}
     >

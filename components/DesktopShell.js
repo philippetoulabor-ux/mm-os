@@ -27,7 +27,7 @@ export function DesktopShell() {
     <DesktopProvider>
       {/* Inline-Höhe/-Farbe: funktioniert auch wenn Tailwind-Klassen nicht geladen werden; Flex statt Grid (weniger fragile JIT-Klassen) */}
       <div
-        className="flex h-[100dvh] min-h-0 w-full flex-col overflow-x-hidden"
+        className="flex min-h-0 w-full flex-1 flex-col overflow-x-hidden min-h-[max(100dvh,400px)]"
         style={{
           backgroundColor: "var(--mm-desktop-bg)",
           color: "var(--mm-shell-text)",

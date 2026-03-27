@@ -105,9 +105,6 @@ export function DesktopIcons() {
                 return;
               }
               setSelected(item.appId);
-            }}
-            onDoubleClick={() => {
-              if (blockClickRef.current) return;
               openOrFocus(item.appId);
             }}
           >

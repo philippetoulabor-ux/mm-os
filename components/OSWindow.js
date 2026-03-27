@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useDesktop } from "@/context/DesktopContext";
 import { AppContent } from "@/components/AppContent";
+import { APPS } from "@/lib/apps";
 
 export function OSWindow({ win }) {
   const {
@@ -10,9 +11,12 @@ export function OSWindow({ win }) {
     focusWindow,
     moveWindow,
     setWindowBounds,
+    openOrFocus,
     siteHeaderHeight,
     dockHeight,
   } = useDesktop();
+
+  const showNotesLauncher = win.appId !== "notes";
 
   const dragging = useRef(false);
   const dragOffset = useRef({ x: 0, y: 0 });
@@ -129,6 +133,11 @@ export function OSWindow({ win }) {
         default:
           return;
       }
+      // Oben nicht vergrößern: nur nach unten schmaler machen, nicht nach oben höher ziehen.
+      if (rs.edge === "n" || rs.edge === "ne" || rs.edge === "nw") {
+        if (nh > rs.startH) nh = rs.startH;
+        ny = rs.startWinY + rs.startH - nh;
+      }
       setWindowBounds(win.id, { x: nx, y: ny, w: nw, h: nh });
     };
     const onUp = () => {
@@ -180,7 +189,25 @@ export function OSWindow({ win }) {
         <span className="flex-1 select-none text-center text-xs font-medium text-zinc-300">
           {win.title}
         </span>
-        <span className="w-14 shrink-0" aria-hidden />
+        {showNotesLauncher ? (
+          <div className="flex w-14 shrink-0 items-center justify-end">
+            <button
+              type="button"
+              aria-label="Notes öffnen"
+              title="Notes"
+              className="flex h-7 w-7 items-center justify-center rounded-md text-lg leading-none text-zinc-200 transition-colors hover:bg-white/10 hover:text-white"
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                openOrFocus("notes");
+              }}
+            >
+              <span aria-hidden>{APPS.notes.icon}</span>
+            </button>
+          </div>
+        ) : (
+          <span className="w-14 shrink-0" aria-hidden />
+        )}
       </header>
       <div className="min-h-0 flex-1 overflow-hidden">
         <AppContent appId={win.appId} />
@@ -190,7 +217,7 @@ export function OSWindow({ win }) {
           <div
             role="separator"
             aria-orientation="horizontal"
-            className={`${edge} left-3 right-3 top-0 h-3 cursor-ns-resize`}
+            className={`${edge} left-3 right-3 top-0 h-3 cursor-n-resize`}
             onMouseDown={(e) => onResizeStart(e, "n")}
           />
           <div
@@ -212,12 +239,12 @@ export function OSWindow({ win }) {
             onMouseDown={(e) => onResizeStart(e, "e")}
           />
           <div
-            className={`${corner} left-0 top-0 cursor-nwse-resize`}
+            className={`${corner} left-0 top-0 cursor-nw-resize`}
             aria-hidden
             onMouseDown={(e) => onResizeStart(e, "nw")}
           />
           <div
-            className={`${corner} right-0 top-0 cursor-nesw-resize`}
+            className={`${corner} right-0 top-0 cursor-ne-resize`}
             aria-hidden
             onMouseDown={(e) => onResizeStart(e, "ne")}
           />
