@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { APPS, isDesktopAtDefaultLayout, webAssetAppId } from "@/lib/apps";
 import { webAssetManifest } from "@/lib/webAssetManifest";
 import { useDesktop } from "@/context/DesktopContext";
@@ -15,8 +15,11 @@ function SettingsPanel() {
     setDarkMode,
     resetDesktopIconPositions,
     desktopIconPositions,
+    windows,
+    closeAllTabs,
   } = useDesktop();
   const cleanUpDesktopActive = isDesktopAtDefaultLayout(desktopIconPositions);
+  const closeAllTabsActive = windows.length === 0;
 
   return (
     <div className="space-y-4 bg-white p-4 text-sm text-zinc-800">
@@ -62,6 +65,28 @@ function SettingsPanel() {
           />
         </button>
       </div>
+      <div className="flex items-center justify-between gap-4">
+        <span className="text-zinc-600">CloseAllTabs</span>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={closeAllTabsActive}
+          aria-label="CloseAllTabs"
+          onClick={() => closeAllTabs()}
+          className={`relative h-7 w-12 shrink-0 rounded-full transition-colors duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500 ${
+            closeAllTabsActive ? "bg-sky-600" : "bg-zinc-600"
+          }`}
+        >
+          <span
+            className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform duration-200 ${
+              closeAllTabsActive
+                ? "translate-x-[1.375rem]"
+                : "translate-x-0.5"
+            }`}
+            aria-hidden
+          />
+        </button>
+      </div>
     </div>
   );
 }
@@ -79,6 +104,71 @@ function fileIcon(name) {
 
 function fileHref(basePath, dir, file) {
   return `${basePath}/${encodeURIComponent(dir)}/${encodeURIComponent(file)}`;
+}
+
+function isPreviewImageFile(name) {
+  return /\.(jpg|jpeg|png|gif|webp)$/i.test(name);
+}
+
+function isPreviewVideoFile(name) {
+  return /\.(mov|mp4|webm)$/i.test(name);
+}
+
+/** Kleines Vorschaubild in der Ordnerliste (Bild/Video), sonst Typ-Emoji. */
+function AssetFileListThumb({ href, file }) {
+  const [imgFailed, setImgFailed] = useState(false);
+  const videoRef = useRef(null);
+
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v || !isPreviewVideoFile(file)) return;
+    const seek = () => {
+      try {
+        v.currentTime = 0.05;
+      } catch {
+        /* ignore */
+      }
+    };
+    v.addEventListener("loadeddata", seek);
+    return () => v.removeEventListener("loadeddata", seek);
+  }, [href, file]);
+
+  if (isPreviewImageFile(file) && !imgFailed) {
+    return (
+      <>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={href}
+          alt=""
+          className="h-11 w-11 shrink-0 rounded border border-zinc-200 object-cover dark:border-zinc-600"
+          onError={() => setImgFailed(true)}
+        />
+      </>
+    );
+  }
+
+  if (isPreviewVideoFile(file)) {
+    return (
+      <video
+        ref={videoRef}
+        src={href}
+        muted
+        playsInline
+        preload="metadata"
+        className="h-11 w-11 shrink-0 rounded border border-zinc-200 object-cover dark:border-zinc-600"
+        aria-hidden
+      />
+    );
+  }
+
+  return (
+    <span
+      className="flex h-11 w-11 shrink-0 items-center justify-center rounded border border-zinc-200 bg-zinc-100 text-lg leading-none dark:border-zinc-600 dark:bg-zinc-800"
+      aria-hidden
+    >
+      {fileIcon(file)}
+    </span>
+  );
 }
 
 /** Normalisierte Breite/Höhe nur fürs Seitenverhältnis (iframe ohne echte Intrinsic-Größe). */
@@ -247,9 +337,13 @@ function AssetSubfolderView({ dir, basePath = "/web" }) {
                 onClick={() =>
                   openAssetFileWindow({ dir, file, basePath })
                 }
-                className="block w-full min-w-0 truncate px-1 py-0.5 text-left text-zinc-900 underline decoration-zinc-400 hover:bg-zinc-100 hover:decoration-zinc-900"
+                className="flex w-full min-w-0 items-center gap-2 rounded px-1 py-1 text-left text-zinc-900 underline decoration-zinc-400 hover:bg-zinc-100 hover:decoration-zinc-900"
               >
-                {fileIcon(file)} {file}
+                <AssetFileListThumb
+                  href={fileHref(basePath, dir, file)}
+                  file={file}
+                />
+                <span className="min-w-0 truncate">{file}</span>
               </button>
             </li>
           ))}
@@ -284,7 +378,7 @@ export function AppContent({ appId, assetFile, windowId }) {
     case "notes":
       return <NotesAppView />;
     case "media":
-      return <MediaAppView windowId={windowId} />;
+      return <MediaAppView />;
     case "settings":
       return <SettingsPanel />;
     default:

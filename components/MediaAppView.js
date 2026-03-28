@@ -3,15 +3,11 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
-import { useDesktop } from "@/context/DesktopContext";
-
-/** Passt zu `w-64` / 16rem (Library-Breite in globals.css). */
-const LIBRARY_PANEL_PX = 256;
-
 /**
  * Pro Eintrag: `youtubePlaylistId` (?list=…) oder `videos: ["id1", …]`.
  * Wiedergabe: YouTube-Embed mit IFrame API (nur für Titelleiste, kein API-Key).
@@ -73,6 +69,8 @@ function embedUrlForEntry(entry, origin) {
 
 const YT_IFRAME_ID = "mm-wmp-yt-iframe";
 
+const MARQUEE_KF_STYLE_ID = "mm-wmp-title-marquee-keyframes";
+
 /** Sekunden: darüber → Zurück springt an den Anfang; darunter → vorheriges Video. */
 const SKIP_BACK_RESTART_SEC = 2.5;
 
@@ -110,25 +108,26 @@ function loadYoutubeIframeApi() {
   });
 }
 
-export function MediaAppView({ windowId }) {
+export function MediaAppView() {
   const [iframeLoaded, setIframeLoaded] = useState(false);
   const [apiOrigin, setApiOrigin] = useState("");
   const [playingTitle, setPlayingTitle] = useState("");
   const [isPlaying, setIsPlaying] = useState(false);
   const [playerReady, setPlayerReady] = useState(false);
+  const [titleNeedsMarquee, setTitleNeedsMarquee] = useState(false);
   const ytPlayerRef = useRef(null);
   const errorAutoSkipCountRef = useRef(0);
+  const nowPlayingClipRef = useRef(null);
+  const nowPlayingStaticRef = useRef(null);
+  const nowPlayingMarqueeRef = useRef(null);
+  const nowPlayingMarqueeSegRef = useRef(null);
+  const reduceMotionRef = useRef(false);
 
   const [playlistIndex, setPlaylistIndex] = useState(() => readPlaylistIndex());
 
   useEffect(() => {
     setApiOrigin(window.location.origin);
   }, []);
-
-  const { windows, setWindowBounds } = useDesktop();
-  const [libraryOpen, setLibraryOpen] = useState(false);
-  const [libraryCloseAnimating, setLibraryCloseAnimating] = useState(false);
-  const [libraryEnterAnim, setLibraryEnterAnim] = useState(false);
 
   const embedUrl = useMemo(
     () => embedUrlForEntry(PLAYLISTS[playlistIndex], apiOrigin || undefined),
@@ -140,8 +139,79 @@ export function MediaAppView({ windowId }) {
     setPlayingTitle("");
     setIsPlaying(false);
     setPlayerReady(false);
+    setTitleNeedsMarquee(false);
     errorAutoSkipCountRef.current = 0;
   }, [embedUrl]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const sync = () => {
+      reduceMotionRef.current = mq.matches;
+    };
+    sync();
+    const onChange = () => {
+      sync();
+      if (mq.matches) setTitleNeedsMarquee(false);
+    };
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+
+  useLayoutEffect(() => {
+    const clip = nowPlayingClipRef.current;
+    if (!clip || !playingTitle || reduceMotionRef.current) {
+      if (reduceMotionRef.current) setTitleNeedsMarquee(false);
+      return undefined;
+    }
+
+    const measure = () => {
+      if (!titleNeedsMarquee) {
+        const s = nowPlayingStaticRef.current;
+        if (s && s.scrollWidth > clip.clientWidth) setTitleNeedsMarquee(true);
+      } else {
+        const m = nowPlayingMarqueeSegRef.current;
+        if (m && m.scrollWidth <= clip.clientWidth) setTitleNeedsMarquee(false);
+      }
+    };
+
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(clip);
+    return () => ro.disconnect();
+  }, [playingTitle, titleNeedsMarquee]);
+
+  useLayoutEffect(() => {
+    const track = nowPlayingMarqueeRef.current;
+    const seg = nowPlayingMarqueeSegRef.current;
+    if (!titleNeedsMarquee || !track || !seg) return undefined;
+
+    const w = seg.offsetWidth;
+    const shiftPx = -w;
+    const pauseSec = 2;
+    const scrollSec = Math.min(40, Math.max(5, w / 28));
+    const totalSec = pauseSec + scrollSec;
+    const pausePct = (pauseSec / totalSec) * 100;
+
+    track.style.setProperty("--mm-wmp-marquee-duration", `${totalSec}s`);
+
+    let styleEl = document.getElementById(MARQUEE_KF_STYLE_ID);
+    if (!styleEl) {
+      styleEl = document.createElement("style");
+      styleEl.id = MARQUEE_KF_STYLE_ID;
+      document.head.appendChild(styleEl);
+    }
+    styleEl.textContent = `
+@keyframes mm-wmp-title-marquee {
+  0%, ${pausePct}% { transform: translateX(0); }
+  100% { transform: translateX(${shiftPx}px); }
+}
+`;
+
+    return () => {
+      track.style.removeProperty("--mm-wmp-marquee-duration");
+    };
+  }, [titleNeedsMarquee, playingTitle]);
 
   useEffect(() => {
     if (!embedUrl || !iframeLoaded) return undefined;
@@ -252,89 +322,41 @@ export function MediaAppView({ windowId }) {
     }
   }, [playlistIndex]);
 
-  const libraryDocked = libraryOpen || libraryCloseAnimating;
-
-  const openLibrary = useCallback(() => {
-    if (!windowId) return;
-    const win = windows.find((w) => w.id === windowId);
-    if (!win) return;
-    setWindowBounds(windowId, {
-      x: win.x,
-      y: win.y,
-      w: win.w + LIBRARY_PANEL_PX,
-      h: win.h,
-    });
-    setLibraryOpen(true);
-    setLibraryEnterAnim(true);
-  }, [windowId, windows, setWindowBounds]);
-
-  const startCloseLibrary = useCallback(() => {
-    setLibraryEnterAnim(false);
-    setLibraryCloseAnimating(true);
-    setLibraryOpen(false);
-  }, []);
-
-  const toggleLibrary = useCallback(() => {
-    if (libraryCloseAnimating) return;
-    if (!libraryOpen) openLibrary();
-    else startCloseLibrary();
-  }, [
-    libraryCloseAnimating,
-    libraryOpen,
-    openLibrary,
-    startCloseLibrary,
-  ]);
-
-  const onLibraryOpenAnimationEnd = useCallback(() => {
-    setLibraryEnterAnim(false);
-  }, []);
-
-  const onLibraryCloseTransitionEnd = useCallback(
-    (e) => {
-      if (!libraryCloseAnimating || !windowId) return;
-      if (e.target !== e.currentTarget) return;
-      if (e.propertyName !== "transform") return;
-      const win = windows.find((w) => w.id === windowId);
-      if (!win) {
-        setLibraryCloseAnimating(false);
-        return;
-      }
-      setWindowBounds(windowId, {
-        x: win.x,
-        y: win.y,
-        w: win.w - LIBRARY_PANEL_PX,
-        h: win.h,
-      });
-      setLibraryCloseAnimating(false);
-    },
-    [libraryCloseAnimating, windowId, windows, setWindowBounds]
-  );
-
-  const onPlaylistSelect = useCallback((e) => {
-    setPlaylistIndex(Number(e.target.value));
-  }, []);
-
   return (
     <div className="mm-wmp-shell">
-      <div className="mm-wmp-nav mm-wmp-nav--library-only">
-        <button
-          type="button"
-          className={`mm-wmp-tab ${libraryDocked ? "mm-wmp-tab-active" : ""}`}
-          onClick={toggleLibrary}
-          disabled={libraryCloseAnimating}
-          aria-expanded={libraryDocked}
-          aria-controls="mm-wmp-library-panel"
-          id="mm-wmp-library-trigger"
-        >
-          Library
-        </button>
-      </div>
-
       <div className="mm-wmp-main">
         <div className="mm-wmp-video-wrap relative flex min-h-0 min-w-0 flex-1 flex-col">
           {embedUrl ? (
             <div className="mm-wmp-now-playing" title={playingTitle || undefined}>
-              {playingTitle || "…"}
+              <div ref={nowPlayingClipRef} className="mm-wmp-now-playing__clip">
+                {titleNeedsMarquee ? (
+                  <div
+                    ref={nowPlayingMarqueeRef}
+                    className="mm-wmp-now-playing__marquee"
+                    aria-live="polite"
+                  >
+                    <span
+                      ref={nowPlayingMarqueeSegRef}
+                      className="mm-wmp-now-playing__marquee-seg"
+                    >
+                      {playingTitle}
+                    </span>
+                    <span
+                      className="mm-wmp-now-playing__marquee-seg"
+                      aria-hidden="true"
+                    >
+                      {playingTitle}
+                    </span>
+                  </div>
+                ) : (
+                  <span
+                    ref={nowPlayingStaticRef}
+                    className="mm-wmp-now-playing__static"
+                  >
+                    {playingTitle || "…"}
+                  </span>
+                )}
+              </div>
             </div>
           ) : null}
           <div className="relative min-h-0 flex-1">
@@ -399,51 +421,6 @@ export function MediaAppView({ windowId }) {
               </button>
             </div>
           ) : null}
-        </div>
-
-        <div
-          id="mm-wmp-library-panel"
-          role="region"
-          aria-labelledby="mm-wmp-library-trigger"
-          aria-hidden={!libraryDocked}
-          className="mm-wmp-library-rail"
-          data-docked={libraryDocked ? "true" : "false"}
-          data-closing={
-            libraryCloseAnimating && !libraryOpen ? "true" : "false"
-          }
-          data-enter={libraryEnterAnim ? "true" : "false"}
-        >
-          <aside
-            className="mm-wmp-library flex h-full min-h-0 flex-col gap-2"
-            onAnimationEnd={(e) => {
-              if (e.target !== e.currentTarget) return;
-              if (String(e.animationName || "").includes("mm-wmp-lib-in"))
-                onLibraryOpenAnimationEnd();
-            }}
-            onTransitionEnd={onLibraryCloseTransitionEnd}
-          >
-            <div>
-              <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-700">
-                Playlist
-              </div>
-              <select
-                className="mm-wmp-select"
-                value={playlistIndex}
-                onChange={onPlaylistSelect}
-                aria-label="Playlist auswählen"
-              >
-                {PLAYLISTS.map((p, i) => (
-                  <option key={p.label} value={i}>
-                    {p.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <p className="text-[10px] leading-snug text-slate-600">
-              Wiedergabe, Anfang/vorheriges und nächstes Video über die Leiste
-              unter dem Video.
-            </p>
-          </aside>
         </div>
       </div>
     </div>

@@ -188,7 +188,6 @@ body {
     inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
-/* Zeile: Video behält Breite, Fenster wächst nach rechts um die Library (siehe MediaAppView + setWindowBounds). */
 .mm-wmp-main {
   position: relative;
   display: flex;
@@ -256,20 +255,59 @@ body {
 
 .mm-wmp-now-playing {
   flex-shrink: 0;
-  padding: 5px 8px 6px;
+  min-width: 0;
+  padding: 8px 10px 10px;
   border-bottom: 1px solid rgba(0, 0, 0, 0.45);
   background: linear-gradient(
     180deg,
     rgba(255, 255, 255, 0.06) 0%,
     rgba(0, 0, 0, 0.2) 100%
   );
-  font-size: 11px;
-  line-height: 1.25;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: 0.01em;
   color: #dce6f2;
   text-shadow: 0 1px 0 rgba(0, 0, 0, 0.5);
-  white-space: nowrap;
+}
+
+.mm-wmp-now-playing__clip {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.mm-wmp-now-playing__static {
+  display: block;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mm-wmp-now-playing__marquee {
+  display: inline-flex;
+  flex-shrink: 0;
+  white-space: nowrap;
+  will-change: transform;
+  animation-name: mm-wmp-title-marquee;
+  animation-duration: var(--mm-wmp-marquee-duration, 14s);
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+.mm-wmp-now-playing__marquee-seg {
+  flex-shrink: 0;
+  padding-right: 2.5rem;
+}
+
+.mm-wmp-now-playing__marquee-seg:last-child {
+  padding-right: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mm-wmp-now-playing__marquee {
+    animation: none;
+    transform: none;
+  }
 }
 
 .mm-wmp-video-controls {

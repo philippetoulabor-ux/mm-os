@@ -364,6 +364,10 @@ export function DesktopProvider({ children }) {
     setWindows((prev) => prev.filter((w) => w.id !== id));
   }, []);
 
+  const closeAllTabs = useCallback(() => {
+    setWindows([]);
+  }, []);
+
   const focusWindow = useCallback((id) => {
     zCounter.current += 1;
     setWindows((prev) =>
@@ -530,6 +534,7 @@ export function DesktopProvider({ children }) {
       openOrFocus,
       openAssetFileWindow,
       closeWindow,
+      closeAllTabs,
       focusWindow,
       minimizeWindow,
       toggleMaximize,
@@ -560,6 +565,7 @@ export function DesktopProvider({ children }) {
       openOrFocus,
       openAssetFileWindow,
       closeWindow,
+      closeAllTabs,
       focusWindow,
       minimizeWindow,
       toggleMaximize,
