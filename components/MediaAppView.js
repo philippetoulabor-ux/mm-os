@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useDesktop } from "@/context/DesktopContext";
 /**
  * Pro Eintrag: `youtubePlaylistId` (?list=…) oder `videos: ["id1", …]`.
  * Wiedergabe: YouTube-Embed mit IFrame API (nur für Titelleiste, kein API-Key).
@@ -108,7 +109,12 @@ function loadYoutubeIframeApi() {
   });
 }
 
-export function MediaAppView() {
+/** @param {{ windowId?: string }} props */
+export function MediaAppView({ windowId }) {
+  const { windows } = useDesktop();
+  const videoCollapsed = Boolean(
+    windowId && windows.find((w) => w.id === windowId)?.mediaVideoCollapsed
+  );
   const [iframeLoaded, setIframeLoaded] = useState(false);
   const [apiOrigin, setApiOrigin] = useState("");
   const [playingTitle, setPlayingTitle] = useState("");
@@ -359,28 +365,43 @@ export function MediaAppView() {
               </div>
             </div>
           ) : null}
-          <div className="relative min-h-0 flex-1">
+          <div
+            className={
+              videoCollapsed
+                ? "relative h-0 shrink-0 overflow-hidden"
+                : "relative min-h-0 flex-1"
+            }
+          >
             {!embedUrl ? (
               <div className="absolute inset-0 flex items-center justify-center bg-black text-xs text-zinc-500">
                 Keine Playlist/Videos in MediaAppView.js konfiguriert.
               </div>
             ) : (
               <>
-                {!iframeLoaded && (
+                {!iframeLoaded && !videoCollapsed && (
                   <div className="absolute inset-0 z-[1] flex items-center justify-center bg-black text-xs text-zinc-500">
                     Player wird geladen…
                   </div>
                 )}
-                <iframe
-                  key={embedUrl}
-                  id={YT_IFRAME_ID}
-                  title="YouTube"
-                  src={embedUrl}
-                  className="pointer-events-none absolute inset-0 h-full w-full border-0"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; web-share"
-                  loading="lazy"
-                  onLoad={() => setIframeLoaded(true)}
-                />
+                <div
+                  className={
+                    videoCollapsed
+                      ? "pointer-events-none fixed left-[-2400px] top-0 z-0 h-[240px] w-[360px] overflow-hidden opacity-0"
+                      : "absolute inset-0"
+                  }
+                  aria-hidden={videoCollapsed}
+                >
+                  <iframe
+                    key={embedUrl}
+                    id={YT_IFRAME_ID}
+                    title="YouTube"
+                    src={embedUrl}
+                    className="pointer-events-none absolute inset-0 h-full w-full border-0"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; web-share"
+                    loading="lazy"
+                    onLoad={() => setIframeLoaded(true)}
+                  />
+                </div>
               </>
             )}
           </div>

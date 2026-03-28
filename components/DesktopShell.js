@@ -1,12 +1,15 @@
 "use client";
 
-import { DesktopProvider } from "@/context/DesktopContext";
+import { useLayoutEffect, useRef } from "react";
+import {
+  DesktopProvider,
+  syncDesktopLayerMetrics,
+  useDesktop,
+} from "@/context/DesktopContext";
 import { Dock } from "@/components/Dock";
 import { DesktopIcons } from "@/components/DesktopIcons";
 import { OSWindow } from "@/components/OSWindow";
 import { SiteHeader } from "@/components/SiteHeader";
-import { useDesktop } from "@/context/DesktopContext";
-
 function DesktopLayers() {
   const { windows } = useDesktop();
   const sorted = [...windows].sort((a, b) => a.z - b.z);
@@ -22,23 +25,48 @@ function DesktopLayers() {
   );
 }
 
+function DesktopShellInner() {
+  const layerRef = useRef(null);
+
+  useLayoutEffect(() => {
+    const el = layerRef.current;
+    if (!el) return undefined;
+    const run = () => syncDesktopLayerMetrics(el);
+    run();
+    const ro = new ResizeObserver(run);
+    ro.observe(el);
+    window.addEventListener("resize", run);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", run);
+    };
+  }, []);
+
+  return (
+    <div
+      className="flex min-h-0 w-full flex-1 flex-col overflow-x-hidden min-h-[max(100dvh,400px)]"
+      style={{
+        backgroundColor: "var(--mm-desktop-bg)",
+        color: "var(--mm-shell-text)",
+      }}
+    >
+      <SiteHeader />
+      {/* overflow-visible: Fenster dürfen nach oben in den Header-Bereich (negatives top) */}
+      <div
+        ref={layerRef}
+        data-mm-desktop-layer
+        className="relative z-10 min-h-0 flex-1 overflow-visible"
+      >
+        <DesktopLayers />
+      </div>
+    </div>
+  );
+}
+
 export function DesktopShell() {
   return (
     <DesktopProvider>
-      {/* Inline-Höhe/-Farbe: funktioniert auch wenn Tailwind-Klassen nicht geladen werden; Flex statt Grid (weniger fragile JIT-Klassen) */}
-      <div
-        className="flex min-h-0 w-full flex-1 flex-col overflow-x-hidden min-h-[max(100dvh,400px)]"
-        style={{
-          backgroundColor: "var(--mm-desktop-bg)",
-          color: "var(--mm-shell-text)",
-        }}
-      >
-        <SiteHeader />
-        {/* overflow-visible: Fenster dürfen nach oben in den Header-Bereich (negatives top) */}
-        <div className="relative z-10 min-h-0 flex-1 overflow-visible">
-          <DesktopLayers />
-        </div>
-      </div>
+      <DesktopShellInner />
     </DesktopProvider>
   );
 }

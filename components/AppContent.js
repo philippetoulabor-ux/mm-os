@@ -393,7 +393,7 @@ export function AppContent({ appId, assetFile, windowId }) {
     case "notes":
       return <NotesAppView />;
     case "media":
-      return <MediaAppView />;
+      return <MediaAppView windowId={windowId} />;
     case "settings":
       return <SettingsPanel />;
     default:

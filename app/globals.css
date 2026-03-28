@@ -64,7 +64,8 @@ body {
 /* Site-Header mit 3D-Logo (wie webdata3d/landing-page; nicht global `header` – OSWindow-Titelzeilen bleiben unberührt) */
 .mm-os-site-header {
   position: relative;
-  z-index: 30;
+  /* Unter dem Desktop-Layer (z-10), damit OSWindow vor dem Logo-Header liegt */
+  z-index: 0;
   display: flex;
   flex-shrink: 0;
   align-items: center;

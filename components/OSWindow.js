@@ -1,7 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useDesktop } from "@/context/DesktopContext";
+import {
+  getDesktopContentRect,
+  MEDIA_MINIMIZE_INSET_X,
+  MEDIA_MINIMIZE_INSET_Y,
+  useDesktop,
+} from "@/context/DesktopContext";
 import { AppContent } from "@/components/AppContent";
 import { APPS } from "@/lib/apps";
 
@@ -151,6 +156,7 @@ export function OSWindow({ win }) {
     moveWindow,
     setWindowBounds,
     openOrFocus,
+    toggleMediaPlayerVideoPanel,
     siteHeaderHeight,
     dockHeight,
     minWindowW,
@@ -158,7 +164,9 @@ export function OSWindow({ win }) {
     osTitlebarH,
   } = useDesktop();
 
-  const showNotesLauncher = win.appId !== "notes";
+  const showNotesLauncher =
+    win.appId !== "notes" &&
+    !(win.appId === "media" && win.mediaVideoCollapsed);
 
   const dragging = useRef(false);
   const dragOffset = useRef({ x: 0, y: 0 });
@@ -227,9 +235,20 @@ export function OSWindow({ win }) {
       if (!dragging.current || win.maximized) return;
       const nx = e.clientX - dragOffset.current.x;
       const ny = e.clientY - dragOffset.current.y;
-      const maxX = window.innerWidth - 80;
-      const maxY =
-        window.innerHeight - siteHeaderHeight - dockHeight - 40;
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      const { w: dW, h: dH } = getDesktopContentRect();
+      const px = MEDIA_MINIMIZE_INSET_X;
+      const py = MEDIA_MINIMIZE_INSET_Y;
+      let maxX;
+      let maxY;
+      if (win.appId === "media" && win.mediaVideoCollapsed) {
+        maxX = dW - win.w - px;
+        maxY = dH - win.h - py;
+      } else {
+        maxX = vw - 80;
+        maxY = vh - siteHeaderHeight - dockHeight - 40;
+      }
       moveWindow(
         win.id,
         Math.max(0, Math.min(nx, maxX)),
@@ -245,7 +264,17 @@ export function OSWindow({ win }) {
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
     };
-  }, [win.id, win.maximized, moveWindow, siteHeaderHeight, dockHeight]);
+  }, [
+    win.id,
+    win.maximized,
+    win.appId,
+    win.mediaVideoCollapsed,
+    win.w,
+    win.h,
+    moveWindow,
+    siteHeaderHeight,
+    dockHeight,
+  ]);
 
   useEffect(() => {
     const onMove = (e) => {
@@ -324,11 +353,6 @@ export function OSWindow({ win }) {
         default:
           return;
       }
-      // Oben nicht vergrößern: nur nach unten schmaler machen, nicht nach oben höher ziehen.
-      if (rs.edge === "n" || rs.edge === "ne" || rs.edge === "nw") {
-        if (nh > rs.startH) nh = rs.startH;
-        ny = rs.startWinY + rs.startH - nh;
-      }
       setWindowBounds(win.id, { x: nx, y: ny, w: nw, h: nh });
     };
     const onUp = () => {
@@ -368,7 +392,8 @@ export function OSWindow({ win }) {
       : {}),
   };
 
-  const showResize = !win.maximized;
+  const showResize =
+    !win.maximized && !(win.appId === "media" && win.mediaVideoCollapsed);
   const edge = "absolute z-10";
   const corner = "absolute z-20 h-4 w-4";
 
@@ -381,10 +406,16 @@ export function OSWindow({ win }) {
       onMouseDown={() => focusWindow(win.id)}
     >
       <header
-        className="flex h-10 shrink-0 cursor-default items-center gap-2 border-b-2 border-black bg-[var(--mm-desktop-bg)] pl-1 pr-3 font-sans"
+        className="flex h-10 shrink-0 cursor-default items-center gap-2 border-b-2 border-black bg-[var(--mm-desktop-bg)] pl-0 pr-3 font-sans"
         onMouseDown={onBarMouseDown}
       >
-        <div className="flex w-14 shrink-0 items-center justify-start">
+        <div
+          className={
+            win.appId === "media"
+              ? "flex w-[4.125rem] shrink-0 items-center justify-start gap-0.5 pl-2"
+              : "flex w-14 shrink-0 items-center justify-start pl-1"
+          }
+        >
           <button
             type="button"
             aria-label="Schließen"
@@ -399,6 +430,31 @@ export function OSWindow({ win }) {
               aria-hidden
             />
           </button>
+          {win.appId === "media" ? (
+            <button
+              type="button"
+              aria-label={
+                win.mediaVideoCollapsed
+                  ? "Player wiederherstellen"
+                  : "Player minimieren"
+              }
+              aria-pressed={!!win.mediaVideoCollapsed}
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-transparent hover:opacity-90"
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleMediaPlayerVideoPanel(win.id);
+              }}
+            >
+              <span
+                className={`block h-3 w-3 shrink-0 rounded-full ${
+                  win.mediaVideoCollapsed
+                    ? "bg-[rgb(0,255,0)]"
+                    : "bg-[rgb(255,204,0)]"
+                }`}
+                aria-hidden
+              />
+            </button>
+          ) : null}
         </div>
         <span className="flex-1 select-none text-center text-xs font-medium text-black dark:text-zinc-100">
           {win.title}

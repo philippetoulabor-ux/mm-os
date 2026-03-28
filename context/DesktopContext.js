@@ -19,6 +19,62 @@ const DOCK_H = 80;
 const OS_TITLEBAR_H = 40;
 const MIN_WIN_W = 240;
 const MIN_WIN_H = 160;
+/** Inhaltshöhe (ohne OS-Titelleiste), wenn der Media-Player nur Titelzeile + Transport hat (Video ausgeblendet). */
+const MEDIA_COMPACT_CLIENT_H = 120;
+/** Feste Breite im minimierten Media-Player (kleinstes Fenster). */
+const MEDIA_COMPACT_W = MIN_WIN_W;
+const MEDIA_COMPACT_TOTAL_H = OS_TITLEBAR_H + MEDIA_COMPACT_CLIENT_H;
+/** Unten: wie Dock `bottom-3` (12px). */
+export const MEDIA_MINIMIZE_INSET_Y = 12;
+/** Rechts: größerer Abstand zum Rand (12px wirkten optisch zu knapp). */
+export const MEDIA_MINIMIZE_INSET_X = 28;
+
+/**
+ * Gemessene Größe des `relative`-Desktop-Layers (Fenster-Positionierungs-Container).
+ * Wird von DesktopShell per ResizeObserver gesetzt — gleiche Basis für x und y wie in CSS.
+ */
+const desktopLayerMetrics = { w: 0, h: 0 };
+
+/** @param {HTMLElement | null} el Desktop-Layer unter dem Site-Header */
+export function syncDesktopLayerMetrics(el) {
+  if (!el || typeof window === "undefined") return;
+  const r = el.getBoundingClientRect();
+  desktopLayerMetrics.w = r.width;
+  desktopLayerMetrics.h = r.height;
+}
+
+/**
+ * Größe des Desktop-Inhalts (Koordinatensystem von OSWindow: 0,0 = oben links im Layer).
+ * Bevorzugt Live-Messung von `[data-mm-desktop-layer]` (identisch mit Positionierungs-Container).
+ */
+export function getDesktopContentRect() {
+  if (typeof window === "undefined") return { w: 1920, h: 900 };
+  const el = document.querySelector("[data-mm-desktop-layer]");
+  if (el) {
+    const r = el.getBoundingClientRect();
+    desktopLayerMetrics.w = r.width;
+    desktopLayerMetrics.h = r.height;
+    return { w: r.width, h: r.height };
+  }
+  if (desktopLayerMetrics.w > 0 && desktopLayerMetrics.h > 0) {
+    return { w: desktopLayerMetrics.w, h: desktopLayerMetrics.h };
+  }
+  const w = document.documentElement?.clientWidth ?? window.innerWidth;
+  const h = window.innerHeight - SITE_HEADER_H;
+  return { w, h };
+}
+
+/** Unten rechts: Rand des gemessenen Layers; X und Y separat (rechts großzügiger). */
+function getMediaMinimizedPosition() {
+  if (typeof window === "undefined") return { x: 0, y: 0 };
+  const px = MEDIA_MINIMIZE_INSET_X;
+  const py = MEDIA_MINIMIZE_INSET_Y;
+  const { w: dw, h: dh } = getDesktopContentRect();
+  return {
+    x: Math.max(0, dw - MEDIA_COMPACT_W - px),
+    y: Math.max(-SITE_HEADER_H, dh - MEDIA_COMPACT_TOTAL_H - py),
+  };
+}
 
 const DesktopContext = createContext(null);
 
@@ -109,7 +165,7 @@ function sanitizeWindow(w) {
     if (rw > 0 && rh > 0) contentAspect = { rw, rh };
   }
 
-  return {
+  const base = {
     id,
     appId,
     title: typeof w.title === "string" ? w.title : APPS[appId].title,
@@ -124,14 +180,24 @@ function sanitizeWindow(w) {
     contentAspect,
     ...(assetFile ? { assetFile } : {}),
   };
+  if (appId === "media") {
+    return {
+      ...base,
+      mediaVideoCollapsed: bool(w.mediaVideoCollapsed, false),
+    };
+  }
+  return base;
 }
 
 function clampWindowsToViewport(windows) {
   if (typeof window === "undefined") return windows;
   const vw = window.innerWidth;
   const vh = window.innerHeight;
+  const { w: desktopW, h: desktopH } = getDesktopContentRect();
   const maxBottom = vh - DOCK_H;
   const maxH = vh - SITE_HEADER_H - DOCK_H;
+  const px = MEDIA_MINIMIZE_INSET_X;
+  const py = MEDIA_MINIMIZE_INSET_Y;
   return windows.map((win) => {
     if (win.maximized) {
       return {
@@ -143,10 +209,17 @@ function clampWindowsToViewport(windows) {
       };
     }
     let { x, y, w, h } = win;
-    w = Math.max(MIN_WIN_W, w);
-    h = Math.max(MIN_WIN_H, h);
-    x = Math.max(0, Math.min(x, vw - w));
-    y = Math.max(-SITE_HEADER_H, Math.min(y, maxBottom - h));
+    if (win.appId === "media" && win.mediaVideoCollapsed) {
+      w = MEDIA_COMPACT_W;
+      h = MEDIA_COMPACT_TOTAL_H;
+      x = Math.max(0, Math.min(x, desktopW - w - px));
+      y = Math.max(-SITE_HEADER_H, Math.min(y, desktopH - h - py));
+    } else {
+      w = Math.max(MIN_WIN_W, w);
+      h = Math.max(MIN_WIN_H, h);
+      x = Math.max(0, Math.min(x, vw - w));
+      y = Math.max(-SITE_HEADER_H, Math.min(y, maxBottom - h));
+    }
     return { ...win, x, y, w, h };
   });
 }
@@ -184,6 +257,8 @@ export function DesktopProvider({ children }) {
   const [notesText, setNotesText] = useState("");
   /** Einmaliges Vorausfüllen der Notes-App (z. B. aus Finder „Notiz zu Ordner“). */
   const [notesComposerPreset, setNotesComposerPreset] = useState(null);
+  /** Bounds vor Media-„Minimieren“ (nur Video ausblenden), pro Fenster-ID */
+  const mediaPreCollapseBoundsRef = useRef(new Map());
 
   useEffect(() => {
     try {
@@ -210,6 +285,28 @@ export function DesktopProvider({ children }) {
       zCounter.current = maxZ;
       setWindows(loaded);
     }
+  }, []);
+
+  /** Minimierten Media-Player unten rechts halten (Dock-Inset wie `bottom-3`). */
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const onResize = () => {
+      setWindows((prev) =>
+        prev.map((w) => {
+          if (w.appId !== "media" || !w.mediaVideoCollapsed) return w;
+          const pos = getMediaMinimizedPosition();
+          return {
+            ...w,
+            x: pos.x,
+            y: pos.y,
+            w: MEDIA_COMPACT_W,
+            h: MEDIA_COMPACT_TOTAL_H,
+          };
+        })
+      );
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
   }, []);
 
   useEffect(() => {
@@ -323,6 +420,7 @@ export function DesktopProvider({ children }) {
           minimized: false,
           maximized: false,
           prevBounds: null,
+          ...(appId === "media" ? { mediaVideoCollapsed: false } : {}),
         },
       ];
     });
@@ -380,6 +478,66 @@ export function DesktopProvider({ children }) {
   const minimizeWindow = useCallback((id) => {
     setWindows((prev) =>
       prev.map((w) => (w.id === id ? { ...w, minimized: true } : w))
+    );
+  }, []);
+
+  /** Nur Media-Fenster: Video-Bereich ausblenden / wiederherstellen (Titelleiste + Transport bleiben). */
+  const toggleMediaPlayerVideoPanel = useCallback((id) => {
+    setWindows((prev) =>
+      prev.map((w) => {
+        if (w.id !== id || w.appId !== "media") return w;
+        const nextCollapsed = !w.mediaVideoCollapsed;
+        if (nextCollapsed) {
+          mediaPreCollapseBoundsRef.current.set(id, {
+            x: w.x,
+            y: w.y,
+            w: w.w,
+            h: w.h,
+          });
+          const pos = getMediaMinimizedPosition();
+          return {
+            ...w,
+            mediaVideoCollapsed: true,
+            w: MEDIA_COMPACT_W,
+            h: MEDIA_COMPACT_TOTAL_H,
+            x: pos.x,
+            y: pos.y,
+          };
+        }
+        const saved = mediaPreCollapseBoundsRef.current.get(id);
+        const fallback = APPS.media.defaultSize;
+        const rw =
+          saved && typeof saved.w === "number" && Number.isFinite(saved.w)
+            ? Math.max(MIN_WIN_W, saved.w)
+            : fallback.w;
+        const rh =
+          saved && typeof saved.h === "number" && Number.isFinite(saved.h)
+            ? Math.max(MIN_WIN_H, saved.h)
+            : fallback.h;
+        let rx =
+          saved && typeof saved.x === "number" && Number.isFinite(saved.x)
+            ? saved.x
+            : w.x;
+        let ry =
+          saved && typeof saved.y === "number" && Number.isFinite(saved.y)
+            ? saved.y
+            : w.y;
+        if (typeof window !== "undefined") {
+          const vw = window.innerWidth;
+          const vh = window.innerHeight;
+          const maxBottom = vh - DOCK_H;
+          rx = Math.max(0, Math.min(rx, vw - rw));
+          ry = Math.max(-SITE_HEADER_H, Math.min(ry, maxBottom - rh));
+        }
+        return {
+          ...w,
+          mediaVideoCollapsed: false,
+          x: rx,
+          y: ry,
+          w: rw,
+          h: rh,
+        };
+      })
     );
   }, []);
 
@@ -452,12 +610,23 @@ export function DesktopProvider({ children }) {
       prev.map((win) => {
         if (win.id !== id) return win;
         let { x, y, w, h } = bounds;
-        w = Math.max(MIN_WIN_W, w);
-        h = Math.max(MIN_WIN_H, h);
         const vw = window.innerWidth;
-        const maxBottom = window.innerHeight - DOCK_H;
-        x = Math.max(0, Math.min(x, vw - w));
-        y = Math.max(-SITE_HEADER_H, Math.min(y, maxBottom - h));
+        const vh = window.innerHeight;
+        const { w: dW, h: dH } = getDesktopContentRect();
+        const px = MEDIA_MINIMIZE_INSET_X;
+        const py = MEDIA_MINIMIZE_INSET_Y;
+        const maxBottom = vh - DOCK_H;
+        if (win.appId === "media" && win.mediaVideoCollapsed) {
+          w = MEDIA_COMPACT_W;
+          h = MEDIA_COMPACT_TOTAL_H;
+          x = Math.max(0, Math.min(x, dW - w - px));
+          y = Math.max(-SITE_HEADER_H, Math.min(y, dH - h - py));
+        } else {
+          w = Math.max(MIN_WIN_W, w);
+          h = Math.max(MIN_WIN_H, h);
+          x = Math.max(0, Math.min(x, vw - w));
+          y = Math.max(-SITE_HEADER_H, Math.min(y, maxBottom - h));
+        }
         return { ...win, x, y, w, h, maximized: false };
       })
     );
@@ -537,6 +706,7 @@ export function DesktopProvider({ children }) {
       closeAllTabs,
       focusWindow,
       minimizeWindow,
+      toggleMediaPlayerVideoPanel,
       toggleMaximize,
       moveWindow,
       setWindowBounds,
@@ -568,6 +738,7 @@ export function DesktopProvider({ children }) {
       closeAllTabs,
       focusWindow,
       minimizeWindow,
+      toggleMediaPlayerVideoPanel,
       toggleMaximize,
       moveWindow,
       setWindowBounds,
