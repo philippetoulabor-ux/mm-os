@@ -1,9 +1,13 @@
 "use client";
 
+import { useCallback, useEffect } from "react";
 import { APPS, isDesktopAtDefaultLayout, webAssetAppId } from "@/lib/apps";
 import { webAssetManifest } from "@/lib/webAssetManifest";
 import { useDesktop } from "@/context/DesktopContext";
 import { NotesAppView } from "@/components/NotesAppView";
+import { MediaAppView } from "@/components/MediaAppView";
+import { Model3DViewer } from "@/components/Model3DViewer";
+import { resolveModelBackground } from "@/lib/model3dBackground";
 
 function SettingsPanel() {
   const {
@@ -15,9 +19,9 @@ function SettingsPanel() {
   const cleanUpDesktopActive = isDesktopAtDefaultLayout(desktopIconPositions);
 
   return (
-    <div className="space-y-4 p-4 text-sm text-zinc-200">
+    <div className="space-y-4 bg-white p-4 text-sm text-zinc-800">
       <div className="flex items-center justify-between gap-4">
-        <span className="text-zinc-300">DarkMode</span>
+        <span className="text-zinc-600">DarkMode</span>
         <button
           type="button"
           role="switch"
@@ -37,7 +41,7 @@ function SettingsPanel() {
         </button>
       </div>
       <div className="flex items-center justify-between gap-4">
-        <span className="text-zinc-300">CleanUpDesktop</span>
+        <span className="text-zinc-600">CleanUpDesktop</span>
         <button
           type="button"
           role="switch"
@@ -65,7 +69,8 @@ function SettingsPanel() {
 function fileIcon(name) {
   const lower = name.toLowerCase();
   if (lower.endsWith(".stl")) return "🔷";
-  if (lower.endsWith(".glb")) return "🧊";
+  if (/\.(glb|gltf)$/i.test(name)) return "🧊";
+  if (lower.endsWith(".obj")) return "📦";
   if (/\.(mov|mp4|webm)$/i.test(name)) return "🎬";
   if (/\.(jpg|jpeg|png|gif|webp)$/i.test(name)) return "🖼";
   if (/\.pdf$/i.test(name)) return "📕";
@@ -76,31 +81,131 @@ function fileHref(basePath, dir, file) {
   return `${basePath}/${encodeURIComponent(dir)}/${encodeURIComponent(file)}`;
 }
 
+/** Normalisierte Breite/Höhe nur fürs Seitenverhältnis (iframe ohne echte Intrinsic-Größe). */
+function iframeAspectHint(name) {
+  const lower = name.toLowerCase();
+  if (lower.endsWith(".pdf")) return { w: 210, h: 297 };
+  if (/\.(html|htm)$/i.test(name)) return { w: 16, h: 9 };
+  if (/\.(stl|glb|gltf|obj)$/i.test(name)) return { w: 1, h: 1 };
+  return { w: 4, h: 3 };
+}
+
+function AssetFileViewer({ dir, file, basePath, windowId }) {
+  const { fitWindowToContentSize } = useDesktop();
+  const url = fileHref(basePath, dir, file);
+  const manifestEntry = webAssetManifest.find((x) => x.dir === dir);
+  const modelBg = resolveModelBackground(
+    dir,
+    file,
+    manifestEntry?.files ?? [],
+    basePath
+  );
+
+  const fitFromDimensions = useCallback(
+    (w, h) => {
+      if (windowId) fitWindowToContentSize(windowId, w, h);
+    },
+    [windowId, fitWindowToContentSize]
+  );
+
+  const onImgLoad = useCallback(
+    (e) => {
+      const { naturalWidth, naturalHeight } = e.currentTarget;
+      fitFromDimensions(naturalWidth, naturalHeight);
+    },
+    [fitFromDimensions]
+  );
+
+  const onVideoMeta = useCallback(
+    (e) => {
+      const v = e.currentTarget;
+      if (v.videoWidth > 0 && v.videoHeight > 0) {
+        fitFromDimensions(v.videoWidth, v.videoHeight);
+      }
+    },
+    [fitFromDimensions]
+  );
+
+  const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(file);
+  const isVideo = /\.(mov|mp4|webm)$/i.test(file);
+  const is3d = /\.(stl|glb|gltf|obj)$/i.test(file);
+
+  useEffect(() => {
+    if (!windowId || isImage || isVideo || is3d) return;
+    const { w, h } = iframeAspectHint(file);
+    fitWindowToContentSize(windowId, w, h);
+  }, [windowId, file, url, isImage, isVideo, is3d, fitWindowToContentSize]);
+
+  if (is3d) {
+    return (
+      <Model3DViewer
+        modelUrl={url}
+        fileName={file}
+        background={modelBg}
+        windowId={windowId}
+      />
+    );
+  }
+
+  if (isImage) {
+    return (
+      <div className="flex h-full min-h-0 items-center justify-center overflow-auto bg-zinc-200 p-2">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={url}
+          alt={file}
+          className="max-h-full max-w-full object-contain"
+          onLoad={onImgLoad}
+        />
+      </div>
+    );
+  }
+  if (isVideo) {
+    return (
+      <div className="flex h-full min-h-0 items-center justify-center bg-black p-2">
+        <video
+          src={url}
+          controls
+          className="max-h-full max-w-full"
+          onLoadedMetadata={onVideoMeta}
+        />
+      </div>
+    );
+  }
+  return (
+    <iframe
+      title={file}
+      src={url}
+      className="h-full min-h-0 w-full flex-1 border-0 bg-white dark:bg-zinc-950"
+    />
+  );
+}
+
 function FinderView() {
   const { openOrFocus } = useDesktop();
 
   return (
-    <div className="flex h-full min-h-0 text-sm text-zinc-200">
-      <aside className="w-40 shrink-0 border-r border-white/10 bg-black/20 p-3">
+    <div className="flex h-full min-h-0 bg-white text-sm text-zinc-800">
+      <aside className="w-40 shrink-0 border-r-2 border-black bg-zinc-100 p-3">
         <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
           Geräte
         </p>
-        <ul className="mt-2 space-y-0.5 text-zinc-400">
-          <li className="rounded px-2 py-1 hover:bg-white/10">Macintosh HD</li>
-          <li className="rounded px-2 py-1 hover:bg-white/10">Netzwerk</li>
+        <ul className="mt-2 space-y-0.5 text-zinc-700">
+          <li className="px-2 py-1 hover:bg-zinc-200/80">Macintosh HD</li>
+          <li className="px-2 py-1 hover:bg-zinc-200/80">Netzwerk</li>
         </ul>
         <p className="mt-4 text-xs font-medium uppercase tracking-wide text-zinc-500">
           Favoriten
         </p>
-        <ul className="mt-2 space-y-0.5 text-zinc-400">
-          <li className="rounded px-2 py-1 hover:bg-white/10">Schreibtisch</li>
-          <li className="rounded px-2 py-1 hover:bg-white/10">Dokumente</li>
+        <ul className="mt-2 space-y-0.5 text-zinc-700">
+          <li className="px-2 py-1 hover:bg-zinc-200/80">Schreibtisch</li>
+          <li className="px-2 py-1 hover:bg-zinc-200/80">Dokumente</li>
         </ul>
       </aside>
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <div className="shrink-0 border-b border-white/10 px-3 py-2">
+        <div className="shrink-0 border-b-2 border-black px-3 py-2">
           <p className="text-xs text-zinc-500">mm-os · Web</p>
-          <p className="font-medium text-white">Ordner</p>
+          <p className="font-medium text-zinc-900">Ordner</p>
         </div>
         <ul className="min-h-0 flex-1 space-y-0.5 overflow-auto p-2">
           {webAssetManifest.map(({ dir }) => (
@@ -108,7 +213,7 @@ function FinderView() {
               <button
                 type="button"
                 onClick={() => openOrFocus(webAssetAppId(dir))}
-                className="flex w-full min-w-0 items-center gap-2 rounded-lg px-2 py-2 text-left text-zinc-300 transition-colors hover:bg-white/10 hover:text-white"
+                className="flex w-full min-w-0 items-center gap-2 px-2 py-2 text-left text-zinc-800 transition-colors hover:bg-zinc-100"
               >
                 <span aria-hidden>📁</span>
                 <span className="truncate">{dir}</span>
@@ -122,28 +227,30 @@ function FinderView() {
 }
 
 function AssetSubfolderView({ dir, basePath = "/web" }) {
+  const { openAssetFileWindow } = useDesktop();
   const entry = webAssetManifest.find((x) => x.dir === dir);
   const files = entry?.files ?? [];
   return (
-    <div className="flex h-full flex-col gap-2 overflow-auto p-3 text-sm text-zinc-200">
-      <p className="shrink-0 font-medium text-white">📁 {dir}</p>
+    <div className="flex h-full flex-col gap-2 overflow-auto bg-white p-3 text-sm text-zinc-800">
+      <p className="shrink-0 font-medium text-zinc-900">📁 {dir}</p>
       <p className="text-xs text-zinc-500">
-        <code className="text-zinc-400">{basePath}/{dir}</code>
+        <code className="text-zinc-600">{basePath}/{dir}</code>
       </p>
       {files.length === 0 ? (
-        <p className="text-zinc-500">Keine Dateien im Manifest — <code>npm run sync:web</code> ausführen.</p>
+        <p className="text-zinc-500">Keine Dateien im Manifest — <code className="text-zinc-700">npm run sync:web</code> ausführen.</p>
       ) : (
-        <ul className="space-y-0.5 text-zinc-400">
+        <ul className="space-y-0.5 text-zinc-700">
           {files.map((file) => (
             <li key={file}>
-              <a
-                href={fileHref(basePath, dir, file)}
-                className="block min-w-0 truncate rounded px-1 py-0.5 text-sky-400 hover:bg-white/10 hover:underline"
-                target="_blank"
-                rel="noreferrer"
+              <button
+                type="button"
+                onClick={() =>
+                  openAssetFileWindow({ dir, file, basePath })
+                }
+                className="block w-full min-w-0 truncate px-1 py-0.5 text-left text-zinc-900 underline decoration-zinc-400 hover:bg-zinc-100 hover:decoration-zinc-900"
               >
                 {fileIcon(file)} {file}
-              </a>
+              </button>
             </li>
           ))}
         </ul>
@@ -152,8 +259,19 @@ function AssetSubfolderView({ dir, basePath = "/web" }) {
   );
 }
 
-export function AppContent({ appId }) {
+export function AppContent({ appId, assetFile, windowId }) {
   const app = APPS[appId];
+  if (appId === "assetFile" && assetFile?.dir && assetFile?.file) {
+    return (
+      <AssetFileViewer
+        dir={assetFile.dir}
+        file={assetFile.file}
+        basePath={assetFile.basePath ?? "/web"}
+        windowId={windowId}
+      />
+    );
+  }
+
   if (app?.assetDir) {
     return (
       <AssetSubfolderView dir={app.assetDir} basePath="/web" />
@@ -165,11 +283,13 @@ export function AppContent({ appId }) {
       return <FinderView />;
     case "notes":
       return <NotesAppView />;
+    case "media":
+      return <MediaAppView windowId={windowId} />;
     case "settings":
       return <SettingsPanel />;
     default:
       return (
-        <div className="flex h-full items-center justify-center text-zinc-500">
+        <div className="flex h-full items-center justify-center bg-white text-sm text-zinc-500">
           Unknown app
         </div>
       );

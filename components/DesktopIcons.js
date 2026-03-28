@@ -1,19 +1,48 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { APPS, DESKTOP_ICONS } from "@/lib/apps";
 import { useDesktop } from "@/context/DesktopContext";
 
 const ICON_W = 80;
 const ICON_H = 100;
+/** Abstand zum rechten Rand — wie DESKTOP_ICON_GRID.startX in lib/apps.js */
+const MARGIN_X = 16;
+const START_Y = 16;
+const ROW_H = 110;
+
+function toPixelPosition(pos, containerWidth) {
+  if (pos?.align === "right" && typeof pos.row === "number") {
+    const w = containerWidth > 0 ? containerWidth : 800;
+    return {
+      x: Math.max(0, w - ICON_W - MARGIN_X),
+      y: START_Y + pos.row * ROW_H,
+    };
+  }
+  return { x: pos?.x ?? MARGIN_X, y: pos?.y ?? START_Y };
+}
 
 export function DesktopIcons() {
   const { openOrFocus, desktopIconPositions, setDesktopIconPosition } =
     useDesktop();
   const [selected, setSelected] = useState(null);
+  const [containerW, setContainerW] = useState(0);
   const desktopRef = useRef(null);
   const dragRef = useRef(null);
   const blockClickRef = useRef(false);
+
+  useLayoutEffect(() => {
+    const el = desktopRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => {
+      const r = el.getBoundingClientRect();
+      setContainerW(r.width);
+    });
+    ro.observe(el);
+    const r = el.getBoundingClientRect();
+    setContainerW(r.width);
+    return () => ro.disconnect();
+  }, []);
 
   const clamp = useCallback((x, y) => {
     const el = desktopRef.current;
@@ -65,7 +94,8 @@ export function DesktopIcons() {
     blockClickRef.current = false;
     const el = desktopRef.current;
     if (!el) return;
-    const pos = desktopIconPositions[appId] ?? { x: 16, y: 16 };
+    const raw = desktopIconPositions[appId] ?? { x: MARGIN_X, y: START_Y };
+    const pos = toPixelPosition(raw, el.getBoundingClientRect().width);
     const rect = el.getBoundingClientRect();
     dragRef.current = {
       appId,
@@ -86,7 +116,11 @@ export function DesktopIcons() {
       {DESKTOP_ICONS.map((item) => {
         const app = APPS[item.appId];
         if (!app) return null;
-        const pos = desktopIconPositions[item.appId] ?? { x: 16, y: 16 };
+        const raw = desktopIconPositions[item.appId] ?? {
+          x: MARGIN_X,
+          y: START_Y,
+        };
+        const pos = toPixelPosition(raw, containerW);
         const isSel = selected === item.appId;
         return (
           <button

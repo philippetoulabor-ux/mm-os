@@ -202,7 +202,7 @@ export function NotesAppView() {
   }, []);
 
   return (
-    <div className="relative flex h-full min-h-0 flex-col bg-amber-50/95">
+    <div className="relative flex h-full min-h-0 flex-col bg-white">
       <div className="relative min-h-0 flex-1 overflow-hidden">
         <textarea
           ref={taRef}
