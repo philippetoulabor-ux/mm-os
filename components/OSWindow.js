@@ -374,12 +374,14 @@ export function OSWindow({ win }) {
 
   return (
     <div
-      className="absolute flex flex-col overflow-hidden border-2 border-black bg-white shadow-none"
+      className={`absolute flex flex-col overflow-hidden border-2 border-black bg-white shadow-none ${
+        win.maximized ? "rounded-none" : "rounded-lg"
+      }`}
       style={style}
       onMouseDown={() => focusWindow(win.id)}
     >
       <header
-        className="flex h-9 shrink-0 cursor-default items-center gap-2 border-b-2 border-black bg-[var(--mm-desktop-bg)] px-3 font-sans"
+        className="flex h-10 shrink-0 cursor-default items-center gap-2 border-b-2 border-black bg-[var(--mm-desktop-bg)] pl-1 pr-3 font-sans"
         onMouseDown={onBarMouseDown}
       >
         <div className="flex w-14 shrink-0 items-center justify-start">

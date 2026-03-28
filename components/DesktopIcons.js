@@ -25,7 +25,6 @@ function toPixelPosition(pos, containerWidth) {
 export function DesktopIcons() {
   const { openOrFocus, desktopIconPositions, setDesktopIconPosition } =
     useDesktop();
-  const [selected, setSelected] = useState(null);
   const [containerW, setContainerW] = useState(0);
   const desktopRef = useRef(null);
   const dragRef = useRef(null);
@@ -121,24 +120,18 @@ export function DesktopIcons() {
           y: START_Y,
         };
         const pos = toPixelPosition(raw, containerW);
-        const isSel = selected === item.appId;
         return (
           <button
             key={item.appId}
             type="button"
             style={{ left: pos.x, top: pos.y }}
-            className={`pointer-events-auto absolute flex min-h-[var(--mm-desktop-folder-tile)] w-20 flex-col items-center gap-1 rounded-lg p-2 text-center outline-none transition-colors ${
-              isSel
-                ? "bg-black/10 dark:bg-white/15"
-                : "hover:bg-black/5 dark:hover:bg-white/10"
-            }`}
+            className="pointer-events-auto absolute flex min-h-[var(--mm-desktop-folder-tile)] w-20 flex-col items-center gap-1 rounded-lg p-2 text-center outline-none transition-colors hover:bg-black/5 active:bg-black/10 dark:hover:bg-white/10 dark:active:bg-white/15"
             onPointerDown={(e) => onPointerDown(e, item.appId)}
             onClick={() => {
               if (blockClickRef.current) {
                 blockClickRef.current = false;
                 return;
               }
-              setSelected(item.appId);
               openOrFocus(item.appId);
             }}
           >

@@ -15,8 +15,8 @@ import { getMentionToken } from "@/lib/noteRefs";
 /** Höhe des Site-Headers (kompaktes Logo + Padding); Näherung für Fenster-Layout */
 const SITE_HEADER_H = 180;
 const DOCK_H = 80;
-/** OSWindow Titelleiste (entspricht Tailwind h-9) */
-const OS_TITLEBAR_H = 36;
+/** OSWindow Titelleiste (entspricht Tailwind h-10; gleicher Inset zum Schließen-Button h-8) */
+const OS_TITLEBAR_H = 40;
 const MIN_WIN_W = 240;
 const MIN_WIN_H = 160;
 

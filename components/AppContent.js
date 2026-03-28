@@ -102,6 +102,13 @@ function fileIcon(name) {
   return "📄";
 }
 
+/** z. B. `candle.glb` → `.glb`; ohne gültige Endung → `null`. */
+function fileExtensionDisplay(name) {
+  const i = name.lastIndexOf(".");
+  if (i < 0 || i >= name.length - 1) return null;
+  return name.slice(i).toLowerCase();
+}
+
 function fileHref(basePath, dir, file) {
   return `${basePath}/${encodeURIComponent(dir)}/${encodeURIComponent(file)}`;
 }
@@ -161,12 +168,20 @@ function AssetFileListThumb({ href, file }) {
     );
   }
 
+  const ext = fileExtensionDisplay(file);
+
   return (
     <span
-      className="flex h-11 w-11 shrink-0 items-center justify-center rounded border border-zinc-200 bg-zinc-100 text-lg leading-none dark:border-zinc-600 dark:bg-zinc-800"
+      className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded border border-zinc-200 bg-zinc-100 px-1 dark:border-zinc-600 dark:bg-zinc-800"
       aria-hidden
     >
-      {fileIcon(file)}
+      {ext ? (
+        <span className="max-w-full truncate text-center font-mono text-[10px] font-semibold leading-tight text-zinc-600 dark:text-zinc-300">
+          {ext}
+        </span>
+      ) : (
+        <span className="text-lg leading-none">{fileIcon(file)}</span>
+      )}
     </span>
   );
 }
