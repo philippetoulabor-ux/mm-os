@@ -1,21 +1,56 @@
 "use client";
 
+import { useLayoutEffect, useState } from "react";
 import { AppIcon } from "@/components/AppIcon";
 import { APPS } from "@/lib/apps";
-import { useDesktop } from "@/context/DesktopContext";
+import {
+  getDesktopContentRect,
+  useDesktop,
+  windowShouldDimDock,
+} from "@/context/DesktopContext";
 
 const BASE_ORDER = ["finder", "notes", "media", "settings"];
 
 export function Dock() {
   const { windows, openOrFocus, focusWindow } = useDesktop();
+  const [coveredByWindow, setCoveredByWindow] = useState(false);
+  const [hovered, setHovered] = useState(false);
+
+  useLayoutEffect(() => {
+    const layer = document.querySelector("[data-mm-desktop-layer]");
+    const tick = () => {
+      const { w, h } = getDesktopContentRect();
+      setCoveredByWindow(
+        windows.some((win) => windowShouldDimDock(win, w, h))
+      );
+    };
+    tick();
+    window.addEventListener("resize", tick);
+    const ro = layer ? new ResizeObserver(tick) : null;
+    if (layer) ro.observe(layer);
+    return () => {
+      window.removeEventListener("resize", tick);
+      ro?.disconnect();
+    };
+  }, [windows]);
 
   const dockIds = BASE_ORDER;
+  const opacity = coveredByWindow && !hovered ? 0.5 : 1;
 
   return (
     <div className="pointer-events-none absolute bottom-3 left-0 right-0 z-[190] flex justify-center px-4">
       <nav
-        className="group/dock pointer-events-auto relative flex items-end justify-center rounded-2xl"
+        className="group/dock pointer-events-auto relative flex items-end justify-center rounded-2xl transition-opacity duration-200 ease-out"
+        style={{ opacity }}
         aria-label="Application dock"
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        onFocusCapture={() => setHovered(true)}
+        onBlurCapture={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget)) {
+            setHovered(false);
+          }
+        }}
       >
         <div
           className="relative origin-bottom scale-[0.72] transition-transform duration-300 ease-[cubic-bezier(0.25,0.8,0.25,1)] group-hover/dock:scale-100 [@media(hover:none)]:scale-100"

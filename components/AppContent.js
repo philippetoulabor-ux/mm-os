@@ -1,6 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { APPS, isDesktopAtDefaultLayout, webAssetAppId } from "@/lib/apps";
 import { webAssetManifest } from "@/lib/webAssetManifest";
 import { useDesktop } from "@/context/DesktopContext";
@@ -9,20 +15,46 @@ import { MediaAppView } from "@/components/MediaAppView";
 import { Model3DViewer } from "@/components/Model3DViewer";
 import { resolveModelBackground } from "@/lib/model3dBackground";
 
-function SettingsPanel() {
+function SettingsPanel({ windowId }) {
   const {
     darkMode,
     setDarkMode,
+    folderPreview,
+    setFolderPreview,
     resetDesktopIconPositions,
     desktopIconPositions,
     windows,
     closeAllTabs,
+    fitWindowToContentSize,
   } = useDesktop();
   const cleanUpDesktopActive = isDesktopAtDefaultLayout(desktopIconPositions);
   const closeAllTabsActive = windows.length === 0;
+  const rootRef = useRef(null);
+
+  useLayoutEffect(() => {
+    const el = rootRef.current;
+    if (!el || !windowId) return;
+    const apply = () => {
+      const r = el.getBoundingClientRect();
+      const w = Math.ceil(r.width);
+      const h = Math.ceil(r.height);
+      if (w > 0 && h > 0) {
+        fitWindowToContentSize(windowId, w, h, {
+          lockAspectForResize: false,
+        });
+      }
+    };
+    apply();
+    const ro = new ResizeObserver(apply);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [windowId, fitWindowToContentSize]);
 
   return (
-    <div className="space-y-4 bg-white p-4 text-sm text-zinc-800">
+    <div
+      ref={rootRef}
+      className="box-border w-max min-w-0 max-w-full space-y-4 bg-white p-4 text-sm text-zinc-800"
+    >
       <div className="flex items-center justify-between gap-4">
         <span className="text-zinc-600">DarkMode</span>
         <button
@@ -82,6 +114,26 @@ function SettingsPanel() {
               closeAllTabsActive
                 ? "translate-x-[1.375rem]"
                 : "translate-x-0.5"
+            }`}
+            aria-hidden
+          />
+        </button>
+      </div>
+      <div className="flex items-center justify-between gap-4">
+        <span className="text-zinc-600">FolderPreview</span>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={folderPreview}
+          aria-label="FolderPreview"
+          onClick={() => setFolderPreview((v) => !v)}
+          className={`relative h-7 w-12 shrink-0 rounded-full transition-colors duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500 ${
+            folderPreview ? "bg-sky-600" : "bg-zinc-600"
+          }`}
+        >
+          <span
+            className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform duration-200 ${
+              folderPreview ? "translate-x-[1.375rem]" : "translate-x-0.5"
             }`}
             aria-hidden
           />
@@ -417,7 +469,11 @@ export function AppContent({ appId, assetFile, windowId }) {
     case "media":
       return <MediaAppView windowId={windowId} />;
     case "settings":
-      return <SettingsPanel />;
+      return (
+        <div className="flex h-full min-h-0 w-full items-start justify-center overflow-auto">
+          <SettingsPanel windowId={windowId} />
+        </div>
+      );
     default:
       return (
         <div className="flex h-full items-center justify-center bg-white text-sm text-zinc-500">

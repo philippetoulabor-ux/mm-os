@@ -29,11 +29,75 @@ export const MEDIA_MINIMIZE_INSET = 12;
 export const MEDIA_MINIMIZE_INSET_X = MEDIA_MINIMIZE_INSET;
 export const MEDIA_MINIMIZE_INSET_Y = MEDIA_MINIMIZE_INSET;
 
+/** Minimaler Rand Fenster ↔ sichtbare Viewport-/Seitenkante (links/rechts/unten/oben). */
+export const WINDOW_DESKTOP_INSET = 4;
+
+/** Reservierter Bereich am Layer-Unterrand (Dock-Höhe + `bottom-3` wie in Dock.js). */
+export function desktopBottomReserve() {
+  return DOCK_H + MEDIA_MINIMIZE_INSET_Y;
+}
+
+/**
+ * Dock visuell abblenden, wenn ein Fenster die Dock-Zone überlappt.
+ * Nur ein schmaler Streifen an der Layer-Unterkante (wie Dock.js `bottom-3` + kompakte Dock-Höhe),
+ * nicht die alte große „Reserve + Band“-Fläche.
+ */
+export function windowShouldDimDock(win, desktopW, desktopH) {
+  if (win.minimized) return false;
+  /** Ab Layer-Unterkante: ~12px (bottom-3) + geschätzte Dock-Höhe im Ruhezustand (scale 0.72). */
+  const DOCK_DIM_ZONE_PX = 68;
+  const dockTop = desktopH - DOCK_DIM_ZONE_PX;
+  const bottom = win.y + win.h;
+  if (bottom <= dockTop) return false;
+  if (win.y >= desktopH) return false;
+  const hx1 = Math.max(0, win.x);
+  const hx2 = Math.min(desktopW, win.x + win.w);
+  return hx2 > hx1;
+}
+
+/**
+ * Grenzen im Koordinatensystem von OSWindow (relativ zu `[data-mm-desktop-layer]`).
+ * Nutzt gemessene Layer-Größe statt `innerHeight - SITE_HEADER`, damit Resize nicht künstlich kleiner bleibt.
+ */
+export function getDesktopWindowLayoutLimits() {
+  const inset = WINDOW_DESKTOP_INSET;
+  if (typeof window === "undefined") {
+    const desktopH = 900;
+    const layerTop = SITE_HEADER_H;
+    const minLayerY = inset - layerTop;
+    const maxBottomLayer = desktopH - inset;
+    const maxWinH = Math.max(MIN_WIN_H, maxBottomLayer - minLayerY);
+    return {
+      desktopW: 1920,
+      desktopH,
+      inset,
+      minLayerY,
+      innerW: Math.max(MIN_WIN_W, 1920 - 2 * inset),
+      maxWinH,
+      maxBottomLayer,
+    };
+  }
+  const { w: desktopW, h: desktopH, layerTop } = getDesktopContentRect();
+  /** Viewport-Oberkante + inset ≙ Layer-Koordinate: Fenster nicht an Header-Linie blockieren. */
+  const minLayerY = inset - layerTop;
+  const maxBottomLayer = desktopH - inset;
+  const maxWinH = Math.max(MIN_WIN_H, maxBottomLayer - minLayerY);
+  return {
+    desktopW,
+    desktopH,
+    inset,
+    minLayerY,
+    innerW: Math.max(MIN_WIN_W, desktopW - 2 * inset),
+    maxWinH,
+    maxBottomLayer,
+  };
+}
+
 /**
  * Gemessene Größe des `relative`-Desktop-Layers (Fenster-Positionierungs-Container).
  * Wird von DesktopShell per ResizeObserver gesetzt — gleiche Basis für x und y wie in CSS.
  */
-const desktopLayerMetrics = { w: 0, h: 0 };
+const desktopLayerMetrics = { w: 0, h: 0, top: SITE_HEADER_H };
 
 /** @param {HTMLElement | null} el Desktop-Layer unter dem Site-Header */
 export function syncDesktopLayerMetrics(el) {
@@ -41,44 +105,54 @@ export function syncDesktopLayerMetrics(el) {
   const r = el.getBoundingClientRect();
   desktopLayerMetrics.w = r.width;
   desktopLayerMetrics.h = r.height;
+  desktopLayerMetrics.top = r.top;
 }
 
 /**
  * Größe des Desktop-Inhalts (Koordinatensystem von OSWindow: 0,0 = oben links im Layer).
- * Bevorzugt Live-Messung von `[data-mm-desktop-layer]` (identisch mit Positionierungs-Container).
+ * `layerTop`: Abstand Layer-Oberkante → Viewport-Oberkante (für Bounds bis zum Seitenrand).
  */
 export function getDesktopContentRect() {
-  if (typeof window === "undefined") return { w: 1920, h: 900 };
+  if (typeof window === "undefined") {
+    return { w: 1920, h: 900, layerTop: SITE_HEADER_H };
+  }
   const el = document.querySelector("[data-mm-desktop-layer]");
   if (el) {
     const r = el.getBoundingClientRect();
     desktopLayerMetrics.w = r.width;
     desktopLayerMetrics.h = r.height;
-    return { w: r.width, h: r.height };
+    desktopLayerMetrics.top = r.top;
+    return { w: r.width, h: r.height, layerTop: r.top };
   }
   if (desktopLayerMetrics.w > 0 && desktopLayerMetrics.h > 0) {
-    return { w: desktopLayerMetrics.w, h: desktopLayerMetrics.h };
+    return {
+      w: desktopLayerMetrics.w,
+      h: desktopLayerMetrics.h,
+      layerTop: desktopLayerMetrics.top,
+    };
   }
   const w = document.documentElement?.clientWidth ?? window.innerWidth;
   const h = window.innerHeight - SITE_HEADER_H;
-  return { w, h };
+  return { w, h, layerTop: SITE_HEADER_H };
 }
 
 /** Unten rechts: Rand des gemessenen Layers; gleicher Inset X/Y. */
 function getMediaMinimizedPosition() {
   if (typeof window === "undefined") return { x: 0, y: 0 };
   const px = MEDIA_MINIMIZE_INSET_X;
-  const py = MEDIA_MINIMIZE_INSET_Y;
   const { w: dw, h: dh } = getDesktopContentRect();
+  const ins = WINDOW_DESKTOP_INSET;
+  const { minLayerY } = getDesktopWindowLayoutLimits();
   return {
-    x: Math.max(0, dw - MEDIA_COMPACT_W - px),
-    y: Math.max(-SITE_HEADER_H, dh - MEDIA_COMPACT_TOTAL_H - py),
+    x: Math.max(ins, dw - MEDIA_COMPACT_W - px),
+    y: Math.max(minLayerY, dh - MEDIA_COMPACT_TOTAL_H - ins),
   };
 }
 
 const DesktopContext = createContext(null);
 
 const DARK_MODE_STORAGE_KEY = "mm-os-dark";
+const FOLDER_PREVIEW_STORAGE_KEY = "mm-os-folder-preview";
 const DESKTOP_ICONS_POS_KEY = "mm-os-desktop-icons";
 const NOTES_TEXT_KEY = "mm-os-notes-text";
 const WINDOWS_STATE_KEY = "mm-os-windows-v1";
@@ -89,12 +163,12 @@ function centerWindow(size) {
   if (typeof window === "undefined") {
     return { x: 80, y: 120 };
   }
-  const vw = window.innerWidth;
-  const vh = window.innerHeight;
-  const availH = vh - SITE_HEADER_H - DOCK_H;
+  const { desktopW, inset, maxBottomLayer, minLayerY } =
+    getDesktopWindowLayoutLimits();
+  const yMax = maxBottomLayer - size.h;
   return {
-    x: Math.max(16, (vw - size.w) / 2),
-    y: Math.max(16, (availH - size.h) / 2),
+    x: Math.max(inset, (desktopW - size.w) / 2),
+    y: Math.max(minLayerY, Math.min((minLayerY + yMax) / 2, yMax)),
   };
 }
 
@@ -191,34 +265,37 @@ function sanitizeWindow(w) {
 
 function clampWindowsToViewport(windows) {
   if (typeof window === "undefined") return windows;
-  const vw = window.innerWidth;
-  const vh = window.innerHeight;
-  const { w: desktopW, h: desktopH } = getDesktopContentRect();
-  const maxBottom = vh - DOCK_H;
-  const maxH = vh - SITE_HEADER_H - DOCK_H;
+  const {
+    desktopW,
+    desktopH,
+    inset,
+    innerW,
+    maxWinH,
+    maxBottomLayer,
+    minLayerY,
+  } = getDesktopWindowLayoutLimits();
   const px = MEDIA_MINIMIZE_INSET_X;
-  const py = MEDIA_MINIMIZE_INSET_Y;
   return windows.map((win) => {
     if (win.maximized) {
       return {
         ...win,
         x: 0,
-        y: 0,
-        w: vw,
-        h: maxH,
+        y: minLayerY,
+        w: desktopW,
+        h: maxWinH,
       };
     }
     let { x, y, w, h } = win;
     if (win.appId === "media" && win.mediaVideoCollapsed) {
       w = MEDIA_COMPACT_W;
       h = MEDIA_COMPACT_TOTAL_H;
-      x = Math.max(0, Math.min(x, desktopW - w - px));
-      y = Math.max(-SITE_HEADER_H, Math.min(y, desktopH - h - py));
+      x = Math.max(inset, Math.min(x, desktopW - w - px));
+      y = Math.max(minLayerY, Math.min(y, desktopH - h - inset));
     } else {
-      w = Math.max(MIN_WIN_W, w);
-      h = Math.max(MIN_WIN_H, h);
-      x = Math.max(0, Math.min(x, vw - w));
-      y = Math.max(-SITE_HEADER_H, Math.min(y, maxBottom - h));
+      w = Math.max(MIN_WIN_W, Math.min(w, innerW));
+      h = Math.max(MIN_WIN_H, Math.min(h, maxWinH));
+      x = Math.max(inset, Math.min(x, desktopW - w - inset));
+      y = Math.max(minLayerY, Math.min(y, maxBottomLayer - h));
     }
     return { ...win, x, y, w, h };
   });
@@ -245,6 +322,7 @@ function loadWindowsFromStorage() {
 export function DesktopProvider({ children }) {
   const [windows, setWindows] = useState([]);
   const [darkMode, setDarkModeState] = useState(false);
+  const [folderPreview, setFolderPreviewState] = useState(true);
   const [desktopIconPositions, setDesktopIconPositions] = useState(() =>
     getDefaultDesktopIconPositions()
   );
@@ -264,6 +342,9 @@ export function DesktopProvider({ children }) {
     try {
       if (localStorage.getItem(DARK_MODE_STORAGE_KEY) === "1") {
         setDarkModeState(true);
+      }
+      if (localStorage.getItem(FOLDER_PREVIEW_STORAGE_KEY) === "0") {
+        setFolderPreviewState(false);
       }
     } catch {
       /* ignore */
@@ -382,6 +463,18 @@ export function DesktopProvider({ children }) {
       const next = typeof value === "function" ? value(prev) : value;
       try {
         localStorage.setItem(DARK_MODE_STORAGE_KEY, next ? "1" : "0");
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  }, []);
+
+  const setFolderPreview = useCallback((value) => {
+    setFolderPreviewState((prev) => {
+      const next = typeof value === "function" ? value(prev) : value;
+      try {
+        localStorage.setItem(FOLDER_PREVIEW_STORAGE_KEY, next ? "1" : "0");
       } catch {
         /* ignore */
       }
@@ -537,11 +630,10 @@ export function DesktopProvider({ children }) {
         let rx = w.x + w.w - rw;
         let ry = w.y + w.h - rh;
         if (typeof window !== "undefined") {
-          const vw = window.innerWidth;
-          const vh = window.innerHeight;
-          const maxBottom = vh - DOCK_H;
-          rx = Math.max(0, Math.min(rx, vw - rw));
-          ry = Math.max(-SITE_HEADER_H, Math.min(ry, maxBottom - rh));
+          const { desktopW, inset, maxBottomLayer, minLayerY } =
+            getDesktopWindowLayoutLimits();
+          rx = Math.max(inset, Math.min(rx, desktopW - rw - inset));
+          ry = Math.max(minLayerY, Math.min(ry, maxBottomLayer - rh));
         }
         return {
           ...w,
@@ -575,14 +667,15 @@ export function DesktopProvider({ children }) {
         }
         const pb = { x: w.x, y: w.y, w: w.w, h: w.h };
         if (typeof window === "undefined") return w;
+        const { desktopW, maxWinH, minLayerY } = getDesktopWindowLayoutLimits();
         return {
           ...w,
           maximized: true,
           prevBounds: pb,
           x: 0,
-          y: 0,
-          w: window.innerWidth,
-          h: window.innerHeight - SITE_HEADER_H - DOCK_H,
+          y: minLayerY,
+          w: desktopW,
+          h: maxWinH,
         };
       })
     );
@@ -624,22 +717,28 @@ export function DesktopProvider({ children }) {
       prev.map((win) => {
         if (win.id !== id) return win;
         let { x, y, w, h } = bounds;
-        const vw = window.innerWidth;
-        const vh = window.innerHeight;
         const { w: dW, h: dH } = getDesktopContentRect();
         const px = MEDIA_MINIMIZE_INSET_X;
-        const py = MEDIA_MINIMIZE_INSET_Y;
-        const maxBottom = vh - DOCK_H;
         if (win.appId === "media" && win.mediaVideoCollapsed) {
           w = MEDIA_COMPACT_W;
           h = MEDIA_COMPACT_TOTAL_H;
-          x = Math.max(0, Math.min(x, dW - w - px));
-          y = Math.max(-SITE_HEADER_H, Math.min(y, dH - h - py));
+          const ins = WINDOW_DESKTOP_INSET;
+          const { minLayerY } = getDesktopWindowLayoutLimits();
+          x = Math.max(ins, Math.min(x, dW - w - px));
+          y = Math.max(minLayerY, Math.min(y, dH - h - ins));
         } else {
-          w = Math.max(MIN_WIN_W, w);
-          h = Math.max(MIN_WIN_H, h);
-          x = Math.max(0, Math.min(x, vw - w));
-          y = Math.max(-SITE_HEADER_H, Math.min(y, maxBottom - h));
+          const {
+            desktopW,
+            inset,
+            innerW,
+            maxWinH,
+            maxBottomLayer,
+            minLayerY,
+          } = getDesktopWindowLayoutLimits();
+          w = Math.max(MIN_WIN_W, Math.min(w, innerW));
+          h = Math.max(MIN_WIN_H, Math.min(h, maxWinH));
+          x = Math.max(inset, Math.min(x, desktopW - w - inset));
+          y = Math.max(minLayerY, Math.min(y, maxBottomLayer - h));
         }
         return { ...win, x, y, w, h, maximized: false };
       })
@@ -650,18 +749,17 @@ export function DesktopProvider({ children }) {
    * Passt Fensterbreite/-höhe an Medien-Seitenverhältnis an (Inhalt = Clientfläche unter Titelleiste).
    * Ruft man typischerweise nach naturalWidth/naturalHeight bzw. videoWidth/videoHeight auf.
    */
-  const fitWindowToContentSize = useCallback((id, intrinsicW, intrinsicH) => {
+  const fitWindowToContentSize = useCallback(
+    (id, intrinsicW, intrinsicH, options) => {
     if (typeof window === "undefined") return;
     if (!intrinsicW || !intrinsicH || intrinsicW <= 0 || intrinsicH <= 0) return;
 
-    const pad = 24;
-    const maxCW = window.innerWidth - pad * 2;
-    const maxCH =
-      window.innerHeight -
-      SITE_HEADER_H -
-      DOCK_H -
-      pad * 2 -
-      OS_TITLEBAR_H;
+    const lockAspectForResize = options?.lockAspectForResize !== false;
+
+    const ins = WINDOW_DESKTOP_INSET;
+    const { innerW, maxWinH } = getDesktopWindowLayoutLimits();
+    const maxCW = innerW;
+    const maxCH = Math.max(80, maxWinH - OS_TITLEBAR_H - ins);
     const minCW = MIN_WIN_W;
     const minCH = Math.max(MIN_WIN_H - OS_TITLEBAR_H, 80);
 
@@ -689,13 +787,12 @@ export function DesktopProvider({ children }) {
     setWindows((prev) =>
       prev.map((win) => {
         if (win.id !== id) return win;
-        const vw = window.innerWidth;
-        const vh = window.innerHeight;
+        const { desktopW, inset, maxBottomLayer, minLayerY } =
+          getDesktopWindowLayoutLimits();
         let x = win.x + (win.w - totalW) / 2;
         let y = win.y + (win.h - totalH) / 2;
-        x = Math.max(0, Math.min(x, vw - totalW));
-        const maxBottom = vh - DOCK_H;
-        y = Math.max(-SITE_HEADER_H, Math.min(y, maxBottom - totalH));
+        x = Math.max(inset, Math.min(x, desktopW - totalW - inset));
+        y = Math.max(minLayerY, Math.min(y, maxBottomLayer - totalH));
         return {
           ...win,
           x,
@@ -704,12 +801,16 @@ export function DesktopProvider({ children }) {
           h: totalH,
           maximized: false,
           prevBounds: null,
-          /** Inhaltsfläche (ohne Titelleiste): rw×rh = Seitenverhältnis für Resize-Lock */
-          contentAspect: { rw: intrinsicW, rh: intrinsicH },
+          /** Nur bei resizable + Medien: Seitenverhältnis fürs Ziehen an den Kanten */
+          contentAspect: lockAspectForResize
+            ? { rw: intrinsicW, rh: intrinsicH }
+            : null,
         };
       })
     );
-  }, []);
+  },
+  []
+);
 
   const value = useMemo(
     () => ({
@@ -730,6 +831,8 @@ export function DesktopProvider({ children }) {
       resetDesktopIconPositions,
       darkMode,
       setDarkMode,
+      folderPreview,
+      setFolderPreview,
       notesText,
       setNotesText,
       appendNote,
@@ -762,6 +865,8 @@ export function DesktopProvider({ children }) {
       resetDesktopIconPositions,
       darkMode,
       setDarkMode,
+      folderPreview,
+      setFolderPreview,
       notesText,
       setNotesText,
       appendNote,

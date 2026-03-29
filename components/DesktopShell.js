@@ -51,7 +51,7 @@ function DesktopShellInner() {
       }}
     >
       <SiteHeader />
-      {/* overflow-visible: Fenster dürfen nach oben in den Header-Bereich (negatives top) */}
+      {/* overflow-visible: Fenster dürfen mit negativem top in den Header bis zur Viewport-Kante */}
       <div
         ref={layerRef}
         data-mm-desktop-layer

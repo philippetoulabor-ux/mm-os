@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AppIcon } from "@/components/AppIcon";
 import { APPS, DESKTOP_ICONS } from "@/lib/apps";
+import { getWebAssetFolderPreviewHref } from "@/lib/webAssetFolderPreview";
 import { useDesktop } from "@/context/DesktopContext";
 
 const ICON_W = 80;
@@ -23,9 +24,41 @@ function toPixelPosition(pos, containerWidth) {
   return { x: pos?.x ?? MARGIN_X, y: pos?.y ?? START_Y };
 }
 
+function DesktopFolderIcon({ app, folderPreview }) {
+  const href =
+    folderPreview && app.assetDir
+      ? getWebAssetFolderPreviewHref(app.assetDir)
+      : null;
+  const [imgFailed, setImgFailed] = useState(false);
+
+  useEffect(() => {
+    setImgFailed(false);
+  }, [href]);
+
+  if (href && !imgFailed) {
+    return (
+      <>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={href}
+          alt=""
+          className="h-9 w-9 shrink-0 rounded-lg object-cover shadow-md ring-1 ring-black/10 dark:ring-white/15"
+          onError={() => setImgFailed(true)}
+        />
+      </>
+    );
+  }
+
+  return <AppIcon app={app} />;
+}
+
 export function DesktopIcons() {
-  const { openOrFocus, desktopIconPositions, setDesktopIconPosition } =
-    useDesktop();
+  const {
+    openOrFocus,
+    desktopIconPositions,
+    setDesktopIconPosition,
+    folderPreview,
+  } = useDesktop();
   const [containerW, setContainerW] = useState(0);
   const desktopRef = useRef(null);
   const dragRef = useRef(null);
@@ -137,7 +170,7 @@ export function DesktopIcons() {
             }}
           >
             <span className="inline-flex drop-shadow-md filter" aria-hidden>
-              <AppIcon app={app} />
+              <DesktopFolderIcon app={app} folderPreview={folderPreview} />
             </span>
             <span className="max-w-full truncate text-xs font-medium text-zinc-800 [text-shadow:0_1px_0_rgba(255,255,255,0.6)] dark:text-zinc-100 dark:[text-shadow:0_1px_0_rgba(0,0,0,0.35)]">
               {item.label}

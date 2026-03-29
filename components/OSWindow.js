@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   getDesktopContentRect,
+  getDesktopWindowLayoutLimits,
   MEDIA_MINIMIZE_INSET_X,
-  MEDIA_MINIMIZE_INSET_Y,
   useDesktop,
 } from "@/context/DesktopContext";
 import { AppContent } from "@/components/AppContent";
@@ -108,12 +108,10 @@ function clampAspectWindowBounds(
   titlebar,
   minW,
   minH,
-  vw,
-  siteHeader,
-  dock
+  limits
 ) {
-  const maxBottom = window.innerHeight - dock;
-  const maxWinH = window.innerHeight - siteHeader - dock;
+  const { innerW, maxWinH, maxBottomLayer, inset, minLayerY, desktopW } =
+    limits;
 
   let w = Math.max(minW, nw);
   let h = w * (rh / rw) + titlebar;
@@ -124,7 +122,7 @@ function clampAspectWindowBounds(
     h = w * (rh / rw) + titlebar;
   }
 
-  let s = Math.min(1, vw / w, maxWinH / h);
+  let s = Math.min(1, innerW / w, maxWinH / h);
   w = Math.max(minW, Math.floor(w * s));
   h = w * (rh / rw) + titlebar;
 
@@ -133,8 +131,8 @@ function clampAspectWindowBounds(
     w = Math.max(minW, (h - titlebar) * (rw / rh));
     h = w * (rh / rw) + titlebar;
   }
-  if (w > vw) {
-    w = vw;
+  if (w > innerW) {
+    w = innerW;
     h = w * (rh / rw) + titlebar;
   }
   if (h < minH) {
@@ -145,8 +143,8 @@ function clampAspectWindowBounds(
 
   let x = nx;
   let y = ny;
-  x = Math.max(0, Math.min(x, vw - w));
-  y = Math.max(-siteHeader, Math.min(y, maxBottom - h));
+  x = Math.max(inset, Math.min(x, desktopW - w - inset));
+  y = Math.max(minLayerY, Math.min(y, maxBottomLayer - h));
   return { x, y, w, h };
 }
 
@@ -158,8 +156,6 @@ export function OSWindow({ win }) {
     setWindowBounds,
     openOrFocus,
     toggleMediaPlayerVideoPanel,
-    siteHeaderHeight,
-    dockHeight,
     minWindowW,
     minWindowH,
     osTitlebarH,
@@ -236,24 +232,27 @@ export function OSWindow({ win }) {
       if (!dragging.current || win.maximized) return;
       const nx = e.clientX - dragOffset.current.x;
       const ny = e.clientY - dragOffset.current.y;
-      const vw = window.innerWidth;
-      const vh = window.innerHeight;
       const { w: dW, h: dH } = getDesktopContentRect();
+      const {
+        desktopW,
+        inset,
+        minLayerY,
+        maxBottomLayer,
+      } = getDesktopWindowLayoutLimits();
       const px = MEDIA_MINIMIZE_INSET_X;
-      const py = MEDIA_MINIMIZE_INSET_Y;
       let maxX;
       let maxY;
       if (win.appId === "media" && win.mediaVideoCollapsed) {
         maxX = dW - win.w - px;
-        maxY = dH - win.h - py;
+        maxY = dH - win.h - inset;
       } else {
-        maxX = vw - 80;
-        maxY = vh - siteHeaderHeight - dockHeight - 40;
+        maxX = desktopW - win.w - inset;
+        maxY = maxBottomLayer - win.h;
       }
       moveWindow(
         win.id,
-        Math.max(0, Math.min(nx, maxX)),
-        Math.max(-siteHeaderHeight, Math.min(ny, maxY))
+        Math.max(inset, Math.min(nx, maxX)),
+        Math.max(minLayerY, Math.min(ny, maxY))
       );
     };
     const onUp = () => {
@@ -273,8 +272,6 @@ export function OSWindow({ win }) {
     win.w,
     win.h,
     moveWindow,
-    siteHeaderHeight,
-    dockHeight,
   ]);
 
   useEffect(() => {
@@ -293,7 +290,7 @@ export function OSWindow({ win }) {
       ) {
         const raw = computeAspectResizeBounds(rs, dx, dy, aspect, osTitlebarH);
         if (!raw) return;
-        const vw = window.innerWidth;
+        const limits = getDesktopWindowLayoutLimits();
         const clamped = clampAspectWindowBounds(
           raw.x,
           raw.y,
@@ -304,9 +301,7 @@ export function OSWindow({ win }) {
           osTitlebarH,
           minWindowW,
           minWindowH,
-          vw,
-          siteHeaderHeight,
-          dockHeight
+          limits
         );
         setWindowBounds(win.id, clamped);
         return;
@@ -372,8 +367,6 @@ export function OSWindow({ win }) {
     minWindowW,
     minWindowH,
     osTitlebarH,
-    siteHeaderHeight,
-    dockHeight,
   ]);
 
   if (!mounted || win.minimized) return null;
@@ -393,8 +386,11 @@ export function OSWindow({ win }) {
       : {}),
   };
 
+  const appAllowsResize = APPS[win.appId]?.resizable !== false;
   const showResize =
-    !win.maximized && !(win.appId === "media" && win.mediaVideoCollapsed);
+    appAllowsResize &&
+    !win.maximized &&
+    !(win.appId === "media" && win.mediaVideoCollapsed);
   const edge = "absolute z-10";
   const corner = "absolute z-20 h-4 w-4";
 
