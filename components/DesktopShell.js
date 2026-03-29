@@ -6,7 +6,6 @@ import {
   syncDesktopLayerMetrics,
   useDesktop,
 } from "@/context/DesktopContext";
-import { Dock } from "@/components/Dock";
 import { DesktopIcons } from "@/components/DesktopIcons";
 import { OSWindow } from "@/components/OSWindow";
 import { SiteHeader } from "@/components/SiteHeader";
@@ -20,7 +19,6 @@ function DesktopLayers() {
       {sorted.map((w) => (
         <OSWindow key={w.id} win={w} />
       ))}
-      <Dock />
     </>
   );
 }

@@ -462,7 +462,7 @@ export function OSWindow({ win }) {
               type="button"
               aria-label="Notes öffnen"
               title="Notes"
-              className="flex min-h-7 min-w-7 items-center justify-center rounded-full bg-white px-2.5 py-1 text-black hover:bg-zinc-100"
+              className="flex min-h-7 min-w-7 items-center justify-center rounded-full bg-transparent px-2.5 py-1 text-black hover:opacity-90 dark:text-zinc-100"
               onMouseDown={(e) => e.stopPropagation()}
               onClick={(e) => {
                 e.stopPropagation();

@@ -7,7 +7,12 @@ import {
   useRef,
   useState,
 } from "react";
-import { APPS, isDesktopAtDefaultLayout, webAssetAppId } from "@/lib/apps";
+import {
+  APPS,
+  assetDirDisplayName,
+  isDesktopAtDefaultLayout,
+  webAssetAppId,
+} from "@/lib/apps";
 import { webAssetManifest } from "@/lib/webAssetManifest";
 import { useDesktop } from "@/context/DesktopContext";
 import { NotesAppView } from "@/components/NotesAppView";
@@ -395,7 +400,7 @@ function FinderView() {
                 className="flex w-full min-w-0 items-center gap-2 px-2 py-2 text-left text-zinc-800 transition-colors hover:bg-zinc-100"
               >
                 <span aria-hidden>📁</span>
-                <span className="truncate">{dir}</span>
+                <span className="truncate">{assetDirDisplayName(dir)}</span>
               </button>
             </li>
           ))}
@@ -411,7 +416,9 @@ function AssetSubfolderView({ dir, basePath = "/web" }) {
   const files = entry?.files ?? [];
   return (
     <div className="flex h-full flex-col gap-2 overflow-auto bg-white p-3 text-sm text-zinc-800">
-      <p className="shrink-0 font-medium text-zinc-900">📁 {dir}</p>
+      <p className="shrink-0 font-medium text-zinc-900">
+        📁 {assetDirDisplayName(dir)}
+      </p>
       <p className="text-xs text-zinc-500">
         <code className="text-zinc-600">{basePath}/{dir}</code>
       </p>

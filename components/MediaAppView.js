@@ -22,6 +22,9 @@ const PLAYLISTS = [
 
 const MEDIA_STATE_KEY = "mm-os-media-state";
 
+const WMP_PLAY_BTN_IMG = "/web/buttons/playButton.jpg";
+const WMP_PAUSE_BTN_IMG = "/web/buttons/pauseButton.jpg";
+
 function readPlaylistIndex() {
   if (typeof window === "undefined") return 0;
   try {
@@ -464,12 +467,17 @@ export function MediaAppView({ windowId }) {
               </button>
               <button
                 type="button"
-                className="mm-wmp-playbtn mm-wmp-playbtn--compact"
+                className="mm-wmp-playbtn mm-wmp-playbtn--compact mm-wmp-playbtn--custom"
                 disabled={!playerReady}
                 onClick={togglePlayPause}
                 aria-label={isPlaying ? "Pause" : "Wiedergabe"}
               >
-                {isPlaying ? "⏸" : "▶"}
+                <img
+                  className="mm-wmp-playbtn-img"
+                  src={isPlaying ? WMP_PAUSE_BTN_IMG : WMP_PLAY_BTN_IMG}
+                  alt=""
+                  draggable={false}
+                />
               </button>
               <button
                 type="button"

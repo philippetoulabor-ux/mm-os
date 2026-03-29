@@ -14,7 +14,6 @@ import { getMentionToken } from "@/lib/noteRefs";
 
 /** Höhe des Site-Headers (kompaktes Logo + Padding); Näherung für Fenster-Layout */
 const SITE_HEADER_H = 180;
-const DOCK_H = 80;
 /** OSWindow Titelleiste (entspricht Tailwind h-10; gleicher Inset zum Schließen-Button h-8) */
 const OS_TITLEBAR_H = 40;
 const MIN_WIN_W = 240;
@@ -24,7 +23,7 @@ const MEDIA_COMPACT_CLIENT_H = 120;
 /** Feste Breite im minimierten Media-Player (kleinstes Fenster). */
 const MEDIA_COMPACT_W = MIN_WIN_W;
 const MEDIA_COMPACT_TOTAL_H = OS_TITLEBAR_H + MEDIA_COMPACT_CLIENT_H;
-/** Gleicher Abstand zum rechten und unteren Rand des Desktop-Layers (wie Dock `bottom-3`). */
+/** Abstand zum rechten und unteren Rand des Desktop-Layers (minimiertes Media-Fenster). */
 export const MEDIA_MINIMIZE_INSET = 12;
 export const MEDIA_MINIMIZE_INSET_X = MEDIA_MINIMIZE_INSET;
 export const MEDIA_MINIMIZE_INSET_Y = MEDIA_MINIMIZE_INSET;
@@ -32,19 +31,12 @@ export const MEDIA_MINIMIZE_INSET_Y = MEDIA_MINIMIZE_INSET;
 /** Minimaler Rand Fenster ↔ sichtbare Viewport-/Seitenkante (links/rechts/unten/oben). */
 export const WINDOW_DESKTOP_INSET = 4;
 
-/** Reservierter Bereich am Layer-Unterrand (Dock-Höhe + `bottom-3` wie in Dock.js). */
-export function desktopBottomReserve() {
-  return DOCK_H + MEDIA_MINIMIZE_INSET_Y;
-}
-
 /**
- * Dock visuell abblenden, wenn ein Fenster die Dock-Zone überlappt.
- * Nur ein schmaler Streifen an der Layer-Unterkante (wie Dock.js `bottom-3` + kompakte Dock-Höhe),
- * nicht die alte große „Reserve + Band“-Fläche.
+ * Mini-Dock unten links visuell abblenden, wenn ein Fenster die untere Dock-Zone überlappt
+ * (gleiche Logik wie früheres zentriertes Dock: Streifen an der Layer-Unterkante).
  */
 export function windowShouldDimDock(win, desktopW, desktopH) {
   if (win.minimized) return false;
-  /** Ab Layer-Unterkante: ~12px (bottom-3) + geschätzte Dock-Höhe im Ruhezustand (scale 0.72). */
   const DOCK_DIM_ZONE_PX = 68;
   const dockTop = desktopH - DOCK_DIM_ZONE_PX;
   const bottom = win.y + win.h;
@@ -368,7 +360,7 @@ export function DesktopProvider({ children }) {
     }
   }, []);
 
-  /** Minimierten Media-Player unten rechts halten (Dock-Inset wie `bottom-3`). */
+  /** Minimierten Media-Player unten rechts halten (Layer-Rand-Inset). */
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
     const onResize = () => {
@@ -842,7 +834,7 @@ export function DesktopProvider({ children }) {
       /** Fenster-Koordinaten beziehen sich auf den Desktop unter dem Header; min y ≈ 0 */
       menuBarHeight: 0,
       siteHeaderHeight: SITE_HEADER_H,
-      dockHeight: DOCK_H,
+      dockHeight: 0,
       minWindowW: MIN_WIN_W,
       minWindowH: MIN_WIN_H,
       osTitlebarH: OS_TITLEBAR_H,
