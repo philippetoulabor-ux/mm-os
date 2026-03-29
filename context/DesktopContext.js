@@ -24,10 +24,10 @@ const MEDIA_COMPACT_CLIENT_H = 120;
 /** Feste Breite im minimierten Media-Player (kleinstes Fenster). */
 const MEDIA_COMPACT_W = MIN_WIN_W;
 const MEDIA_COMPACT_TOTAL_H = OS_TITLEBAR_H + MEDIA_COMPACT_CLIENT_H;
-/** Unten: wie Dock `bottom-3` (12px). */
-export const MEDIA_MINIMIZE_INSET_Y = 12;
-/** Rechts: größerer Abstand zum Rand (12px wirkten optisch zu knapp). */
-export const MEDIA_MINIMIZE_INSET_X = 28;
+/** Gleicher Abstand zum rechten und unteren Rand des Desktop-Layers (wie Dock `bottom-3`). */
+export const MEDIA_MINIMIZE_INSET = 12;
+export const MEDIA_MINIMIZE_INSET_X = MEDIA_MINIMIZE_INSET;
+export const MEDIA_MINIMIZE_INSET_Y = MEDIA_MINIMIZE_INSET;
 
 /**
  * Gemessene Größe des `relative`-Desktop-Layers (Fenster-Positionierungs-Container).
@@ -64,7 +64,7 @@ export function getDesktopContentRect() {
   return { w, h };
 }
 
-/** Unten rechts: Rand des gemessenen Layers; X und Y separat (rechts großzügiger). */
+/** Unten rechts: Rand des gemessenen Layers; gleicher Inset X/Y. */
 function getMediaMinimizedPosition() {
   if (typeof window === "undefined") return { x: 0, y: 0 };
   const px = MEDIA_MINIMIZE_INSET_X;
@@ -404,8 +404,28 @@ export function DesktopProvider({ children }) {
         );
       }
       zCounter.current += 1;
-      const pos = centerWindow(def.defaultSize);
       const id = `${appId}-${Date.now()}`;
+      if (appId === "media") {
+        const pos = getMediaMinimizedPosition();
+        return [
+          ...prev,
+          {
+            id,
+            appId,
+            title: def.title,
+            x: pos.x,
+            y: pos.y,
+            w: MEDIA_COMPACT_W,
+            h: MEDIA_COMPACT_TOTAL_H,
+            z: zCounter.current,
+            minimized: false,
+            maximized: false,
+            prevBounds: null,
+            mediaVideoCollapsed: true,
+          },
+        ];
+      }
+      const pos = centerWindow(def.defaultSize);
       return [
         ...prev,
         {
@@ -420,7 +440,6 @@ export function DesktopProvider({ children }) {
           minimized: false,
           maximized: false,
           prevBounds: null,
-          ...(appId === "media" ? { mediaVideoCollapsed: false } : {}),
         },
       ];
     });
@@ -514,14 +533,9 @@ export function DesktopProvider({ children }) {
           saved && typeof saved.h === "number" && Number.isFinite(saved.h)
             ? Math.max(MIN_WIN_H, saved.h)
             : fallback.h;
-        let rx =
-          saved && typeof saved.x === "number" && Number.isFinite(saved.x)
-            ? saved.x
-            : w.x;
-        let ry =
-          saved && typeof saved.y === "number" && Number.isFinite(saved.y)
-            ? saved.y
-            : w.y;
+        // Untere rechte Ecke des kompakten Fensters beibehalten → Größe wächst nach links oben.
+        let rx = w.x + w.w - rw;
+        let ry = w.y + w.h - rh;
         if (typeof window !== "undefined") {
           const vw = window.innerWidth;
           const vh = window.innerHeight;

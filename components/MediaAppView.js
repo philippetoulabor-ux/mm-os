@@ -78,6 +78,10 @@ const SKIP_BACK_RESTART_SEC = 2.5;
 /** Max. automatische Weiterschaltungen bei Fehler (Alter, Embed, nicht gefunden, …). */
 const MAX_ERROR_AUTO_SKIPS = 48;
 
+/** Lautstärke beim Start (0) bis Ziel nach dieser Dauer (ms) einblenden (Autoplay-freundlich). */
+const VOLUME_FADE_MS = 7000;
+const VOLUME_TARGET = 100;
+
 /** @returns {Promise<void>} */
 function loadYoutubeIframeApi() {
   if (typeof window === "undefined") return Promise.resolve();
@@ -128,6 +132,7 @@ export function MediaAppView({ windowId }) {
   const nowPlayingMarqueeRef = useRef(null);
   const nowPlayingMarqueeSegRef = useRef(null);
   const reduceMotionRef = useRef(false);
+  const volumeFadeRafRef = useRef(0);
 
   const [playlistIndex, setPlaylistIndex] = useState(() => readPlaylistIndex());
 
@@ -236,16 +241,48 @@ export function MediaAppView({ windowId }) {
         events: {
           onReady: (e) => {
             if (cancelled) return;
+            const p = e.target;
             setPlayerReady(true);
-            const t = e.target.getVideoData()?.title;
+            const t = p.getVideoData()?.title;
             if (t) setPlayingTitle(t);
             const YT = window.YT;
-            const ps = e.target.getPlayerState?.();
+            try {
+              if (typeof p.setShuffle === "function") p.setShuffle(true);
+            } catch {
+              /* ignore */
+            }
+            try {
+              p.setVolume(0);
+            } catch {
+              /* ignore */
+            }
+            try {
+              p.playVideo();
+            } catch {
+              /* ignore */
+            }
+            const ps = p.getPlayerState?.();
             if (ps != null && YT) {
               setIsPlaying(
                 ps === YT.PlayerState.PLAYING || ps === YT.PlayerState.BUFFERING
               );
             }
+            const fadeStart = performance.now();
+            const tick = (now) => {
+              if (cancelled) return;
+              const u = Math.min(1, (now - fadeStart) / VOLUME_FADE_MS);
+              try {
+                p.setVolume(Math.round(VOLUME_TARGET * u));
+              } catch {
+                /* ignore */
+              }
+              if (u < 1) {
+                volumeFadeRafRef.current = requestAnimationFrame(tick);
+              } else {
+                volumeFadeRafRef.current = 0;
+              }
+            };
+            volumeFadeRafRef.current = requestAnimationFrame(tick);
           },
           onStateChange: (e) => {
             if (cancelled) return;
@@ -280,6 +317,10 @@ export function MediaAppView({ windowId }) {
 
     return () => {
       cancelled = true;
+      if (volumeFadeRafRef.current) {
+        cancelAnimationFrame(volumeFadeRafRef.current);
+        volumeFadeRafRef.current = 0;
+      }
       try {
         ytPlayerRef.current?.destroy?.();
       } catch {
@@ -398,7 +439,7 @@ export function MediaAppView({ windowId }) {
                     src={embedUrl}
                     className="pointer-events-none absolute inset-0 h-full w-full border-0"
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; web-share"
-                    loading="lazy"
+                    loading="eager"
                     onLoad={() => setIframeLoaded(true)}
                   />
                 </div>

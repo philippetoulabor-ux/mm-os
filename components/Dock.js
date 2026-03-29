@@ -1,19 +1,15 @@
 "use client";
 
+import { AppIcon } from "@/components/AppIcon";
 import { APPS } from "@/lib/apps";
 import { useDesktop } from "@/context/DesktopContext";
 
-const BASE_ORDER = ["finder", "notes", "settings"];
+const BASE_ORDER = ["finder", "notes", "media", "settings"];
 
 export function Dock() {
   const { windows, openOrFocus, focusWindow } = useDesktop();
 
-  const isRunning = (appId) => windows.some((w) => w.appId === appId);
-  const dockIds = [
-    ...BASE_ORDER.slice(0, 2),
-    ...(isRunning("media") ? ["media"] : []),
-    ...BASE_ORDER.slice(2),
-  ];
+  const dockIds = BASE_ORDER;
 
   return (
     <div className="pointer-events-none absolute bottom-3 left-0 right-0 z-[190] flex justify-center px-4">
@@ -51,10 +47,10 @@ export function Dock() {
                   </span>
                   <span className="relative flex flex-col items-center">
                     <span
-                      className="text-4xl drop-shadow-md transition-transform duration-200 ease-out [transform-origin:bottom] group-hover:scale-[1.15]"
+                      className="inline-flex drop-shadow-md transition-transform duration-200 ease-out [transform-origin:bottom] group-hover:scale-[1.15]"
                       aria-hidden
                     >
-                      {app.icon}
+                      <AppIcon app={app} />
                     </span>
                   </span>
                   <span className="sr-only">{app.title}</span>

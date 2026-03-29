@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { AppIcon } from "@/components/AppIcon";
 import { APPS, DESKTOP_ICONS } from "@/lib/apps";
 import { useDesktop } from "@/context/DesktopContext";
 
@@ -135,8 +136,8 @@ export function DesktopIcons() {
               openOrFocus(item.appId);
             }}
           >
-            <span className="text-4xl drop-shadow-md filter" aria-hidden>
-              {app.icon}
+            <span className="inline-flex drop-shadow-md filter" aria-hidden>
+              <AppIcon app={app} />
             </span>
             <span className="max-w-full truncate text-xs font-medium text-zinc-800 [text-shadow:0_1px_0_rgba(255,255,255,0.6)] dark:text-zinc-100 dark:[text-shadow:0_1px_0_rgba(0,0,0,0.35)]">
               {item.label}

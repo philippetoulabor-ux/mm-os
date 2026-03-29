@@ -197,6 +197,7 @@ function iframeAspectHint(name) {
 
 function AssetFileViewer({ dir, file, basePath, windowId }) {
   const { fitWindowToContentSize } = useDesktop();
+  const videoRef = useRef(null);
   const url = fileHref(basePath, dir, file);
   const manifestEntry = webAssetManifest.find((x) => x.dir === dir);
   const modelBg = resolveModelBackground(
@@ -231,9 +232,26 @@ function AssetFileViewer({ dir, file, basePath, windowId }) {
     [fitFromDimensions]
   );
 
+  const onVideoClick = useCallback((e) => {
+    const v = e.currentTarget;
+    if (v.paused) {
+      void v.play();
+    } else {
+      v.pause();
+    }
+  }, []);
+
   const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(file);
   const isVideo = /\.(mov|mp4|webm)$/i.test(file);
   const is3d = /\.(stl|glb|gltf|obj)$/i.test(file);
+
+  useEffect(() => {
+    if (!isVideo) return;
+    const el = videoRef.current;
+    if (!el) return;
+    const p = el.play();
+    if (p !== undefined && typeof p.catch === "function") p.catch(() => {});
+  }, [isVideo, url]);
 
   useEffect(() => {
     if (!windowId || isImage || isVideo || is3d) return;
@@ -269,10 +287,14 @@ function AssetFileViewer({ dir, file, basePath, windowId }) {
     return (
       <div className="flex h-full min-h-0 items-center justify-center bg-black p-2">
         <video
+          ref={videoRef}
           src={url}
-          controls
-          className="max-h-full max-w-full"
+          autoPlay
+          loop
+          playsInline
+          className="max-h-full max-w-full cursor-pointer"
           onLoadedMetadata={onVideoMeta}
+          onClick={onVideoClick}
         />
       </div>
     );

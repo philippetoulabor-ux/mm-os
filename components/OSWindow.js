@@ -8,6 +8,7 @@ import {
   useDesktop,
 } from "@/context/DesktopContext";
 import { AppContent } from "@/components/AppContent";
+import { AppIcon } from "@/components/AppIcon";
 import { APPS } from "@/lib/apps";
 
 /**
@@ -465,14 +466,16 @@ export function OSWindow({ win }) {
               type="button"
               aria-label="Notes öffnen"
               title="Notes"
-              className="flex min-h-7 min-w-7 items-center justify-center rounded-full bg-white px-2.5 py-1 text-lg font-bold leading-none text-black hover:bg-zinc-100"
+              className="flex min-h-7 min-w-7 items-center justify-center rounded-full bg-white px-2.5 py-1 text-black hover:bg-zinc-100"
               onMouseDown={(e) => e.stopPropagation()}
               onClick={(e) => {
                 e.stopPropagation();
                 openOrFocus("notes");
               }}
             >
-              <span aria-hidden>{APPS.notes.icon}</span>
+              <span aria-hidden>
+                <AppIcon app={APPS.notes} variant="compact" />
+              </span>
             </button>
           </div>
         ) : (
