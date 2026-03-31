@@ -12,10 +12,12 @@ import {
 
 const ICON_W = 80;
 const ICON_H = 100;
-/** Abstand zum rechten Rand / Fallback — wie DESKTOP_ICON_GRID in lib/apps.js */
-const MARGIN_X = 32;
-const START_Y = 40;
+/** Abstand zum linken/rechten Rand / Fallback — wie DESKTOP_ICON_GRID in lib/apps.js */
+const MARGIN_X = 120;
+const START_Y = 88;
 const ROW_H = 110;
+/** Notes + Media: gleicher Zeilenabstand wie links, aber etwas höher am Rand */
+const RIGHT_START_Y = START_Y - 40;
 
 /** Apps in der Mini-Dock-Leiste unten links (früheres Dock-Verhalten). */
 const DOCK_LAUNCHER_APP_IDS = new Set(["finder", "settings"]);
@@ -25,7 +27,7 @@ function toPixelPosition(pos, containerWidth) {
     const w = containerWidth > 0 ? containerWidth : 800;
     return {
       x: Math.max(0, w - ICON_W - MARGIN_X),
-      y: START_Y + pos.row * ROW_H,
+      y: RIGHT_START_Y + pos.row * ROW_H,
     };
   }
   return { x: pos?.x ?? MARGIN_X, y: pos?.y ?? START_Y };

@@ -10,6 +10,11 @@ import {
   useState,
 } from "react";
 import { APPS, getDefaultDesktopIconPositions } from "@/lib/apps";
+import {
+  migrateDesktopIconPositions,
+  migrateNotesText,
+  migrateWindowState,
+} from "@/lib/webAssetIds";
 import { getMentionToken } from "@/lib/noteRefs";
 
 /** Höhe des Site-Headers (kompaktes Logo + Padding); Näherung für Fenster-Layout */
@@ -146,6 +151,9 @@ const DesktopContext = createContext(null);
 const DARK_MODE_STORAGE_KEY = "mm-os-dark";
 const FOLDER_PREVIEW_STORAGE_KEY = "mm-os-folder-preview";
 const DESKTOP_ICONS_POS_KEY = "mm-os-desktop-icons";
+/** Einmalig: gespeicherte `webasset_*`-Koordinaten verwerfen, damit das Raster aus lib/apps.js greift. */
+const DESKTOP_FOLDER_GRID_VERSION = 3;
+const DESKTOP_FOLDER_GRID_KEY = "mm-os-desktop-folder-grid-v";
 const NOTES_TEXT_KEY = "mm-os-notes-text";
 const WINDOWS_STATE_KEY = "mm-os-windows-v1";
 
@@ -172,7 +180,30 @@ function loadDesktopIconPositions() {
     if (!raw) return defaults;
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object") return defaults;
-    return { ...defaults, ...parsed };
+    let migrated = migrateDesktopIconPositions(parsed);
+    if (JSON.stringify(migrated) !== JSON.stringify(parsed)) {
+      try {
+        localStorage.setItem(DESKTOP_ICONS_POS_KEY, JSON.stringify(migrated));
+      } catch {
+        /* ignore */
+      }
+    }
+    const gridVer = Number(localStorage.getItem(DESKTOP_FOLDER_GRID_KEY)) || 0;
+    if (gridVer < DESKTOP_FOLDER_GRID_VERSION) {
+      for (const key of Object.keys(migrated)) {
+        if (key.startsWith("webasset_")) delete migrated[key];
+      }
+      try {
+        localStorage.setItem(
+          DESKTOP_FOLDER_GRID_KEY,
+          String(DESKTOP_FOLDER_GRID_VERSION)
+        );
+        localStorage.setItem(DESKTOP_ICONS_POS_KEY, JSON.stringify(migrated));
+      } catch {
+        /* ignore */
+      }
+    }
+    return { ...defaults, ...migrated };
   } catch {
     return defaults;
   }
@@ -300,8 +331,19 @@ function loadWindowsFromStorage() {
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
+    const migrated = parsed.map(migrateWindowState);
+    const changed = migrated.some(
+      (w, i) => JSON.stringify(w) !== JSON.stringify(parsed[i])
+    );
+    if (changed) {
+      try {
+        localStorage.setItem(WINDOWS_STATE_KEY, JSON.stringify(migrated));
+      } catch {
+        /* ignore */
+      }
+    }
     const out = [];
-    for (const item of parsed) {
+    for (const item of migrated) {
       const s = sanitizeWindow(item);
       if (s) out.push(s);
     }
@@ -409,7 +451,16 @@ export function DesktopProvider({ children }) {
   useEffect(() => {
     try {
       const raw = localStorage.getItem(NOTES_TEXT_KEY);
-      if (raw !== null) setNotesText(raw);
+      if (raw === null) return;
+      const migrated = migrateNotesText(raw);
+      if (migrated !== raw) {
+        try {
+          localStorage.setItem(NOTES_TEXT_KEY, migrated);
+        } catch {
+          /* ignore */
+        }
+      }
+      setNotesText(migrated);
     } catch {
       /* ignore */
     }
