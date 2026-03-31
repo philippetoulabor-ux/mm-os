@@ -1,12 +1,23 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { AppIcon } from "@/components/AppIcon";
 import { useDesktop } from "@/context/DesktopContext";
+import { APPS } from "@/lib/apps";
 import {
   getGhostCompletion,
+  getMentionedAppsInOrder,
   getMentionToken,
   tryAutoAtBeforeCursor,
 } from "@/lib/noteRefs";
+import { getWebAssetFolderPreviewHref } from "@/lib/webAssetFolderPreview";
 
 const fieldClass =
   "w-full min-h-full resize-none bg-transparent p-4 text-sm leading-relaxed outline-none";
@@ -62,6 +73,56 @@ function cursorParaOffset(text, cursor) {
   return { paraIndex: pi, local: cursor - start };
 }
 
+/** Gleiche Zeilenhöhe wie früher (`text-[0.65rem] leading-none` ≈ 10px). */
+const MENTION_CHIP_ICON_PX = 10;
+
+/** Wie `DesktopFolderIcon`: bei FolderPreview Vorschaubild, sonst `AppIcon` / Emoji. */
+function MentionChipIcon({ app, folderPreview }) {
+  const href =
+    folderPreview && app?.assetDir
+      ? getWebAssetFolderPreviewHref(app.assetDir)
+      : null;
+  const [imgFailed, setImgFailed] = useState(false);
+
+  useEffect(() => {
+    setImgFailed(false);
+  }, [href]);
+
+  const boxStyle = {
+    width: MENTION_CHIP_ICON_PX,
+    height: MENTION_CHIP_ICON_PX,
+  };
+
+  if (href && !imgFailed) {
+    return (
+      <>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={href}
+          alt=""
+          style={boxStyle}
+          className="shrink-0 rounded-[2px] object-cover ring-1 ring-black/15 dark:ring-white/20"
+          onError={() => setImgFailed(true)}
+        />
+      </>
+    );
+  }
+
+  return (
+    <div
+      className="flex shrink-0 items-center justify-center overflow-hidden rounded-[2px]"
+      style={boxStyle}
+    >
+      <div
+        className="flex h-6 w-6 shrink-0 origin-center scale-[0.4166666667] items-center justify-center"
+        aria-hidden
+      >
+        <AppIcon app={app} variant="compact" />
+      </div>
+    </div>
+  );
+}
+
 function renderMirror(text, cursor, ghost) {
   const parts = splitParagraphs(text);
   const { paraIndex, local } = cursorParaOffset(text, cursor);
@@ -104,6 +165,8 @@ export function NotesAppView() {
     setNotesText,
     notesComposerPreset,
     consumeNotesComposerPreset,
+    openOrFocus,
+    folderPreview,
   } = useDesktop();
 
   const taRef = useRef(null);
@@ -201,6 +264,24 @@ export function NotesAppView() {
     if (mirrorRef.current) mirrorRef.current.scrollTop = top;
   }, []);
 
+  const hasSendableText = notesText.trim().length > 0;
+  const mentionedApps = useMemo(
+    () => getMentionedAppsInOrder(notesText),
+    [notesText]
+  );
+  const fieldPadBottom =
+    hasSendableText || mentionedApps.length > 0 ? "pb-20" : "";
+
+  const handleSend = useCallback(async () => {
+    const t = notesText.trim();
+    if (!t) return;
+    try {
+      await navigator.clipboard.writeText(t);
+    } catch {
+      /* ignore */
+    }
+  }, [notesText]);
+
   return (
     <div className="relative flex h-full min-h-0 flex-col bg-white">
       <div className="relative min-h-0 flex-1 overflow-hidden">
@@ -216,14 +297,14 @@ export function NotesAppView() {
           }}
           onScroll={onScroll}
           spellCheck={false}
-          className={`${fieldClass} absolute inset-0 z-10 overflow-auto text-transparent caret-zinc-800 placeholder:text-zinc-400/80`}
+          className={`${fieldClass} absolute inset-0 z-10 overflow-auto text-transparent caret-zinc-800 placeholder:text-zinc-400/80 ${fieldPadBottom}`}
           placeholder={NOTES_PLACEHOLDER}
           aria-label="Notizen"
           autoComplete="off"
         />
         <div
           ref={mirrorRef}
-          className={`${fieldClass} pointer-events-none absolute inset-0 z-0 overflow-auto whitespace-pre-wrap break-words text-zinc-800`}
+          className={`${fieldClass} pointer-events-none absolute inset-0 z-0 overflow-auto whitespace-pre-wrap break-words text-zinc-800 ${fieldPadBottom}`}
           aria-hidden
         >
           {notesText ? (
@@ -232,6 +313,44 @@ export function NotesAppView() {
             <span className="text-zinc-400">{NOTES_PLACEHOLDER}</span>
           )}
         </div>
+        {mentionedApps.length > 0 ? (
+          <div
+            className={`absolute bottom-3 left-3 z-20 flex max-w-full flex-row flex-wrap items-end gap-1.5 ${
+              hasSendableText ? "max-w-[calc(100%-10rem)]" : ""
+            }`}
+            aria-label="Erwähnte Apps"
+          >
+            {mentionedApps.map((p) => {
+              const app = APPS[p.appId];
+              if (!app) return null;
+              return (
+                <button
+                  key={p.appId}
+                  type="button"
+                  onClick={() => openOrFocus(p.appId)}
+                  className="flex min-w-0 max-w-[6.5rem] flex-col items-stretch gap-0.5 rounded-md bg-[var(--mm-desktop-bg)] px-2 py-1.5 text-left text-[var(--mm-shell-text)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500"
+                >
+                  <span className="inline-flex shrink-0" aria-hidden>
+                    <MentionChipIcon app={app} folderPreview={folderPreview} />
+                  </span>
+                  <span className="min-w-0 truncate text-[0.65rem] font-medium leading-tight">
+                    {p.title}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
+        {hasSendableText ? (
+          <button
+            type="button"
+            className="absolute bottom-3 right-3 z-20 rounded-lg border-2 border-black bg-white px-6 py-2.5 text-sm font-semibold uppercase tracking-wide text-zinc-900 shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500"
+            aria-label="Senden"
+            onClick={handleSend}
+          >
+            SEND
+          </button>
+        ) : null}
       </div>
     </div>
   );

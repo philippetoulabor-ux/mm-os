@@ -13,12 +13,18 @@ import {
   isDesktopAtDefaultLayout,
   webAssetAppId,
 } from "@/lib/apps";
+import {
+  FINDER_BROWSE_ROWS,
+  filterFinderSearchIndex,
+} from "@/lib/finderSearch";
 import { webAssetManifest } from "@/lib/webAssetManifest";
 import { useDesktop } from "@/context/DesktopContext";
+import { AppIcon } from "@/components/AppIcon";
 import { NotesAppView } from "@/components/NotesAppView";
 import { MediaAppView } from "@/components/MediaAppView";
 import { Model3DViewer } from "@/components/Model3DViewer";
 import { resolveModelBackground } from "@/lib/model3dBackground";
+import { getWebAssetFolderPreviewHref } from "@/lib/webAssetFolderPreview";
 
 function SettingsPanel({ windowId }) {
   const {
@@ -365,47 +371,144 @@ function AssetFileViewer({ dir, file, basePath, windowId }) {
   );
 }
 
-function FinderView() {
-  const { openOrFocus } = useDesktop();
+function finderFilePreviewHref(dir, file) {
+  if (!dir || !file || !/\.(jpe?g|png|gif|webp)$/i.test(file)) return null;
+  return `/web/${encodeURIComponent(dir)}/${encodeURIComponent(file)}`;
+}
+
+/**
+ * Wie DesktopFolderIcon / Notes-Mentions: bei FolderPreview echtes Vorschaubild
+ * für Web-Asset-Ordner (und für Bilddateien in der Suche), sonst Emoji/AppIcon.
+ */
+function FinderListIcon({ row, folderPreview }) {
+  const app = row.appId ? APPS[row.appId] : null;
+
+  const previewHref =
+    row.kind === "folder" && folderPreview && row.dir
+      ? getWebAssetFolderPreviewHref(row.dir)
+      : row.kind === "file" && folderPreview
+        ? finderFilePreviewHref(row.dir, row.file)
+        : null;
+
+  const [imgFailed, setImgFailed] = useState(false);
+  useEffect(() => {
+    setImgFailed(false);
+  }, [previewHref]);
+
+  if (row.kind === "app" && app) {
+    return (
+      <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center">
+        <AppIcon app={app} />
+      </span>
+    );
+  }
+
+  if (previewHref && !imgFailed) {
+    return (
+      <>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={previewHref}
+          alt=""
+          className="h-9 w-9 shrink-0 rounded-lg object-cover shadow-md ring-1 ring-black/10 dark:ring-white/15"
+          onError={() => setImgFailed(true)}
+        />
+      </>
+    );
+  }
+
+  if (row.kind === "folder" && app) {
+    return (
+      <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center">
+        <AppIcon app={app} />
+      </span>
+    );
+  }
+
+  if (row.kind === "file") {
+    return (
+      <span
+        className="inline-flex h-9 w-9 shrink-0 items-center justify-center text-xl leading-none"
+        aria-hidden
+      >
+        {row.icon}
+      </span>
+    );
+  }
 
   return (
-    <div className="flex h-full min-h-0 bg-white text-sm text-zinc-800">
-      <aside className="w-40 shrink-0 border-r-2 border-black bg-zinc-100 p-3">
-        <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
-          Geräte
-        </p>
-        <ul className="mt-2 space-y-0.5 text-zinc-700">
-          <li className="px-2 py-1 hover:bg-zinc-200/80">Macintosh HD</li>
-          <li className="px-2 py-1 hover:bg-zinc-200/80">Netzwerk</li>
-        </ul>
-        <p className="mt-4 text-xs font-medium uppercase tracking-wide text-zinc-500">
-          Favoriten
-        </p>
-        <ul className="mt-2 space-y-0.5 text-zinc-700">
-          <li className="px-2 py-1 hover:bg-zinc-200/80">Schreibtisch</li>
-          <li className="px-2 py-1 hover:bg-zinc-200/80">Dokumente</li>
-        </ul>
-      </aside>
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <div className="shrink-0 border-b-2 border-black px-3 py-2">
-          <p className="text-xs text-zinc-500">mm-os · Web</p>
-          <p className="font-medium text-zinc-900">Ordner</p>
+    <span
+      className="inline-flex h-9 w-9 shrink-0 items-center justify-center text-xl leading-none"
+      aria-hidden
+    >
+      {row.icon}
+    </span>
+  );
+}
+
+function FinderView() {
+  const { openOrFocus, openAssetFileWindow, folderPreview } = useDesktop();
+  const [query, setQuery] = useState("");
+  const q = query.trim();
+  const searchHits = filterFinderSearchIndex(q);
+  const showSearch = q.length > 0;
+  const rows = showSearch ? searchHits : FINDER_BROWSE_ROWS;
+
+  const openHit = (row) => {
+    if (row.kind === "file") {
+      openAssetFileWindow({ dir: row.dir, file: row.file, basePath: "/web" });
+    } else {
+      openOrFocus(row.appId);
+    }
+  };
+
+  return (
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-white text-sm text-zinc-800">
+      <div className="shrink-0 border-b-2 border-black px-3 py-2">
+        <label htmlFor="finder-search" className="sr-only">
+          Apps und Dateien durchsuchen
+        </label>
+        <div className="flex items-center gap-2 rounded bg-zinc-50 px-2 py-1.5 focus-within:ring-2 focus-within:ring-zinc-400 focus-within:ring-offset-0">
+          <span aria-hidden className="shrink-0 text-zinc-500">
+            🔍
+          </span>
+          <input
+            id="finder-search"
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Apps, Ordner, Dateien durchsuchen…"
+            className="min-w-0 flex-1 border-0 bg-transparent text-sm text-zinc-900 outline-none placeholder:text-zinc-400"
+            autoComplete="off"
+            spellCheck={false}
+          />
         </div>
-        <ul className="min-h-0 flex-1 space-y-0.5 overflow-auto p-2">
-          {webAssetManifest.map(({ dir }) => (
-            <li key={dir}>
+      </div>
+      <ul className="min-h-0 flex-1 space-y-0.5 overflow-auto p-2">
+        {rows.length === 0 ? (
+          <li className="px-2 py-3 text-zinc-500">
+            {showSearch ? "Keine Treffer." : "Keine Einträge."}
+          </li>
+        ) : (
+          rows.map((row) => (
+            <li key={row.id}>
               <button
                 type="button"
-                onClick={() => openOrFocus(webAssetAppId(dir))}
+                onClick={() => openHit(row)}
                 className="flex w-full min-w-0 items-center gap-2 px-2 py-2 text-left text-zinc-800 transition-colors hover:bg-zinc-100"
               >
-                <span aria-hidden>📁</span>
-                <span className="truncate">{assetDirDisplayName(dir)}</span>
+                <FinderListIcon row={row} folderPreview={folderPreview} />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate">{row.primary}</span>
+                  <span className="block truncate text-xs text-zinc-500">
+                    {row.secondary}
+                  </span>
+                </span>
               </button>
             </li>
-          ))}
-        </ul>
-      </div>
+          ))
+        )}
+      </ul>
     </div>
   );
 }

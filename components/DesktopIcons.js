@@ -57,9 +57,15 @@ function CornerDock() {
   }, [windows]);
 
   const opacity = coveredByWindow && !hovered ? 0.5 : 1;
-  const dockItems = DESKTOP_ICONS.filter((i) =>
+  const dockBase = DESKTOP_ICONS.filter((i) =>
     DOCK_LAUNCHER_APP_IDS.has(i.appId)
   );
+  const mediaDockItem = DESKTOP_ICONS.find((i) => i.appId === "media");
+  const mediaIsOpen = windows.some((w) => w.appId === "media");
+  const dockItems =
+    mediaIsOpen && mediaDockItem
+      ? [...dockBase, mediaDockItem]
+      : dockBase;
 
   return (
     <div className="pointer-events-none absolute bottom-3 left-3 z-[190]">
