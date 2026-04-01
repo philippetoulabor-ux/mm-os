@@ -79,8 +79,8 @@ function SettingsPanel({ windowId }) {
           }`}
         >
           <span
-            className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform duration-200 ${
-              darkMode ? "translate-x-[1.375rem]" : "translate-x-0.5"
+            className={`absolute left-0.5 top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform duration-200 ${
+              darkMode ? "translate-x-5" : "translate-x-0"
             }`}
             aria-hidden
           />
@@ -99,10 +99,8 @@ function SettingsPanel({ windowId }) {
           }`}
         >
           <span
-            className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform duration-200 ${
-              cleanUpDesktopActive
-                ? "translate-x-[1.375rem]"
-                : "translate-x-0.5"
+            className={`absolute left-0.5 top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform duration-200 ${
+              cleanUpDesktopActive ? "translate-x-5" : "translate-x-0"
             }`}
             aria-hidden
           />
@@ -121,10 +119,8 @@ function SettingsPanel({ windowId }) {
           }`}
         >
           <span
-            className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform duration-200 ${
-              closeAllTabsActive
-                ? "translate-x-[1.375rem]"
-                : "translate-x-0.5"
+            className={`absolute left-0.5 top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform duration-200 ${
+              closeAllTabsActive ? "translate-x-5" : "translate-x-0"
             }`}
             aria-hidden
           />
@@ -143,8 +139,8 @@ function SettingsPanel({ windowId }) {
           }`}
         >
           <span
-            className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform duration-200 ${
-              folderPreview ? "translate-x-[1.375rem]" : "translate-x-0.5"
+            className={`absolute left-0.5 top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform duration-200 ${
+              folderPreview ? "translate-x-5" : "translate-x-0"
             }`}
             aria-hidden
           />
@@ -376,24 +372,82 @@ function finderFilePreviewHref(dir, file) {
   return `/web/${encodeURIComponent(dir)}/${encodeURIComponent(file)}`;
 }
 
+/** Wie `AssetFileListThumb`: Video-Frame als Miniatur in der Finder-Liste. */
+function FinderFileVideoThumb({ href, file }) {
+  const videoRef = useRef(null);
+
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v || !isPreviewVideoFile(file)) return;
+    const seek = () => {
+      try {
+        v.currentTime = 0.05;
+      } catch {
+        /* ignore */
+      }
+    };
+    v.addEventListener("loadeddata", seek);
+    return () => v.removeEventListener("loadeddata", seek);
+  }, [href, file]);
+
+  return (
+    <video
+      ref={videoRef}
+      src={href}
+      muted
+      playsInline
+      preload="metadata"
+      className="h-9 w-9 shrink-0 rounded-lg object-cover shadow-md ring-1 ring-black/10 dark:ring-white/15"
+      aria-hidden
+    />
+  );
+}
+
+/** Wie `AssetFileListThumb` ohne Bild/Video: Endung im Kasten statt Emoji. */
+function FinderFileFormatThumb({ file }) {
+  const ext = fileExtensionDisplay(file);
+  return (
+    <span
+      className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded border border-zinc-200 bg-zinc-100 px-0.5 dark:border-zinc-600 dark:bg-zinc-800"
+      aria-hidden
+    >
+      {ext ? (
+        <span className="max-w-full truncate text-center font-mono text-[9px] font-semibold leading-tight text-zinc-600 dark:text-zinc-300">
+          {ext}
+        </span>
+      ) : (
+        <span className="text-base leading-none">{fileIcon(file)}</span>
+      )}
+    </span>
+  );
+}
+
 /**
- * Wie DesktopFolderIcon / Notes-Mentions: bei FolderPreview echtes Vorschaubild
- * für Web-Asset-Ordner (und für Bilddateien in der Suche), sonst Emoji/AppIcon.
+ * Wie DesktopFolderIcon / Ordnerliste: Vorschaubild/Video bei FolderPreview,
+ * sonst AppIcon bzw. Dateiendung wie in der Ordnerdateiliste (keine Typ-Emojis).
  */
 function FinderListIcon({ row, folderPreview }) {
   const app = row.appId ? APPS[row.appId] : null;
 
-  const previewHref =
+  const folderPreviewHref =
     row.kind === "folder" && folderPreview && row.dir
       ? getWebAssetFolderPreviewHref(row.dir)
-      : row.kind === "file" && folderPreview
-        ? finderFilePreviewHref(row.dir, row.file)
-        : null;
+      : null;
+
+  const fileImageHref =
+    row.kind === "file" && folderPreview
+      ? finderFilePreviewHref(row.dir, row.file)
+      : null;
+
+  const fileVideoHref =
+    row.kind === "file" && folderPreview && isPreviewVideoFile(row.file)
+      ? `/web/${encodeURIComponent(row.dir)}/${encodeURIComponent(row.file)}`
+      : null;
 
   const [imgFailed, setImgFailed] = useState(false);
   useEffect(() => {
     setImgFailed(false);
-  }, [previewHref]);
+  }, [row.id, folderPreviewHref, fileImageHref]);
 
   if (row.kind === "app" && app) {
     return (
@@ -403,18 +457,36 @@ function FinderListIcon({ row, folderPreview }) {
     );
   }
 
-  if (previewHref && !imgFailed) {
+  if (row.kind === "folder" && folderPreviewHref && !imgFailed) {
     return (
       <>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={previewHref}
+          src={folderPreviewHref}
           alt=""
           className="h-9 w-9 shrink-0 rounded-lg object-cover shadow-md ring-1 ring-black/10 dark:ring-white/15"
           onError={() => setImgFailed(true)}
         />
       </>
     );
+  }
+
+  if (row.kind === "file" && fileImageHref && !imgFailed) {
+    return (
+      <>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={fileImageHref}
+          alt=""
+          className="h-9 w-9 shrink-0 rounded-lg object-cover shadow-md ring-1 ring-black/10 dark:ring-white/15"
+          onError={() => setImgFailed(true)}
+        />
+      </>
+    );
+  }
+
+  if (row.kind === "file" && fileVideoHref) {
+    return <FinderFileVideoThumb href={fileVideoHref} file={row.file} />;
   }
 
   if (row.kind === "folder" && app) {
@@ -426,14 +498,7 @@ function FinderListIcon({ row, folderPreview }) {
   }
 
   if (row.kind === "file") {
-    return (
-      <span
-        className="inline-flex h-9 w-9 shrink-0 items-center justify-center text-xl leading-none"
-        aria-hidden
-      >
-        {row.icon}
-      </span>
-    );
+    return <FinderFileFormatThumb file={row.file} />;
   }
 
   return (
@@ -477,7 +542,7 @@ function FinderView() {
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Apps, Ordner, Dateien durchsuchen…"
+            placeholder="search"
             className="min-w-0 flex-1 border-0 bg-transparent text-sm text-zinc-900 outline-none placeholder:text-zinc-400"
             autoComplete="off"
             spellCheck={false}
@@ -495,14 +560,17 @@ function FinderView() {
               <button
                 type="button"
                 onClick={() => openHit(row)}
-                className="flex w-full min-w-0 items-center gap-2 px-2 py-2 text-left text-zinc-800 transition-colors hover:bg-zinc-100"
+                className="flex w-full min-w-0 items-center gap-3 px-2 py-2.5 text-left transition-colors hover:bg-zinc-100"
               >
                 <FinderListIcon row={row} folderPreview={folderPreview} />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate">{row.primary}</span>
-                  <span className="block truncate text-xs text-zinc-500">
-                    {row.secondary}
-                  </span>
+                <span className="min-w-0 flex-1 truncate font-medium text-zinc-900">
+                  {row.primary}
+                </span>
+                <span
+                  className="shrink-0 max-w-[40%] truncate text-right text-xs font-normal leading-snug text-zinc-500"
+                  title={row.secondary}
+                >
+                  {row.secondary}
                 </span>
               </button>
             </li>
