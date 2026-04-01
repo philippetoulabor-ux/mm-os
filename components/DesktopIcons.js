@@ -22,6 +22,10 @@ const RIGHT_START_Y = START_Y - 40;
 /** Apps in der Mini-Dock-Leiste unten links (früheres Dock-Verhalten). */
 const DOCK_LAUNCHER_APP_IDS = new Set(["finder", "settings"]);
 
+/** Mobile: festes iOS-ähnliches Raster (4 Spalten × min. 4 Zeilen); Finder/Settings nur im Dock wie auf Desktop. */
+const MOBILE_HOME_GRID_COLS = 4;
+const MOBILE_HOME_GRID_ROWS = 4;
+
 function toPixelPosition(pos, containerWidth) {
   if (pos?.align === "right" && typeof pos.row === "number") {
     const w = containerWidth > 0 ? containerWidth : 800;
@@ -68,7 +72,7 @@ function CornerDock() {
       : dockBase;
 
   return (
-    <div className="pointer-events-none absolute bottom-3 left-3 z-[190]">
+    <div className="pointer-events-none absolute bottom-3 left-3 z-[190] max-md:left-auto max-md:right-3">
       <nav
         className="group/dock pointer-events-auto relative flex items-end justify-center rounded-2xl transition-opacity duration-200 ease-out"
         style={{ opacity }}
@@ -153,6 +157,67 @@ function DesktopFolderIcon({ app, folderPreview }) {
   }
 
   return <AppIcon app={app} />;
+}
+
+function DesktopIconTile({
+  item,
+  folderPreview,
+  openOrFocus,
+  layout,
+  positionStyle,
+  onPointerDown,
+  blockClickRef,
+}) {
+  const app = APPS[item.appId];
+  if (!app) return null;
+
+  const onClick = () => {
+    if (blockClickRef?.current) {
+      blockClickRef.current = false;
+      return;
+    }
+    openOrFocus(item.appId);
+  };
+
+  const label = (
+    <span className="w-full min-w-0 max-w-full break-words text-center text-[0.65rem] font-medium leading-tight text-zinc-800 line-clamp-2 [text-shadow:0_1px_0_rgba(255,255,255,0.6)] min-[400px]:text-xs dark:text-zinc-100 dark:[text-shadow:0_1px_0_rgba(0,0,0,0.35)]">
+      {item.label}
+    </span>
+  );
+
+  const iconWrap = (
+    <span className="inline-flex shrink-0 drop-shadow-md filter" aria-hidden>
+      <DesktopFolderIcon app={app} folderPreview={folderPreview} />
+    </span>
+  );
+
+  if (layout === "grid") {
+    return (
+      <button
+        type="button"
+        className="pointer-events-auto flex min-h-0 w-full max-w-[5.25rem] flex-col items-center justify-start gap-0.5 rounded-xl px-0.5 py-1.5 text-center outline-none transition-colors active:bg-black/10 min-[400px]:gap-1 min-[400px]:px-1 min-[400px]:py-2 dark:active:bg-white/15"
+        onClick={onClick}
+      >
+        {iconWrap}
+        {label}
+      </button>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      style={positionStyle}
+      className="pointer-events-auto absolute flex min-h-[var(--mm-desktop-folder-tile)] w-20 flex-col items-center gap-1 rounded-lg p-2 text-center outline-none transition-colors hover:bg-black/5 active:bg-black/10 dark:hover:bg-white/10 dark:active:bg-white/15"
+      onPointerDown={onPointerDown}
+      onClick={onClick}
+    >
+      {iconWrap}
+      <span className="w-full min-w-0 max-w-full break-words text-center text-xs font-medium leading-tight text-zinc-800 line-clamp-2 [text-shadow:0_1px_0_rgba(255,255,255,0.6)] dark:text-zinc-100 dark:[text-shadow:0_1px_0_rgba(0,0,0,0.35)]">
+        {item.label}
+      </span>
+    </button>
+  );
 }
 
 export function DesktopIcons() {
@@ -245,13 +310,58 @@ export function DesktopIcons() {
     e.preventDefault();
   };
 
+  const floatingIcons = DESKTOP_ICONS.filter(
+    (item) => !DOCK_LAUNCHER_APP_IDS.has(item.appId)
+  );
+
+  const mobileGridRows = Math.max(
+    MOBILE_HOME_GRID_ROWS,
+    Math.ceil(floatingIcons.length / MOBILE_HOME_GRID_COLS)
+  );
+
   return (
     <div
       ref={desktopRef}
       className="pointer-events-none absolute inset-0"
     >
-      {DESKTOP_ICONS.filter((item) => !DOCK_LAUNCHER_APP_IDS.has(item.appId)).map(
-        (item) => {
+      {/* Mobile: festes 4×4-Raster; Dock unten separat — kein Drag */}
+      <div
+        className="absolute inset-0 flex flex-col md:hidden"
+        style={{
+          paddingBottom:
+            "max(5.25rem, calc(4.25rem + env(safe-area-inset-bottom, 0px)))",
+          paddingLeft: "max(0.5rem, env(safe-area-inset-left, 0px))",
+          paddingRight: "max(0.5rem, env(safe-area-inset-right, 0px))",
+        }}
+      >
+        <div
+          className={`grid min-h-0 w-full flex-1 gap-x-1 gap-y-0.5 px-1 pt-1 min-[400px]:gap-x-2 min-[400px]:gap-y-2 min-[400px]:px-2 ${
+            mobileGridRows > MOBILE_HOME_GRID_ROWS ? "overflow-y-auto" : ""
+          }`}
+          style={{
+            gridTemplateColumns: `repeat(${MOBILE_HOME_GRID_COLS}, minmax(0, 1fr))`,
+            gridTemplateRows: `repeat(${mobileGridRows}, minmax(0, 1fr))`,
+          }}
+        >
+          {floatingIcons.map((item) => (
+            <div
+              key={`m-${item.appId}`}
+              className="flex min-h-0 min-w-0 items-start justify-center [align-self:stretch] [justify-self:stretch]"
+            >
+              <DesktopIconTile
+                item={item}
+                folderPreview={folderPreview}
+                openOrFocus={openOrFocus}
+                layout="grid"
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Desktop: frei positionierbare Icons */}
+      <div className="hidden md:contents">
+        {floatingIcons.map((item) => {
           const app = APPS[item.appId];
           if (!app) return null;
           const raw = desktopIconPositions[item.appId] ?? {
@@ -260,30 +370,20 @@ export function DesktopIcons() {
           };
           const pos = toPixelPosition(raw, containerW);
           return (
-            <button
+            <DesktopIconTile
               key={item.appId}
-              type="button"
-              style={{ left: pos.x, top: pos.y }}
-              className="pointer-events-auto absolute flex min-h-[var(--mm-desktop-folder-tile)] w-20 flex-col items-center gap-1 rounded-lg p-2 text-center outline-none transition-colors hover:bg-black/5 active:bg-black/10 dark:hover:bg-white/10 dark:active:bg-white/15"
+              item={item}
+              folderPreview={folderPreview}
+              openOrFocus={openOrFocus}
+              layout="absolute"
+              positionStyle={{ left: pos.x, top: pos.y }}
               onPointerDown={(e) => onPointerDown(e, item.appId)}
-              onClick={() => {
-                if (blockClickRef.current) {
-                  blockClickRef.current = false;
-                  return;
-                }
-                openOrFocus(item.appId);
-              }}
-            >
-              <span className="inline-flex drop-shadow-md filter" aria-hidden>
-                <DesktopFolderIcon app={app} folderPreview={folderPreview} />
-              </span>
-              <span className="w-full min-w-0 max-w-full break-words text-center text-xs font-medium leading-tight text-zinc-800 line-clamp-2 [text-shadow:0_1px_0_rgba(255,255,255,0.6)] dark:text-zinc-100 dark:[text-shadow:0_1px_0_rgba(0,0,0,0.35)]">
-                {item.label}
-              </span>
-            </button>
+              blockClickRef={blockClickRef}
+            />
           );
-        }
-      )}
+        })}
+      </div>
+
       <CornerDock />
     </div>
   );
