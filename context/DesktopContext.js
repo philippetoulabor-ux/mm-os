@@ -36,6 +36,14 @@ export const MEDIA_MINIMIZE_INSET_Y = MEDIA_MINIMIZE_INSET;
 /** Minimaler Rand Fenster ↔ sichtbare Viewport-/Seitenkante (links/rechts/unten/oben). */
 export const WINDOW_DESKTOP_INSET = 4;
 
+/** Entspricht Tailwind `max-md` — schmale Viewports: Fenster immer fullscreen im Desktop-Layer. */
+const MOBILE_LAYOUT_MAX_WIDTH_PX = 767;
+
+export function isMobileViewport() {
+  if (typeof window === "undefined") return false;
+  return window.innerWidth <= MOBILE_LAYOUT_MAX_WIDTH_PX;
+}
+
 /**
  * Mini-Dock unten links visuell abblenden, wenn ein Fenster die untere Dock-Zone überlappt
  * (gleiche Logik wie früheres zentriertes Dock: Streifen an der Layer-Unterkante).
@@ -87,6 +95,32 @@ export function getDesktopWindowLayoutLimits() {
     innerW: Math.max(MIN_WIN_W, desktopW - 2 * inset),
     maxWinH,
     maxBottomLayer,
+  };
+}
+
+/**
+ * Vollblick-Rect im Layer-Koordinatensystem: Oberkante bündig mit dem Viewport (Screen-Oberkante),
+ * Unterkante bündig mit dem unteren Rand des Desktop-Layers.
+ * Früher: y = minLayerY = inset − layerTop ließ oben {@link WINDOW_DESKTOP_INSET} frei — hier y = −layerTop.
+ */
+export function getDesktopLayerFullscreenRect() {
+  if (typeof window === "undefined") {
+    const desktopH = 900;
+    const layerTop = SITE_HEADER_H;
+    const desktopW = 1920;
+    return {
+      x: 0,
+      y: -layerTop,
+      w: desktopW,
+      h: Math.max(MIN_WIN_H, layerTop + desktopH),
+    };
+  }
+  const { w: desktopW, h: desktopH, layerTop } = getDesktopContentRect();
+  return {
+    x: 0,
+    y: -layerTop,
+    w: desktopW,
+    h: Math.max(MIN_WIN_H, layerTop + desktopH),
   };
 }
 
@@ -274,6 +308,7 @@ function sanitizeWindow(w) {
     minimized: bool(w.minimized, false),
     maximized: bool(w.maximized, false),
     prevBounds,
+    mobileImmersive: bool(w.mobileImmersive, false),
     contentAspect,
     ...(assetFile ? { assetFile } : {}),
   };
@@ -298,14 +333,68 @@ function clampWindowsToViewport(windows) {
     minLayerY,
   } = getDesktopWindowLayoutLimits();
   const px = MEDIA_MINIMIZE_INSET_X;
-  return windows.map((win) => {
+
+  let list = windows.map((win) => {
+    if (!isMobileViewport() && win.mobileImmersive && win.prevBounds) {
+      const pb = win.prevBounds;
+      return {
+        ...win,
+        x: pb.x,
+        y: pb.y,
+        w: pb.w,
+        h: pb.h,
+        maximized: false,
+        mobileImmersive: false,
+      };
+    }
+    return win;
+  });
+
+  if (isMobileViewport()) {
+    return list.map((win) => {
+      if (win.minimized) return win;
+      const fs = getDesktopLayerFullscreenRect();
+      if (win.appId === "media" && win.mediaVideoCollapsed) {
+        const def = APPS.media;
+        const pos = centerWindow(def.defaultSize);
+        const fallbackPb = {
+          x: pos.x,
+          y: pos.y,
+          w: def.defaultSize.w,
+          h: def.defaultSize.h,
+        };
+        const pb =
+          win.prevBounds && typeof win.prevBounds.w === "number"
+            ? win.prevBounds
+            : fallbackPb;
+        return {
+          ...win,
+          mediaVideoCollapsed: false,
+          ...fs,
+          maximized: true,
+          prevBounds: pb,
+          mobileImmersive: true,
+        };
+      }
+      const pb =
+        win.mobileImmersive && win.prevBounds
+          ? win.prevBounds
+          : { x: win.x, y: win.y, w: win.w, h: win.h };
+      return {
+        ...win,
+        ...fs,
+        maximized: true,
+        prevBounds: pb,
+        mobileImmersive: true,
+      };
+    });
+  }
+
+  return list.map((win) => {
     if (win.maximized) {
       return {
         ...win,
-        x: 0,
-        y: minLayerY,
-        w: desktopW,
-        h: maxWinH,
+        ...getDesktopLayerFullscreenRect(),
       };
     }
     let { x, y, w, h } = win;
@@ -402,23 +491,11 @@ export function DesktopProvider({ children }) {
     }
   }, []);
 
-  /** Minimierten Media-Player unten rechts halten (Layer-Rand-Inset). */
+  /** Viewport / Layer: Fenster begrenzen; Mobile = fullscreen, Desktop inkl. minimierter Media-Position. */
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
     const onResize = () => {
-      setWindows((prev) =>
-        prev.map((w) => {
-          if (w.appId !== "media" || !w.mediaVideoCollapsed) return w;
-          const pos = getMediaMinimizedPosition();
-          return {
-            ...w,
-            x: pos.x,
-            y: pos.y,
-            w: MEDIA_COMPACT_W,
-            h: MEDIA_COMPACT_TOTAL_H,
-          };
-        })
-      );
+      setWindows((prev) => clampWindowsToViewport(prev));
     };
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
@@ -542,6 +619,31 @@ export function DesktopProvider({ children }) {
       zCounter.current += 1;
       const id = `${appId}-${Date.now()}`;
       if (appId === "media") {
+        if (isMobileViewport()) {
+          const pos = centerWindow(def.defaultSize);
+          const pb = {
+            x: pos.x,
+            y: pos.y,
+            w: def.defaultSize.w,
+            h: def.defaultSize.h,
+          };
+          const fs = getDesktopLayerFullscreenRect();
+          return [
+            ...prev,
+            {
+              id,
+              appId,
+              title: def.title,
+              ...fs,
+              z: zCounter.current,
+              minimized: false,
+              maximized: true,
+              prevBounds: pb,
+              mobileImmersive: true,
+              mediaVideoCollapsed: false,
+            },
+          ];
+        }
         const pos = getMediaMinimizedPosition();
         return [
           ...prev,
@@ -557,7 +659,32 @@ export function DesktopProvider({ children }) {
             minimized: false,
             maximized: false,
             prevBounds: null,
+            mobileImmersive: false,
             mediaVideoCollapsed: true,
+          },
+        ];
+      }
+      if (isMobileViewport()) {
+        const pos = centerWindow(def.defaultSize);
+        const pb = {
+          x: pos.x,
+          y: pos.y,
+          w: def.defaultSize.w,
+          h: def.defaultSize.h,
+        };
+        const fs = getDesktopLayerFullscreenRect();
+        return [
+          ...prev,
+          {
+            id,
+            appId,
+            title: def.title,
+            ...fs,
+            z: zCounter.current,
+            minimized: false,
+            maximized: true,
+            prevBounds: pb,
+            mobileImmersive: true,
           },
         ];
       }
@@ -576,6 +703,7 @@ export function DesktopProvider({ children }) {
           minimized: false,
           maximized: false,
           prevBounds: null,
+          mobileImmersive: false,
         },
       ];
     });
@@ -589,8 +717,33 @@ export function DesktopProvider({ children }) {
 
       setWindows((prev) => {
         zCounter.current += 1;
-        const pos = centerWindow(def.defaultSize);
         const id = `assetFile-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+        if (isMobileViewport()) {
+          const pos = centerWindow(def.defaultSize);
+          const pb = {
+            x: pos.x,
+            y: pos.y,
+            w: def.defaultSize.w,
+            h: def.defaultSize.h,
+          };
+          const fs = getDesktopLayerFullscreenRect();
+          return [
+            ...prev,
+            {
+              id,
+              appId: def.id,
+              title: file,
+              ...fs,
+              z: zCounter.current,
+              minimized: false,
+              maximized: true,
+              prevBounds: pb,
+              mobileImmersive: true,
+              assetFile: { dir, file, basePath },
+            },
+          ];
+        }
+        const pos = centerWindow(def.defaultSize);
         return [
           ...prev,
           {
@@ -605,6 +758,7 @@ export function DesktopProvider({ children }) {
             minimized: false,
             maximized: false,
             prevBounds: null,
+            mobileImmersive: false,
             assetFile: { dir, file, basePath },
           },
         ];
@@ -710,15 +864,12 @@ export function DesktopProvider({ children }) {
         }
         const pb = { x: w.x, y: w.y, w: w.w, h: w.h };
         if (typeof window === "undefined") return w;
-        const { desktopW, maxWinH, minLayerY } = getDesktopWindowLayoutLimits();
+        const fs = getDesktopLayerFullscreenRect();
         return {
           ...w,
           maximized: true,
           prevBounds: pb,
-          x: 0,
-          y: minLayerY,
-          w: desktopW,
-          h: maxWinH,
+          ...fs,
         };
       })
     );
@@ -798,6 +949,31 @@ export function DesktopProvider({ children }) {
     if (!intrinsicW || !intrinsicH || intrinsicW <= 0 || intrinsicH <= 0) return;
 
     const lockAspectForResize = options?.lockAspectForResize !== false;
+
+    if (isMobileViewport()) {
+      const fs = getDesktopLayerFullscreenRect();
+      setWindows((prev) =>
+        prev.map((win) => {
+          if (win.id !== id) return win;
+          return {
+            ...win,
+            ...fs,
+            maximized: true,
+            mobileImmersive: true,
+            prevBounds: win.prevBounds ?? {
+              x: win.x,
+              y: win.y,
+              w: win.w,
+              h: win.h,
+            },
+            contentAspect: lockAspectForResize
+              ? { rw: intrinsicW, rh: intrinsicH }
+              : null,
+          };
+        })
+      );
+      return;
+    }
 
     const ins = WINDOW_DESKTOP_INSET;
     const { innerW, maxWinH } = getDesktopWindowLayoutLimits();
