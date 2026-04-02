@@ -254,7 +254,7 @@ function iframeAspectHint(name) {
   return { w: 4, h: 3 };
 }
 
-function AssetFileViewer({ dir, file, basePath, windowId }) {
+function AssetFileViewer({ dir, file, basePath, windowId, unifiedParentScroll = false }) {
   const { fitWindowToContentSize } = useDesktop();
   const videoRef = useRef(null);
   const url = fileHref(basePath, dir, file);
@@ -325,13 +325,20 @@ function AssetFileViewer({ dir, file, basePath, windowId }) {
         fileName={file}
         background={modelBg}
         windowId={windowId}
+        unifiedParentScroll={unifiedParentScroll}
       />
     );
   }
 
   if (isImage) {
     return (
-      <div className="flex h-full min-h-0 items-center justify-center overflow-auto bg-zinc-200 p-2">
+      <div
+        className={`flex items-center justify-center bg-zinc-200 p-2 ${
+          unifiedParentScroll
+            ? "min-h-[50vh] w-full"
+            : "h-full min-h-0 overflow-auto"
+        }`}
+      >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={url}
@@ -344,7 +351,13 @@ function AssetFileViewer({ dir, file, basePath, windowId }) {
   }
   if (isVideo) {
     return (
-      <div className="flex h-full min-h-0 items-center justify-center bg-black p-2">
+      <div
+        className={`flex items-center justify-center bg-black p-2 ${
+          unifiedParentScroll
+            ? "min-h-[50vh] w-full"
+            : "h-full min-h-0"
+        }`}
+      >
         <video
           ref={videoRef}
           src={url}
@@ -362,7 +375,11 @@ function AssetFileViewer({ dir, file, basePath, windowId }) {
     <iframe
       title={file}
       src={url}
-      className="h-full min-h-0 w-full flex-1 border-0 bg-white dark:bg-zinc-950"
+      className={`min-h-0 w-full border-0 bg-white dark:bg-zinc-950 ${
+        unifiedParentScroll
+          ? "min-h-[70vh] flex-none"
+          : "h-full flex-1"
+      }`}
     />
   );
 }
@@ -511,7 +528,7 @@ function FinderListIcon({ row, folderPreview }) {
   );
 }
 
-function FinderView() {
+function FinderView({ unifiedParentScroll = false }) {
   const { openOrFocus, openAssetFileWindow, folderPreview } = useDesktop();
   const [query, setQuery] = useState("");
   const q = query.trim();
@@ -528,7 +545,13 @@ function FinderView() {
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-white text-sm text-zinc-800">
+    <div
+      className={`flex min-h-0 flex-col bg-white text-sm text-zinc-800 ${
+        unifiedParentScroll
+          ? "h-auto overflow-visible"
+          : "h-full overflow-hidden"
+      }`}
+    >
       <div className="shrink-0 border-b-2 border-black px-3 py-2">
         <label htmlFor="finder-search" className="sr-only">
           Apps und Dateien durchsuchen
@@ -549,7 +572,13 @@ function FinderView() {
           />
         </div>
       </div>
-      <ul className="min-h-0 flex-1 space-y-0.5 overflow-auto p-2">
+      <ul
+        className={
+          unifiedParentScroll
+            ? "space-y-0.5 p-2"
+            : "min-h-0 flex-1 space-y-0.5 overflow-auto p-2"
+        }
+      >
         {rows.length === 0 ? (
           <li className="px-2 py-3 text-zinc-500">
             {showSearch ? "Keine Treffer." : "Keine Einträge."}
@@ -581,22 +610,33 @@ function FinderView() {
   );
 }
 
-function AssetSubfolderView({ dir, basePath = "/web" }) {
+function AssetSubfolderView({ dir, basePath = "/web", unifiedParentScroll = false }) {
   const { openAssetFileWindow } = useDesktop();
   const entry = webAssetManifest.find((x) => x.dir === dir);
   const files = entry?.files ?? [];
   return (
-    <div className="flex h-full flex-col gap-2 overflow-auto bg-white p-3 text-sm text-zinc-800">
-      <p className="shrink-0 font-medium text-zinc-900">
-        📁 {assetDirDisplayName(dir)}
-      </p>
-      <p className="text-xs text-zinc-500">
-        <code className="text-zinc-600">{basePath}/{dir}</code>
-      </p>
+    <div
+      className={`flex flex-col gap-2 bg-white p-3 text-sm text-zinc-800 max-md:items-center ${
+        unifiedParentScroll ? "h-auto overflow-visible" : "h-full overflow-auto"
+      }`}
+    >
+      {!unifiedParentScroll ? (
+        <>
+          <p className="w-full shrink-0 text-center font-medium text-zinc-900 md:text-left">
+            📁 {assetDirDisplayName(dir)}
+          </p>
+          <p className="w-full text-center text-xs text-zinc-500 md:text-left">
+            <code className="text-zinc-600">{basePath}/{dir}</code>
+          </p>
+        </>
+      ) : null}
       {files.length === 0 ? (
-        <p className="text-zinc-500">Keine Dateien im Manifest — <code className="text-zinc-700">npm run sync:web</code> ausführen.</p>
+        <p className="w-full text-center text-zinc-500 md:text-left">
+          Keine Dateien im Manifest —{" "}
+          <code className="text-zinc-700">npm run sync:web</code> ausführen.
+        </p>
       ) : (
-        <ul className="space-y-0.5 text-zinc-700">
+        <ul className="w-full space-y-0.5 text-left text-zinc-700">
           {files.map((file) => (
             <li key={file}>
               <button
@@ -620,7 +660,12 @@ function AssetSubfolderView({ dir, basePath = "/web" }) {
   );
 }
 
-export function AppContent({ appId, assetFile, windowId }) {
+export function AppContent({
+  appId,
+  assetFile,
+  windowId,
+  unifiedParentScroll = false,
+}) {
   const app = APPS[appId];
   if (appId === "assetFile" && assetFile?.dir && assetFile?.file) {
     return (
@@ -629,32 +674,52 @@ export function AppContent({ appId, assetFile, windowId }) {
         file={assetFile.file}
         basePath={assetFile.basePath ?? "/web"}
         windowId={windowId}
+        unifiedParentScroll={unifiedParentScroll}
       />
     );
   }
 
   if (app?.assetDir) {
     return (
-      <AssetSubfolderView dir={app.assetDir} basePath="/web" />
+      <AssetSubfolderView
+        dir={app.assetDir}
+        basePath="/web"
+        unifiedParentScroll={unifiedParentScroll}
+      />
     );
   }
 
   switch (appId) {
     case "finder":
-      return <FinderView />;
+      return <FinderView unifiedParentScroll={unifiedParentScroll} />;
     case "notes":
-      return <NotesAppView />;
+      return <NotesAppView unifiedParentScroll={unifiedParentScroll} />;
     case "media":
-      return <MediaAppView windowId={windowId} />;
+      return (
+        <MediaAppView
+          windowId={windowId}
+          unifiedParentScroll={unifiedParentScroll}
+        />
+      );
     case "settings":
       return (
-        <div className="flex h-full min-h-0 w-full items-start justify-center overflow-auto">
+        <div
+          className={`flex w-full items-start justify-center ${
+            unifiedParentScroll
+              ? "min-h-0"
+              : "h-full min-h-0 overflow-auto"
+          }`}
+        >
           <SettingsPanel windowId={windowId} />
         </div>
       );
     default:
       return (
-        <div className="flex h-full items-center justify-center bg-white text-sm text-zinc-500">
+        <div
+          className={`flex items-center justify-center bg-white text-sm text-zinc-500 ${
+            unifiedParentScroll ? "min-h-[40vh]" : "h-full"
+          }`}
+        >
           Unknown app
         </div>
       );

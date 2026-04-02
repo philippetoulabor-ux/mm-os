@@ -117,7 +117,7 @@ function loadYoutubeIframeApi() {
 }
 
 /** @param {{ windowId?: string }} props */
-export function MediaAppView({ windowId }) {
+export function MediaAppView({ windowId, unifiedParentScroll = false }) {
   const { windows } = useDesktop();
   const videoCollapsed = Boolean(
     windowId && windows.find((w) => w.id === windowId)?.mediaVideoCollapsed
@@ -373,7 +373,11 @@ export function MediaAppView({ windowId }) {
   }, [playlistIndex]);
 
   return (
-    <div className="mm-wmp-shell">
+    <div
+      className={`mm-wmp-shell ${
+        unifiedParentScroll ? "!h-auto min-h-[70vh]" : ""
+      }`}
+    >
       <div className="mm-wmp-main">
         <div className="mm-wmp-video-wrap relative flex min-h-0 min-w-0 flex-1 flex-col">
           {embedUrl ? (

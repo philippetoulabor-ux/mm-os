@@ -44,19 +44,6 @@ function toPixelPosition(pos, containerWidth) {
   return { x: pos?.x ?? MARGIN_X, y: pos?.y ?? START_Y };
 }
 
-/** Entspricht Tailwind `max-md` / DesktopContext mobile layout */
-function useIsMobileLayout() {
-  const [isMobile, setIsMobile] = useState(false);
-  useLayoutEffect(() => {
-    const mq = window.matchMedia("(max-width: 767px)");
-    const apply = () => setIsMobile(mq.matches);
-    apply();
-    mq.addEventListener("change", apply);
-    return () => mq.removeEventListener("change", apply);
-  }, []);
-  return isMobile;
-}
-
 function LauncherDockButtons({ dockItems, windows, openOrFocus, focusWindow }) {
   return (
     <>
@@ -67,7 +54,7 @@ function LauncherDockButtons({ dockItems, windows, openOrFocus, focusWindow }) {
           <button
             key={item.appId}
             type="button"
-            className="group relative flex min-h-[3.25rem] min-w-[2.5rem] flex-col items-center justify-end bg-transparent px-2 pb-1 pt-2 transition-transform active:scale-95"
+            className="group relative flex min-h-[3.25rem] min-w-[2.5rem] items-center justify-center bg-transparent px-2 py-2 transition-transform active:scale-95"
             onClick={() => {
               const openWin = windows.find((x) => x.appId === item.appId);
               if (openWin && !openWin.minimized) focusWindow(openWin.id);
@@ -80,9 +67,9 @@ function LauncherDockButtons({ dockItems, windows, openOrFocus, focusWindow }) {
             >
               {app.title}
             </span>
-            <span className="relative flex flex-col items-center">
+            <span className="relative inline-flex flex-col items-center">
               <span
-                className="inline-flex drop-shadow-md transition-transform duration-200 ease-out [transform-origin:bottom] group-hover:scale-[1.15]"
+                className="inline-flex drop-shadow-md transition-transform duration-200 ease-out [transform-origin:center] group-hover:scale-[1.15]"
                 aria-hidden
               >
                 <AppIcon app={app} />
@@ -96,70 +83,42 @@ function LauncherDockButtons({ dockItems, windows, openOrFocus, focusWindow }) {
   );
 }
 
-function MobileNavDockButtons({ onHome, onBack }) {
+function MobileNavDockButtons({ onBack }) {
   return (
-    <>
-      <button
-        type="button"
-        className="group relative flex min-h-[3.25rem] min-w-[2.5rem] flex-col items-center justify-end bg-transparent px-2 pb-1 pt-2 transition-transform active:scale-95"
-        onClick={onHome}
-        aria-label="Home"
+    <button
+      type="button"
+      className="group relative flex min-h-[3.25rem] min-w-[2.5rem] items-center justify-center bg-transparent px-2 py-2 transition-transform active:scale-95"
+      onClick={onBack}
+      aria-label="Zurück"
+    >
+      <span
+        className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-md border border-black/10 bg-white/95 px-2 py-0.5 text-xs font-medium text-zinc-800 opacity-0 shadow-md backdrop-blur-sm transition-opacity duration-150 group-hover:opacity-100 dark:border-white/15 dark:bg-zinc-900/95 dark:text-zinc-100"
+        aria-hidden
       >
-        <span
-          className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-md border border-black/10 bg-white/95 px-2 py-0.5 text-xs font-medium text-zinc-800 opacity-0 shadow-md backdrop-blur-sm transition-opacity duration-150 group-hover:opacity-100 dark:border-white/15 dark:bg-zinc-900/95 dark:text-zinc-100"
-          aria-hidden
-        >
-          Home
-        </span>
-        <span
-          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-600 shadow-md ring-2 ring-white/40 dark:ring-white/20"
-          aria-hidden
-        />
-        <span className="sr-only">Home</span>
-      </button>
-      <button
-        type="button"
-        className="group relative flex min-h-[3.25rem] min-w-[2.5rem] flex-col items-center justify-end bg-transparent px-2 pb-1 pt-2 transition-transform active:scale-95"
-        onClick={onBack}
-        aria-label="Zurück"
+        Zurück
+      </span>
+      <span
+        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-black/15 bg-zinc-200/95 shadow-md dark:border-white/20 dark:bg-zinc-600/95"
+        aria-hidden
       >
-        <span
-          className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-md border border-black/10 bg-white/95 px-2 py-0.5 text-xs font-medium text-zinc-800 opacity-0 shadow-md backdrop-blur-sm transition-opacity duration-150 group-hover:opacity-100 dark:border-white/15 dark:bg-zinc-900/95 dark:text-zinc-100"
-          aria-hidden
+        <svg
+          className="h-5 w-5 text-zinc-800 dark:text-zinc-100"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
         >
-          Zurück
-        </span>
-        <span
-          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-black/15 bg-zinc-200/95 shadow-md dark:border-white/20 dark:bg-zinc-600/95"
-          aria-hidden
-        >
-          <svg
-            className="h-5 w-5 text-zinc-800 dark:text-zinc-100"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M15 18l-6-6 6-6" />
-          </svg>
-        </span>
-        <span className="sr-only">Zurück</span>
-      </button>
-    </>
+          <path d="M15 18l-6-6 6-6" />
+        </svg>
+      </span>
+    </button>
   );
 }
 
 function CornerDock() {
-  const {
-    windows,
-    openOrFocus,
-    focusWindow,
-    closeWindow,
-    closeAllTabs,
-  } = useDesktop();
-  const isMobile = useIsMobileLayout();
+  const { windows, openOrFocus, focusWindow, closeWindow } = useDesktop();
   const [coveredByWindow, setCoveredByWindow] = useState(false);
   const [hovered, setHovered] = useState(false);
 
@@ -167,7 +126,8 @@ function CornerDock() {
     () => windows.filter((w) => !w.minimized).length,
     [windows]
   );
-  const wantNavDock = isMobile && visibleCount > 0;
+  /** Sobald ein Fenster offen ist: nur Zurück — kein Finder/Settings im Dock. */
+  const wantNavDock = visibleCount > 0;
 
   const [displayVariant, setDisplayVariant] = useState(
     /** @type {"launcher" | "nav"} */ ("launcher")
@@ -175,11 +135,6 @@ function CornerDock() {
   const [dockAnimScale, setDockAnimScale] = useState(1);
 
   useEffect(() => {
-    if (!isMobile) {
-      setDisplayVariant("launcher");
-      setDockAnimScale(1);
-      return;
-    }
     const target = wantNavDock ? "nav" : "launcher";
     if (target === displayVariant) {
       setDockAnimScale(1);
@@ -192,7 +147,7 @@ function CornerDock() {
       setDockAnimScale(1);
     }, 220);
     return () => window.clearTimeout(id);
-  }, [isMobile, wantNavDock, displayVariant]);
+  }, [wantNavDock, displayVariant]);
 
   const closeTopWindow = useCallback(() => {
     const visible = windows.filter((w) => !w.minimized);
@@ -230,7 +185,7 @@ function CornerDock() {
       ? [...dockBase, mediaDockItem]
       : dockBase;
 
-  const showNav = isMobile && displayVariant === "nav";
+  const showNav = displayVariant === "nav";
 
   return (
     <div className="pointer-events-none absolute bottom-3 right-3 z-[190] md:left-3 md:right-auto">
@@ -250,24 +205,17 @@ function CornerDock() {
         <div className="relative origin-bottom scale-[0.72] transition-transform duration-300 ease-[cubic-bezier(0.25,0.8,0.25,1)] group-hover/dock:scale-100 [@media(hover:none)]:scale-100">
           <div
             className="origin-bottom transition-transform duration-[220ms] ease-[cubic-bezier(0.25,0.8,0.25,1)]"
-            style={
-              isMobile
-                ? {
-                    transform: `scale(${dockAnimScale})`,
-                  }
-                : undefined
-            }
+            style={{
+              transform: `scale(${dockAnimScale})`,
+            }}
           >
             <div
               className="pointer-events-none absolute inset-0 rounded-2xl border border-black/10 bg-white/55 shadow-lg shadow-black/10 backdrop-blur-xl [transform-origin:bottom] dark:border-white/10 dark:bg-zinc-800/75 dark:shadow-black/40"
               aria-hidden
             />
-            <div className="relative z-[1] flex items-end gap-1 px-3 py-2">
+            <div className="relative z-[1] flex items-center gap-1 px-3 py-2">
               {showNav ? (
-                <MobileNavDockButtons
-                  onHome={closeAllTabs}
-                  onBack={closeTopWindow}
-                />
+                <MobileNavDockButtons onBack={closeTopWindow} />
               ) : (
                 <LauncherDockButtons
                   dockItems={dockItems}

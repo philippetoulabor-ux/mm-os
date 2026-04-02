@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   getDesktopContentRect,
   getDesktopWindowLayoutLimits,
@@ -9,7 +10,21 @@ import {
 } from "@/context/DesktopContext";
 import { AppContent } from "@/components/AppContent";
 import { AppIcon } from "@/components/AppIcon";
-import { APPS } from "@/lib/apps";
+import { APPS, assetDirDisplayName } from "@/lib/apps";
+import { logoConfig } from "@/lib/logoConfig";
+
+const WindowHomeLogo = dynamic(
+  () => import("@/components/LogoViewer"),
+  {
+    ssr: false,
+    loading: () => (
+      <span
+        className="block h-full w-full rounded-full bg-zinc-200/50 dark:bg-zinc-600/50"
+        aria-hidden
+      />
+    ),
+  }
+);
 
 /**
  * @param {object} rs resizeState mit startWinX, startWinY, startW, startH, edge
@@ -148,9 +163,22 @@ function clampAspectWindowBounds(
   return { x, y, w, h };
 }
 
+function useIsMobileLayout() {
+  const [isMobile, setIsMobile] = useState(false);
+  useLayoutEffect(() => {
+    const mq = window.matchMedia("(max-width: 767px)");
+    const apply = () => setIsMobile(mq.matches);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
+  return isMobile;
+}
+
 export function OSWindow({ win }) {
   const {
     closeWindow,
+    closeAllTabs,
     focusWindow,
     moveWindow,
     setWindowBounds,
@@ -161,9 +189,17 @@ export function OSWindow({ win }) {
     osTitlebarH,
   } = useDesktop();
 
+  const isMobile = useIsMobileLayout();
+
   const showNotesLauncher =
     win.appId !== "notes" &&
     !(win.appId === "media" && win.mediaVideoCollapsed);
+
+  const appMeta = APPS[win.appId];
+  const mobileAssetFolderChromeDir =
+    isMobile && showNotesLauncher && appMeta?.assetDir
+      ? appMeta.assetDir
+      : null;
 
   const dragging = useRef(false);
   const dragOffset = useRef({ x: 0, y: 0 });
@@ -402,88 +438,168 @@ export function OSWindow({ win }) {
       style={style}
       onMouseDown={() => focusWindow(win.id)}
     >
-      <header
-        className="flex h-10 shrink-0 cursor-default items-center gap-2 border-b-2 border-black bg-[var(--mm-desktop-bg)] pl-0 pr-3 font-sans"
-        onMouseDown={onBarMouseDown}
-      >
-        <div
-          className={
-            win.appId === "media"
-              ? "flex w-[4.125rem] shrink-0 items-center justify-start gap-0.5 pl-2"
-              : "flex w-14 shrink-0 items-center justify-start pl-1"
-          }
+      {!isMobile ? (
+        <header
+          className="flex h-10 shrink-0 cursor-default items-center gap-2 border-b-2 border-black bg-[var(--mm-desktop-bg)] pl-0 pr-3 font-sans"
+          onMouseDown={onBarMouseDown}
         >
-          <button
-            type="button"
-            aria-label="Schließen"
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-transparent hover:opacity-90"
-            onClick={(e) => {
-              e.stopPropagation();
-              closeWindow(win.id);
-            }}
+          <div
+            className={
+              win.appId === "media"
+                ? "flex w-[4.125rem] shrink-0 items-center justify-start gap-0.5 pl-2"
+                : "flex w-14 shrink-0 items-center justify-start pl-1"
+            }
           >
-            <span
-              className="block h-3 w-3 shrink-0 rounded-full bg-[rgb(255,0,0)]"
-              aria-hidden
-            />
-          </button>
-          {win.appId === "media" ? (
             <button
               type="button"
-              aria-label={
-                win.mediaVideoCollapsed
-                  ? "Player wiederherstellen"
-                  : "Player minimieren"
-              }
-              aria-pressed={!!win.mediaVideoCollapsed}
+              aria-label="Schließen"
               className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-transparent hover:opacity-90"
               onClick={(e) => {
                 e.stopPropagation();
-                toggleMediaPlayerVideoPanel(win.id);
+                closeWindow(win.id);
               }}
             >
               <span
-                className={`block h-3 w-3 shrink-0 rounded-full ${
-                  win.mediaVideoCollapsed
-                    ? "bg-[rgb(0,255,0)]"
-                    : "bg-[rgb(255,204,0)]"
-                }`}
+                className="block h-3 w-3 shrink-0 rounded-full bg-[rgb(255,0,0)]"
                 aria-hidden
               />
             </button>
-          ) : null}
-        </div>
-        <span className="flex-1 select-none text-center text-xs font-medium text-black dark:text-zinc-100">
-          {win.title}
-        </span>
-        {showNotesLauncher ? (
-          <div className="flex w-14 shrink-0 items-center justify-end">
-            <button
-              type="button"
-              aria-label="Notes öffnen"
-              title="Notes"
-              className="flex min-h-7 min-w-7 items-center justify-center rounded-full bg-transparent px-2.5 py-1 text-black hover:opacity-90 dark:text-zinc-100"
-              onMouseDown={(e) => e.stopPropagation()}
-              onClick={(e) => {
-                e.stopPropagation();
-                openOrFocus("notes");
-              }}
-            >
-              <span aria-hidden>
-                <AppIcon app={APPS.notes} variant="compact" />
-              </span>
-            </button>
+            {win.appId === "media" ? (
+              <button
+                type="button"
+                aria-label={
+                  win.mediaVideoCollapsed
+                    ? "Player wiederherstellen"
+                    : "Player minimieren"
+                }
+                aria-pressed={!!win.mediaVideoCollapsed}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-transparent hover:opacity-90"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleMediaPlayerVideoPanel(win.id);
+                }}
+              >
+                <span
+                  className={`block h-3 w-3 shrink-0 rounded-full ${
+                    win.mediaVideoCollapsed
+                      ? "bg-[rgb(0,255,0)]"
+                      : "bg-[rgb(255,204,0)]"
+                  }`}
+                  aria-hidden
+                />
+              </button>
+            ) : null}
+          </div>
+          <span className="flex-1 select-none text-center text-xs font-medium text-black dark:text-zinc-100">
+            {win.title}
+          </span>
+          {showNotesLauncher ? (
+            <div className="flex w-14 shrink-0 items-center justify-end">
+              <button
+                type="button"
+                aria-label="Notes öffnen"
+                title="Notes"
+                className="flex min-h-7 min-w-7 items-center justify-center rounded-full bg-transparent px-2.5 py-1 text-black hover:opacity-90 dark:text-zinc-100"
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openOrFocus("notes");
+                }}
+              >
+                <span aria-hidden>
+                  <AppIcon app={APPS.notes} variant="compact" />
+                </span>
+              </button>
+            </div>
+          ) : (
+            <span className="w-14 shrink-0" aria-hidden />
+          )}
+        </header>
+      ) : null}
+      <div
+        className={
+          isMobile && showNotesLauncher
+            ? "relative flex min-h-0 flex-1 flex-col overflow-hidden"
+            : "min-h-0 flex-1 overflow-hidden"
+        }
+      >
+        {isMobile && showNotesLauncher ? (
+          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-y-contain [-webkit-overflow-scrolling:touch]">
+            <div className="flex min-h-full flex-col">
+              <div className="flex min-h-[4.5rem] w-full shrink-0 items-center gap-2 px-4 pt-[max(1.125rem,env(safe-area-inset-top,0px))] pb-3">
+                <div className="flex shrink-0 items-center">
+                  <button
+                    type="button"
+                    aria-label="Home"
+                    title="Home"
+                    className="flex h-5 w-5 shrink-0 items-center justify-center overflow-hidden rounded-full bg-transparent p-0 shadow-sm active:opacity-90"
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      closeAllTabs();
+                    }}
+                  >
+                    <WindowHomeLogo
+                      config={logoConfig}
+                      skipRouterClick
+                      domId={false}
+                      className="h-full w-full min-h-0 min-w-0"
+                    />
+                    <span className="sr-only">Home</span>
+                  </button>
+                </div>
+                {mobileAssetFolderChromeDir ? (
+                  <div className="min-w-0 flex-1 px-1 text-center">
+                    <p className="truncate text-sm font-medium leading-tight text-zinc-900 dark:text-zinc-100">
+                      📁 {assetDirDisplayName(mobileAssetFolderChromeDir)}
+                    </p>
+                    <p className="mt-0.5 truncate text-center text-xs text-zinc-500">
+                      <code className="text-zinc-600 dark:text-zinc-400">
+                        /web/{mobileAssetFolderChromeDir}
+                      </code>
+                    </p>
+                  </div>
+                ) : (
+                  <div className="min-w-0 flex-1" aria-hidden />
+                )}
+                <div className="flex shrink-0 items-center">
+                  <button
+                    type="button"
+                    aria-label="Notes öffnen"
+                    title="Notes"
+                    className="flex min-h-8 min-w-8 items-center justify-center rounded-full bg-black/5 px-1.5 py-1.5 text-black hover:bg-black/10 active:opacity-90 dark:bg-white/10 dark:text-zinc-100 dark:hover:bg-white/15"
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openOrFocus("notes");
+                    }}
+                  >
+                    <span
+                      className="flex h-4 w-4 shrink-0 items-center justify-center [&_svg]:!h-4 [&_svg]:!w-4"
+                      aria-hidden
+                    >
+                      <AppIcon app={APPS.notes} variant="compact" />
+                    </span>
+                  </button>
+                </div>
+              </div>
+              <div className="flex min-h-0 flex-1 flex-col border-t border-zinc-100/80 dark:border-zinc-700/80">
+                <AppContent
+                  unifiedParentScroll
+                  appId={win.appId}
+                  assetFile={win.assetFile}
+                  windowId={win.id}
+                />
+              </div>
+            </div>
           </div>
         ) : (
-          <span className="w-14 shrink-0" aria-hidden />
+          <AppContent
+            appId={win.appId}
+            assetFile={win.assetFile}
+            windowId={win.id}
+          />
         )}
-      </header>
-      <div className="min-h-0 flex-1 overflow-hidden">
-        <AppContent
-          appId={win.appId}
-          assetFile={win.assetFile}
-          windowId={win.id}
-        />
       </div>
       {showResize && (
         <>

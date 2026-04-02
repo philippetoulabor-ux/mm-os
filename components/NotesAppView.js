@@ -159,7 +159,7 @@ function renderMirror(text, cursor, ghost) {
   });
 }
 
-export function NotesAppView() {
+export function NotesAppView({ unifiedParentScroll = false } = {}) {
   const {
     notesText,
     setNotesText,
@@ -283,8 +283,18 @@ export function NotesAppView() {
   }, [notesText]);
 
   return (
-    <div className="relative flex h-full min-h-0 flex-col bg-white">
-      <div className="relative min-h-0 flex-1 overflow-hidden">
+    <div
+      className={`relative flex min-h-0 flex-col bg-white ${
+        unifiedParentScroll ? "h-auto min-h-[70vh]" : "h-full"
+      }`}
+    >
+      <div
+        className={`relative overflow-hidden ${
+          unifiedParentScroll
+            ? "min-h-[70vh] flex-1"
+            : "min-h-0 flex-1"
+        }`}
+      >
         <textarea
           ref={taRef}
           value={notesText}

@@ -6,6 +6,9 @@ import * as THREE from "three";
 
 const geometryCache = new Map();
 
+/** Entspricht Tailwind `max-md` / DesktopContext — keine Mausfolge am Logo auf schmalen Viewports */
+const MOBILE_MAX_WIDTH_PX = 767;
+
 function parseBinarySTL(buffer) {
   const view = new DataView(buffer);
   const n = view.getUint32(80, true);
@@ -104,9 +107,17 @@ function buildEnvMap(renderer, scene) {
   scene.environment = env;
 }
 
-export default function LogoViewer({ config = {} }) {
+export default function LogoViewer({
+  config = {},
+  /** Kein `router.push` am Logo — z. B. wenn die Klickaktion von einem äußeren `<button>` kommt */
+  skipRouterClick = false,
+  /** `false` = kein `id` (zweites Logo im UI ohne Duplikat von `#logo-container`) */
+  domId,
+  className,
+}) {
   const router = useRouter();
   const containerRef = useRef(null);
+  const mobileLayoutRef = useRef(false);
 
   const opts = useMemo(() => {
     const {
@@ -120,6 +131,16 @@ export default function LogoViewer({ config = {} }) {
     } = config ?? {};
     return { stlUrl, href, rimColor, rimIntensity, paddingTop, paddingBottom, followMouse };
   }, [config]);
+
+  useEffect(() => {
+    const mq = window.matchMedia(`(max-width: ${MOBILE_MAX_WIDTH_PX}px)`);
+    const sync = () => {
+      mobileLayoutRef.current = mq.matches;
+    };
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -143,10 +164,10 @@ export default function LogoViewer({ config = {} }) {
 
     const onEnter = () => (wrapper.style.transform = "scale(1.06)");
     const onLeave = () => (wrapper.style.transform = "scale(1)");
-    const onClick = () => router.push(opts.href);
+    const onClick = skipRouterClick ? null : () => router.push(opts.href);
     wrapper.addEventListener("mouseenter", onEnter);
     wrapper.addEventListener("mouseleave", onLeave);
-    wrapper.addEventListener("click", onClick);
+    if (onClick) wrapper.addEventListener("click", onClick);
     container.appendChild(wrapper);
 
     let renderer = null;
@@ -205,6 +226,7 @@ export default function LogoViewer({ config = {} }) {
       let mouseY = 0;
       if (opts.followMouse) {
         onMove = (e) => {
+          if (mobileLayoutRef.current) return;
           mouseX = (e.clientX / window.innerWidth) * 2 - 1;
           mouseY = -((e.clientY / window.innerHeight) * 2 - 1);
         };
@@ -251,8 +273,13 @@ export default function LogoViewer({ config = {} }) {
       const tick = () => {
         if (disposed) return;
         if (opts.followMouse) {
-          curRotY += (mouseX * 0.6 - curRotY) * 0.06;
-          curRotX += (-mouseY * 0.3 - curRotX) * 0.06;
+          if (!mobileLayoutRef.current) {
+            curRotY += (mouseX * 0.6 - curRotY) * 0.06;
+            curRotX += (-mouseY * 0.3 - curRotX) * 0.06;
+          } else {
+            curRotY += (0 - curRotY) * 0.12;
+            curRotX += (0 - curRotX) * 0.12;
+          }
           mesh.rotation.y = curRotY;
           mesh.rotation.x = curRotX;
           edgeMesh.rotation.y = curRotY;
@@ -271,7 +298,7 @@ export default function LogoViewer({ config = {} }) {
       if (onMove) window.removeEventListener("mousemove", onMove);
       wrapper.removeEventListener("mouseenter", onEnter);
       wrapper.removeEventListener("mouseleave", onLeave);
-      wrapper.removeEventListener("click", onClick);
+      if (onClick) wrapper.removeEventListener("click", onClick);
 
       if (mesh?.material) mesh.material.dispose();
       if (edgeMesh?.material) edgeMesh.material.dispose();
@@ -285,7 +312,8 @@ export default function LogoViewer({ config = {} }) {
 
       if (wrapper.parentNode) wrapper.parentNode.removeChild(wrapper);
     };
-  }, [opts, router]);
+  }, [opts, router, skipRouterClick]);
 
-  return <div id="logo-container" ref={containerRef} />;
+  const rootId = domId === false ? undefined : domId ?? "logo-container";
+  return <div id={rootId} ref={containerRef} className={className} />;
 }

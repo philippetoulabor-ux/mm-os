@@ -93,7 +93,13 @@ function applyDefaultObjMaterials(root) {
 /**
  * @param {{ modelUrl: string, fileName: string, background: { url: string, kind: 'image'|'video' } | null, windowId?: string }} props
  */
-export function Model3DViewer({ modelUrl, fileName, background, windowId }) {
+export function Model3DViewer({
+  modelUrl,
+  fileName,
+  background,
+  windowId,
+  unifiedParentScroll = false,
+}) {
   const wrapRef = useRef(null);
   const canvasHostRef = useRef(null);
   const fittedNoBg = useRef(false);
@@ -327,9 +333,11 @@ export function Model3DViewer({ modelUrl, fileName, background, windowId }) {
   return (
     <div
       ref={wrapRef}
-      className={`relative h-full min-h-0 w-full flex-1 ${
-        hasBg ? "bg-black" : "bg-transparent"
-      }`}
+      className={`relative w-full ${
+        unifiedParentScroll
+          ? "h-[50vh] min-h-[50vh] flex-none"
+          : "h-full min-h-0 flex-1"
+      } ${hasBg ? "bg-black" : "bg-transparent"}`}
     >
       {background?.kind === "image" && (
         // eslint-disable-next-line @next/next/no-img-element
