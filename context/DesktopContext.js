@@ -98,6 +98,12 @@ export function getDesktopWindowLayoutLimits() {
   };
 }
 
+/** Sichtbare Höhe (Mobile Safari: zuverlässiger als Layer-Bounding-Box bei Toolbars / 100dvh-Lücken). */
+function getVisualViewportHeight() {
+  if (typeof window === "undefined") return 900;
+  return window.visualViewport?.height ?? window.innerHeight;
+}
+
 /**
  * Vollblick-Rect im Layer-Koordinatensystem: Oberkante bündig mit dem Viewport (Screen-Oberkante),
  * Unterkante bündig mit dem unteren Rand des Desktop-Layers.
@@ -116,11 +122,13 @@ export function getDesktopLayerFullscreenRect() {
     };
   }
   const { w: desktopW, h: desktopH, layerTop } = getDesktopContentRect();
+  const vh = getVisualViewportHeight();
+  const hFromLayer = layerTop + desktopH;
   return {
     x: 0,
     y: -layerTop,
     w: desktopW,
-    h: Math.max(MIN_WIN_H, layerTop + desktopH),
+    h: Math.max(MIN_WIN_H, hFromLayer, vh),
   };
 }
 
@@ -498,7 +506,11 @@ export function DesktopProvider({ children }) {
       setWindows((prev) => clampWindowsToViewport(prev));
     };
     window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
+    window.visualViewport?.addEventListener("resize", onResize);
+    return () => {
+      window.removeEventListener("resize", onResize);
+      window.visualViewport?.removeEventListener("resize", onResize);
+    };
   }, []);
 
   useEffect(() => {

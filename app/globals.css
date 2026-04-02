@@ -25,11 +25,14 @@
     margin: 0;
     overflow: hidden;
     background-color: var(--mm-desktop-bg, #e0e0e0);
+    /* iOS Safari: verhindert schmale Lücken zwischen 100%/100dvh und dem sichtbaren Bereich */
+    min-height: -webkit-fill-available;
   }
 
   body {
-    height: 100%;
+    min-height: 100%;
     min-height: max(100dvh, 400px);
+    min-height: -webkit-fill-available;
     margin: 0;
     overflow: hidden;
     background-color: var(--mm-desktop-bg, #e0e0e0);

@@ -8,6 +8,12 @@ export const metadata = {
   description: "Desktop-style web shell built with Next.js and React",
 };
 
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+};
+
 export default function RootLayout({ children }) {
   return (
     <html lang="de" style={{ height: "100%" }}>
@@ -16,7 +22,6 @@ export default function RootLayout({ children }) {
         style={{
           margin: 0,
           minHeight: "100%",
-          height: "100%",
           backgroundColor: "var(--mm-desktop-bg)",
           color: "var(--mm-shell-text)",
         }}
