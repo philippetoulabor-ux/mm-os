@@ -254,6 +254,185 @@ function iframeAspectHint(name) {
   return { w: 4, h: 3 };
 }
 
+const ASSET_IMG_ZOOM_MIN = 1;
+const ASSET_IMG_ZOOM_MAX = 4;
+
+function touchDistance(a, b) {
+  const dx = a.clientX - b.clientX;
+  const dy = a.clientY - b.clientY;
+  return Math.hypot(dx, dy);
+}
+
+function clampAssetImagePan(scale, px, py, cw, ch, iw, ih) {
+  if (scale <= ASSET_IMG_ZOOM_MIN || !cw || !ch || !iw || !ih) {
+    return { x: 0, y: 0 };
+  }
+  const sw = iw * scale;
+  const sh = ih * scale;
+  const maxX = Math.max(0, (sw - cw) / 2);
+  const maxY = Math.max(0, (sh - ch) / 2);
+  return {
+    x: Math.min(maxX, Math.max(-maxX, px)),
+    y: Math.min(maxY, Math.max(-maxY, py)),
+  };
+}
+
+/** Pinch-Zoom + Pan; nur für Mobile-Asset-Layout. */
+function AssetImageMobileZoom({ url, alt, onLoad, className = "" }) {
+  const [scale, setScale] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [layoutTick, setLayoutTick] = useState(0);
+  const containerRef = useRef(null);
+  const imgRef = useRef(null);
+  const scaleRef = useRef(1);
+  const panRef = useRef({ x: 0, y: 0 });
+  const pinchRef = useRef(null);
+  const panTouchRef = useRef(null);
+
+  useLayoutEffect(() => {
+    scaleRef.current = scale;
+    panRef.current = pan;
+  });
+
+  const clampPanFromDom = useCallback((nextScale, px, py) => {
+    const c = containerRef.current;
+    const im = imgRef.current;
+    if (!c || !im) return { x: 0, y: 0 };
+    const cw = c.clientWidth;
+    const ch = c.clientHeight;
+    const iw = im.offsetWidth;
+    const ih = im.offsetHeight;
+    return clampAssetImagePan(nextScale, px, py, cw, ch, iw, ih);
+  }, []);
+
+  useEffect(() => {
+    const c = containerRef.current;
+    if (!c || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => {
+      setLayoutTick((t) => t + 1);
+    });
+    ro.observe(c);
+    return () => ro.disconnect();
+  }, []);
+
+  useLayoutEffect(() => {
+    if (scale <= ASSET_IMG_ZOOM_MIN) {
+      setPan({ x: 0, y: 0 });
+      return;
+    }
+    setPan((p) => clampPanFromDom(scale, p.x, p.y));
+  }, [scale, clampPanFromDom, layoutTick]);
+
+  const handleImgLoad = useCallback(
+    (e) => {
+      onLoad?.(e);
+      setLayoutTick((t) => t + 1);
+    },
+    [onLoad]
+  );
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const onTouchStart = (e) => {
+      if (e.touches.length === 2) {
+        pinchRef.current = {
+          d0: touchDistance(e.touches[0], e.touches[1]),
+          scale0: scaleRef.current,
+        };
+        panTouchRef.current = null;
+        return;
+      }
+      if (e.touches.length === 1 && scaleRef.current > ASSET_IMG_ZOOM_MIN) {
+        const t = e.touches[0];
+        panTouchRef.current = {
+          startPan: { ...panRef.current },
+          sx: t.clientX,
+          sy: t.clientY,
+        };
+        pinchRef.current = null;
+      }
+    };
+
+    const onTouchMove = (e) => {
+      if (e.touches.length === 2 && pinchRef.current) {
+        e.preventDefault();
+        const { d0, scale0 } = pinchRef.current;
+        const d = touchDistance(e.touches[0], e.touches[1]);
+        if (d0 < 1) return;
+        const raw = scale0 * (d / d0);
+        const next = Math.min(
+          ASSET_IMG_ZOOM_MAX,
+          Math.max(ASSET_IMG_ZOOM_MIN, raw)
+        );
+        setScale(next);
+        return;
+      }
+      if (
+        e.touches.length === 1 &&
+        panTouchRef.current &&
+        scaleRef.current > ASSET_IMG_ZOOM_MIN
+      ) {
+        e.preventDefault();
+        const t = e.touches[0];
+        const { startPan, sx, sy } = panTouchRef.current;
+        const nx = startPan.x + (t.clientX - sx);
+        const ny = startPan.y + (t.clientY - sy);
+        setPan(clampPanFromDom(scaleRef.current, nx, ny));
+      }
+    };
+
+    const onTouchEnd = (e) => {
+      if (e.touches.length < 2) pinchRef.current = null;
+      if (e.touches.length === 0) panTouchRef.current = null;
+    };
+
+    el.addEventListener("touchstart", onTouchStart, { passive: true });
+    el.addEventListener("touchmove", onTouchMove, { passive: false });
+    el.addEventListener("touchend", onTouchEnd, { passive: true });
+    el.addEventListener("touchcancel", onTouchEnd, { passive: true });
+    return () => {
+      el.removeEventListener("touchstart", onTouchStart);
+      el.removeEventListener("touchmove", onTouchMove);
+      el.removeEventListener("touchend", onTouchEnd);
+      el.removeEventListener("touchcancel", onTouchEnd);
+    };
+  }, [clampPanFromDom]);
+
+  return (
+    <div className={`relative min-h-0 w-full flex-1 ${className}`}>
+      <div
+        ref={containerRef}
+        className="relative h-full min-h-0 w-full overflow-hidden"
+        style={{
+          touchAction: scale > ASSET_IMG_ZOOM_MIN ? "none" : "pan-y",
+        }}
+      >
+        <div className="flex h-full w-full items-center justify-center">
+          <div
+            style={{
+              transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})`,
+              transformOrigin: "center center",
+            }}
+            className="flex max-h-full max-w-full items-center justify-center will-change-transform"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              ref={imgRef}
+              src={url}
+              alt={alt}
+              className="max-h-full max-w-full object-contain select-none"
+              draggable={false}
+              onLoad={handleImgLoad}
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AssetFileViewer({ dir, file, basePath, windowId, unifiedParentScroll = false }) {
   const { fitWindowToContentSize } = useDesktop();
   const videoRef = useRef(null);
@@ -333,19 +512,31 @@ function AssetFileViewer({ dir, file, basePath, windowId, unifiedParentScroll = 
   if (isImage) {
     return (
       <div
-        className={`flex items-center justify-center bg-zinc-200 p-2 ${
+        className={`flex w-full min-h-0 flex-col ${
           unifiedParentScroll
-            ? "min-h-[50vh] w-full"
-            : "h-full min-h-0 overflow-auto"
+            ? // Viewport-Höhe minus Mobile-Chrome: Zentrierung bezieht sich auf den sichtbaren Screen, nicht auf einen hohen flex-1-Block
+              "max-md:my-auto max-md:h-[calc(100dvh-5.75rem-env(safe-area-inset-top,0px))] max-md:max-h-[calc(100dvh-5.75rem-env(safe-area-inset-top,0px))] max-md:min-h-0 max-md:shrink-0 max-md:bg-transparent max-md:p-0 md:min-h-[50vh] md:items-center md:justify-center md:bg-zinc-200 md:p-2"
+            : "h-full min-h-0 items-center justify-center overflow-auto bg-zinc-200 p-2"
         }`}
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={url}
-          alt={file}
-          className="max-h-full max-w-full object-contain"
-          onLoad={onImgLoad}
-        />
+        {unifiedParentScroll ? (
+          <AssetImageMobileZoom
+            url={url}
+            alt={file}
+            onLoad={onImgLoad}
+            className="min-h-0"
+          />
+        ) : (
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={url}
+              alt={file}
+              className="max-h-full max-w-full object-contain"
+              onLoad={onImgLoad}
+            />
+          </>
+        )}
       </div>
     );
   }
@@ -644,7 +835,7 @@ function AssetSubfolderView({ dir, basePath = "/web", unifiedParentScroll = fals
                 onClick={() =>
                   openAssetFileWindow({ dir, file, basePath })
                 }
-                className="flex w-full min-w-0 items-center gap-2 rounded px-1 py-1 text-left text-zinc-900 underline decoration-zinc-400 hover:bg-zinc-100 hover:decoration-zinc-900"
+                className="flex w-full min-w-0 items-center gap-2 rounded px-1 py-1 text-left text-zinc-900 underline decoration-zinc-400 md:hover:bg-zinc-100 md:hover:decoration-zinc-900"
               >
                 <AssetFileListThumb
                   href={fileHref(basePath, dir, file)}
