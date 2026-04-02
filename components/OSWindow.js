@@ -10,7 +10,7 @@ import {
 } from "@/context/DesktopContext";
 import { AppContent } from "@/components/AppContent";
 import { AppIcon } from "@/components/AppIcon";
-import { APPS, assetDirDisplayName } from "@/lib/apps";
+import { APPS } from "@/lib/apps";
 import { logoConfig } from "@/lib/logoConfig";
 
 const WindowHomeLogo = dynamic(
@@ -548,20 +548,18 @@ export function OSWindow({ win }) {
                     <span className="sr-only">Home</span>
                   </button>
                 </div>
-                {mobileAssetFolderChromeDir ? (
-                  <div className="min-w-0 flex-1 px-1 text-center">
-                    <p className="truncate text-sm font-medium leading-tight text-zinc-900 dark:text-zinc-100">
-                      📁 {assetDirDisplayName(mobileAssetFolderChromeDir)}
-                    </p>
+                <div className="min-w-0 flex-1 px-1 text-center">
+                  <p className="truncate text-sm font-medium leading-tight text-zinc-900 dark:text-zinc-100">
+                    {win.title}
+                  </p>
+                  {mobileAssetFolderChromeDir ? (
                     <p className="mt-0.5 truncate text-center text-xs text-zinc-500">
                       <code className="text-zinc-600 dark:text-zinc-400">
                         /web/{mobileAssetFolderChromeDir}
                       </code>
                     </p>
-                  </div>
-                ) : (
-                  <div className="min-w-0 flex-1" aria-hidden />
-                )}
+                  ) : null}
+                </div>
                 <div className="flex shrink-0 items-center">
                   <button
                     type="button"

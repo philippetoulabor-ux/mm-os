@@ -117,17 +117,29 @@ function MobileNavDockButtons({ onBack }) {
   );
 }
 
+/** Tailwind `md` — Dock bleibt auf Desktop das Launcher-Dock; Zurück nur auf schmalen Viewports. */
+const DESKTOP_MIN_WIDTH_PX = 768;
+
 function CornerDock() {
   const { windows, openOrFocus, focusWindow, closeWindow } = useDesktop();
   const [coveredByWindow, setCoveredByWindow] = useState(false);
   const [hovered, setHovered] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(false);
+
+  useLayoutEffect(() => {
+    const mq = window.matchMedia(`(min-width: ${DESKTOP_MIN_WIDTH_PX}px)`);
+    const update = () => setIsDesktop(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
 
   const visibleCount = useMemo(
     () => windows.filter((w) => !w.minimized).length,
     [windows]
   );
-  /** Sobald ein Fenster offen ist: nur Zurück — kein Finder/Settings im Dock. */
-  const wantNavDock = visibleCount > 0;
+  /** Mobile: sobald ein Fenster offen ist, nur Zurück. Desktop: Dock bleibt Finder/Settings. */
+  const wantNavDock = visibleCount > 0 && !isDesktop;
 
   const [displayVariant, setDisplayVariant] = useState(
     /** @type {"launcher" | "nav"} */ ("launcher")
