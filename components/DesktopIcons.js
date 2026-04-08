@@ -162,6 +162,12 @@ function CornerDock() {
     closeWindow(top.id);
   }, [windows, closeWindow]);
 
+  const topVisibleWindow = useMemo(() => {
+    const visible = windows.filter((w) => !w.minimized);
+    if (visible.length === 0) return null;
+    return visible.reduce((a, b) => (a.z >= b.z ? a : b));
+  }, [windows]);
+
   useLayoutEffect(() => {
     const layer = document.querySelector("[data-mm-desktop-layer]");
     const tick = () => {
@@ -223,9 +229,17 @@ function CornerDock() {
                 aria-hidden
               />
             )}
-            <div className="relative z-[1] flex items-center gap-1 px-3 py-2">
+            <div
+              className={
+                showNav && topVisibleWindow?.appId === "media"
+                  ? "hidden"
+                  : "relative z-[1] flex items-center gap-1 px-3 py-2"
+              }
+            >
               {showNav ? (
-                <MobileNavDockButtons onBack={closeTopWindow} />
+                topVisibleWindow?.appId === "media" ? null : (
+                  <MobileNavDockButtons onBack={closeTopWindow} />
+                )
               ) : (
                 <LauncherDockButtons
                   dockItems={dockItems}

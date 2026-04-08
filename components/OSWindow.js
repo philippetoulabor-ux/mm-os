@@ -195,11 +195,12 @@ export function OSWindow({ win }) {
     win.appId !== "notes" &&
     !(win.appId === "media" && win.mediaVideoCollapsed);
 
+  /** Mobile: Titelleiste + gescrollter Inhalt — unabhängig vom Media-„Mini“-Modus (Desktop). */
+  const useMobileUnifiedChrome = isMobile && win.appId !== "notes";
+
   const appMeta = APPS[win.appId];
   const mobileAssetFolderChromeDir =
-    isMobile && showNotesLauncher && appMeta?.assetDir
-      ? appMeta.assetDir
-      : null;
+    useMobileUnifiedChrome && appMeta?.assetDir ? appMeta.assetDir : null;
 
   const dragging = useRef(false);
   const dragOffset = useRef({ x: 0, y: 0 });
@@ -518,12 +519,12 @@ export function OSWindow({ win }) {
       ) : null}
       <div
         className={
-          isMobile && showNotesLauncher
+          useMobileUnifiedChrome
             ? "relative flex min-h-0 flex-1 flex-col overflow-hidden"
             : "min-h-0 flex-1 overflow-hidden"
         }
       >
-        {isMobile && showNotesLauncher ? (
+        {useMobileUnifiedChrome ? (
           <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-y-contain [-webkit-overflow-scrolling:touch]">
             <div className="flex min-h-full flex-col">
               <div className="flex min-h-[4.5rem] w-full shrink-0 items-center gap-2 px-4 pt-[max(1.125rem,env(safe-area-inset-top,0px))] pb-3">

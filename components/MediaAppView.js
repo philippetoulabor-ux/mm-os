@@ -122,7 +122,9 @@ function loadYoutubeIframeApi() {
 export function MediaAppView({ windowId, unifiedParentScroll = false }) {
   const { windows } = useDesktop();
   const videoCollapsed = Boolean(
-    windowId && windows.find((w) => w.id === windowId)?.mediaVideoCollapsed
+    windowId &&
+      windows.find((w) => w.id === windowId)?.mediaVideoCollapsed &&
+      !unifiedParentScroll
   );
   const [iframeLoaded, setIframeLoaded] = useState(false);
   const [apiOrigin, setApiOrigin] = useState("");
@@ -377,7 +379,7 @@ export function MediaAppView({ windowId, unifiedParentScroll = false }) {
   return (
     <div
       className={`mm-wmp-shell ${
-        unifiedParentScroll ? "!h-auto min-h-[70vh]" : ""
+        unifiedParentScroll ? "mm-wmp-shell--unified" : ""
       }`}
     >
       <div className="mm-wmp-main">

@@ -132,6 +132,14 @@ body {
     inset 0 -1px 0 rgba(0, 0, 0, 0.35);
 }
 
+/* Mobile: Eltern ist Flex-Spalte — Shell füllt die Höhe, Video-Bereich kann flex-1 wachsen */
+.mm-wmp-shell.mm-wmp-shell--unified {
+  flex: 1 1 0%;
+  height: auto;
+  min-height: 0;
+  width: 100%;
+}
+
 .mm-wmp-nav {
   display: flex;
   width: 100%;
@@ -339,12 +347,21 @@ body {
   justify-content: center;
   gap: 2px;
   padding: 8px 10px 9px;
-  border-top: 1px solid rgba(0, 0, 0, 0.45);
-  background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.05) 0%,
-    rgba(0, 0, 0, 0.35) 100%
-  );
+  border-top: none;
+  background: #050508;
+}
+
+/* Mobile (unified): gleiche Zeilenhöhe / horizontales Padding wie OSWindow-Kopfzeile */
+.mm-wmp-shell--unified .mm-wmp-video-controls {
+  box-sizing: border-box;
+  min-height: 4.5rem;
+  padding: 0.5rem 1rem;
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px));
+  gap: 0.125rem;
+  /* 4.5rem Zeile − vertikales Padding ≈ große Touch-Ziele wie im Header */
+  --mm-wmp-play-size: 3.5rem;
+  --mm-wmp-skip-h: calc(var(--mm-wmp-play-size) / 1.15);
+  --mm-wmp-skip-w: calc(var(--mm-wmp-skip-h) * 34 / 30);
 }
 
 .mm-wmp-playbtn--compact {
