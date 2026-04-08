@@ -24,6 +24,8 @@ const MEDIA_STATE_KEY = "mm-os-media-state";
 
 const WMP_PLAY_BTN_IMG = "/web/buttons/playButton.jpg";
 const WMP_PAUSE_BTN_IMG = "/web/buttons/pauseButton.jpg";
+const WMP_BACK_BTN_IMG = "/web/buttons/back.webp";
+const WMP_SKIP_BTN_IMG = "/web/buttons/skip.webp";
 
 function readPlaylistIndex() {
   if (typeof window === "undefined") return 0;
@@ -461,13 +463,18 @@ export function MediaAppView({ windowId, unifiedParentScroll = false }) {
             >
               <button
                 type="button"
-                className="mm-wmp-skip"
+                className="mm-wmp-skip mm-wmp-skip--custom"
                 disabled={!playerReady}
                 onClick={skipBackward}
                 aria-label="Zurück: zuerst von vorn, sonst vorheriges Video"
                 title="Zurück: zuerst von vorn, sonst vorheriges Video"
               >
-                «
+                <img
+                  className="mm-wmp-skip-img"
+                  src={WMP_BACK_BTN_IMG}
+                  alt=""
+                  draggable={false}
+                />
               </button>
               <button
                 type="button"
@@ -485,13 +492,18 @@ export function MediaAppView({ windowId, unifiedParentScroll = false }) {
               </button>
               <button
                 type="button"
-                className="mm-wmp-skip"
+                className="mm-wmp-skip mm-wmp-skip--custom"
                 disabled={!playerReady}
                 onClick={skipForward}
                 aria-label="Nächstes Video"
                 title="Nächstes Video"
               >
-                »
+                <img
+                  className="mm-wmp-skip-img"
+                  src={WMP_SKIP_BTN_IMG}
+                  alt=""
+                  draggable={false}
+                />
               </button>
             </div>
           ) : null}
