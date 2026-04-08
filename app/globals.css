@@ -328,11 +328,16 @@ body {
 }
 
 .mm-wmp-video-controls {
+  /* Pause/Play zentriert; Skip/Back höher skaliert (Verhältnis ~1.15:1 zur Kreishöhe) */
+  --mm-wmp-play-size: 52px;
+  --mm-wmp-skip-h: calc(var(--mm-wmp-play-size) / 1.15);
+  --mm-wmp-skip-w: calc(var(--mm-wmp-skip-h) * 34 / 30);
   display: flex;
   flex-shrink: 0;
+  flex-wrap: nowrap;
   align-items: center;
   justify-content: center;
-  gap: 14px;
+  gap: 2px;
   padding: 8px 10px 9px;
   border-top: 1px solid rgba(0, 0, 0, 0.45);
   background: linear-gradient(
@@ -360,8 +365,9 @@ body {
 }
 
 .mm-wmp-playbtn.mm-wmp-playbtn--custom.mm-wmp-playbtn--compact {
-  width: 44px;
-  height: 44px;
+  width: var(--mm-wmp-play-size, 44px);
+  height: var(--mm-wmp-play-size, 44px);
+  flex-shrink: 0;
 }
 
 .mm-wmp-playbtn.mm-wmp-playbtn--custom:hover:not(:disabled) {
@@ -521,6 +527,11 @@ body {
     0 1px 2px rgba(0, 0, 0, 0.35);
 }
 .mm-wmp-skip.mm-wmp-skip--custom {
+  box-sizing: border-box;
+  width: var(--mm-wmp-skip-w, 34px);
+  height: var(--mm-wmp-skip-h, 30px);
+  flex-shrink: 0;
+  align-self: center;
   display: grid;
   place-items: stretch;
   padding: 0;
