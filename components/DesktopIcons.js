@@ -202,7 +202,7 @@ function CornerDock() {
   const showNav = displayVariant === "nav";
 
   return (
-    <div className="pointer-events-none absolute bottom-3 right-3 z-[190] md:left-3 md:right-auto">
+    <div className="pointer-events-none absolute bottom-3 right-3 z-[10000] md:left-3 md:right-auto">
       <nav
         className="group/dock pointer-events-auto relative flex items-end justify-center rounded-2xl transition-opacity duration-200 ease-out"
         style={{ opacity }}
