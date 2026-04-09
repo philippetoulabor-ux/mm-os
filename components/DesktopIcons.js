@@ -17,14 +17,14 @@ import {
   windowShouldDimDock,
 } from "@/context/DesktopContext";
 
-const ICON_W = 80;
-const ICON_H = 100;
+const ICON_W = 120;
+const ICON_H = 150;
 /** Abstand zum linken/rechten Rand / Fallback — wie DESKTOP_ICON_GRID in lib/apps.js */
-const MARGIN_X = 120;
-const START_Y = 88;
-const ROW_H = 110;
+const MARGIN_X = 180;
+const START_Y = 132;
+const ROW_H = 165;
 /** Notes + Media: gleicher Zeilenabstand wie links, aber etwas höher am Rand */
-const RIGHT_START_Y = START_Y - 40;
+const RIGHT_START_Y = START_Y - 60;
 
 /** Apps in der Mini-Dock-Leiste unten links (früheres Dock-Verhalten). */
 const DOCK_LAUNCHER_APP_IDS = new Set(["finder", "settings"]);
@@ -35,7 +35,7 @@ const MOBILE_HOME_GRID_ROWS = 4;
 
 function toPixelPosition(pos, containerWidth) {
   if (pos?.align === "right" && typeof pos.row === "number") {
-    const w = containerWidth > 0 ? containerWidth : 800;
+    const w = containerWidth > 0 ? containerWidth : 1200;
     return {
       x: Math.max(0, w - ICON_W - MARGIN_X),
       y: RIGHT_START_Y + pos.row * ROW_H,
@@ -274,7 +274,7 @@ function DesktopFolderIcon({ app, folderPreview }) {
         <img
           src={href}
           alt=""
-          className="h-9 w-9 shrink-0 rounded-lg object-cover shadow-md ring-1 ring-black/10 dark:ring-white/15"
+          className="h-9 w-9 shrink-0 rounded-lg object-cover shadow-md ring-2 ring-black/10 dark:ring-white/15"
           onError={() => setImgFailed(true)}
         />
       </>
@@ -305,7 +305,7 @@ function DesktopIconTile({
   };
 
   const label = (
-    <span className="w-full min-w-0 max-w-full break-words text-center text-[0.65rem] font-medium leading-tight text-zinc-800 line-clamp-2 [text-shadow:0_1px_0_rgba(255,255,255,0.6)] min-[400px]:text-xs dark:text-zinc-100 dark:[text-shadow:0_1px_0_rgba(0,0,0,0.35)]">
+    <span className="w-full min-w-0 max-w-full break-words text-center text-[0.65rem] font-medium leading-tight text-zinc-800 line-clamp-2 [text-shadow:0_2px_0_rgba(255,255,255,0.6)] min-[400px]:text-xs dark:text-zinc-100 dark:[text-shadow:0_2px_0_rgba(0,0,0,0.35)]">
       {item.label}
     </span>
   );
@@ -338,7 +338,7 @@ function DesktopIconTile({
       onClick={onClick}
     >
       {iconWrap}
-      <span className="w-full min-w-0 max-w-full break-words text-center text-xs font-medium leading-tight text-zinc-800 line-clamp-2 [text-shadow:0_1px_0_rgba(255,255,255,0.6)] dark:text-zinc-100 dark:[text-shadow:0_1px_0_rgba(0,0,0,0.35)]">
+      <span className="w-full min-w-0 max-w-full break-words text-center text-xs font-medium leading-tight text-zinc-800 line-clamp-2 [text-shadow:0_2px_0_rgba(255,255,255,0.6)] dark:text-zinc-100 dark:[text-shadow:0_2px_0_rgba(0,0,0,0.35)]">
         {item.label}
       </span>
     </button>
@@ -392,8 +392,8 @@ export function DesktopIcons() {
       const nx = e.clientX - rect.left - d.offX;
       const ny = e.clientY - rect.top - d.offY;
       if (
-        Math.abs(e.clientX - d.startClientX) > 4 ||
-        Math.abs(e.clientY - d.startClientY) > 4
+        Math.abs(e.clientX - d.startClientX) > 8 ||
+        Math.abs(e.clientY - d.startClientY) > 8
       ) {
         d.didDrag = true;
       }

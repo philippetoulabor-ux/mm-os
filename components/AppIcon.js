@@ -75,7 +75,7 @@ export function AppIcon({ app, variant = "default" }) {
     const sz = variant === "compact" ? "h-6 w-6" : "h-9 w-9";
     return (
       <span
-        className={`inline-flex overflow-hidden rounded-full ${sz} shrink-0 shadow-md ring-1 ring-black/10 dark:ring-white/15`}
+        className={`inline-flex overflow-hidden rounded-full ${sz} shrink-0 shadow-md ring-2 ring-black/10 dark:ring-white/15`}
         aria-hidden
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}

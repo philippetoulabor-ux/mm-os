@@ -42,7 +42,7 @@ function DesktopShellInner() {
 
   return (
     <div
-      className="flex min-h-0 w-full flex-1 flex-col overflow-x-hidden min-h-[max(100dvh,400px)]"
+      className="flex min-h-0 w-full flex-1 flex-col overflow-x-hidden min-h-[max(100dvh,800px)]"
       style={{
         backgroundColor: "var(--mm-desktop-bg)",
         color: "var(--mm-shell-text)",

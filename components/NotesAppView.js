@@ -73,7 +73,7 @@ function cursorParaOffset(text, cursor) {
   return { paraIndex: pi, local: cursor - start };
 }
 
-/** Gleiche Zeilenhöhe wie früher (`text-[0.65rem] leading-none` ≈ 10px). */
+/** Gleiche Zeilenhöhe wie früher (`text-[0.65rem] leading-none` ≈ 15px bei 150%-Root). */
 const MENTION_CHIP_ICON_PX = 10;
 
 /** Wie `DesktopFolderIcon`: bei FolderPreview Vorschaubild, sonst `AppIcon` / Emoji. */
@@ -101,7 +101,7 @@ function MentionChipIcon({ app, folderPreview }) {
           src={href}
           alt=""
           style={boxStyle}
-          className="shrink-0 rounded-[2px] object-cover ring-1 ring-black/15 dark:ring-white/20"
+          className="shrink-0 rounded-[4px] object-cover ring-2 ring-black/15 dark:ring-white/20"
           onError={() => setImgFailed(true)}
         />
       </>
@@ -110,7 +110,7 @@ function MentionChipIcon({ app, folderPreview }) {
 
   return (
     <div
-      className="flex shrink-0 items-center justify-center overflow-hidden rounded-[2px]"
+      className="flex shrink-0 items-center justify-center overflow-hidden rounded-[4px]"
       style={boxStyle}
     >
       <div

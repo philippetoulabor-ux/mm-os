@@ -417,7 +417,7 @@ export function OSWindow({ win }) {
 
   return (
     <div
-      className={`absolute flex flex-col overflow-hidden border-2 border-black bg-white shadow-none ${
+      className={`absolute flex flex-col overflow-hidden border-[3px] border-black bg-white shadow-none ${
         win.maximized ? "rounded-none" : "rounded-lg"
       }`}
       style={style}
@@ -425,7 +425,7 @@ export function OSWindow({ win }) {
     >
       {!isMobile ? (
         <header
-          className="flex h-10 shrink-0 cursor-default items-center gap-2 border-b-2 border-black bg-[var(--mm-desktop-bg)] pl-0 pr-3 font-sans"
+          className="flex h-10 shrink-0 cursor-default items-center gap-2 border-b-[3px] border-black bg-[var(--mm-desktop-bg)] pl-0 pr-3 font-sans"
           onMouseDown={onBarMouseDown}
         >
           <div
@@ -539,7 +539,7 @@ export function OSWindow({ win }) {
                   <p
                     className={`truncate text-sm leading-tight ${
                       win.appId === "media"
-                        ? "font-semibold leading-[1.3] tracking-[0.01em] text-white [text-shadow:0_1px_0_rgba(0,0,0,0.5)]"
+                        ? "font-semibold leading-[1.3] tracking-[0.01em] text-white [text-shadow:0_2px_0_rgba(0,0,0,0.5)]"
                         : "font-medium text-zinc-900 dark:text-zinc-100"
                     }`}
                   >

@@ -361,7 +361,7 @@ export function Model3DViewer({
       )}
       <div
         ref={canvasHostRef}
-        className="relative z-10 h-full min-h-[200px] w-full min-w-0"
+        className="relative z-10 h-full min-h-[400px] w-full min-w-0"
       />
     </div>
   );

@@ -21,6 +21,8 @@
   }
 
   html {
+    /* Globale UI-Skalierung 1,5× (Tailwind/rem-Utilities folgen der Root-Schriftgröße) */
+    font-size: 150%;
     height: 100%;
     margin: 0;
     overflow: hidden;
@@ -31,7 +33,7 @@
 
   body {
     min-height: 100%;
-    min-height: max(100dvh, 400px);
+    min-height: max(100dvh, 800px);
     min-height: -webkit-fill-available;
     margin: 0;
     overflow: hidden;
@@ -61,7 +63,7 @@ body {
   display: flex;
   flex-direction: column;
   width: 100%;
-  min-height: max(100dvh, 400px);
+  min-height: max(100dvh, 800px);
 }
 
 /* Mobile (max-md): keine sichtbaren Scrollbars — Entspricht Tailwind md / DesktopContext 767px */
@@ -103,8 +105,8 @@ body {
   box-sizing: border-box;
   width: min(18vw, var(--mm-logo-max));
   height: min(18vw, var(--mm-logo-max));
-  min-width: 44px;
-  min-height: 44px;
+  min-width: 66px;
+  min-height: 66px;
   max-width: var(--mm-logo-max);
   max-height: var(--mm-logo-max);
   flex-shrink: 0;
@@ -125,11 +127,11 @@ body {
   );
   color: #e8eef5;
   font-family: Tahoma, "Segoe UI", system-ui, sans-serif;
-  font-size: 12px;
-  border: 1px solid #0f1419;
+  font-size: 18px;
+  border: 1.5px solid #0f1419;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.1),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.35);
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.1),
+    inset 0 -1.5px 0 rgba(0, 0, 0, 0.35);
 }
 
 /* Mobile: Eltern ist Flex-Spalte — Shell füllt die Höhe, Video-Bereich kann flex-1 wachsen */
@@ -144,16 +146,16 @@ body {
   border-top: none;
   border-right: none;
   border-left: none;
-  border-bottom: 1px solid #0f1419;
-  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.35);
+  border-bottom: 1.5px solid #0f1419;
+  box-shadow: inset 0 -1.5px 0 rgba(0, 0, 0, 0.35);
 }
 
 .mm-wmp-shell.mm-wmp-shell--unified .mm-wmp-video-wrap {
   border-top: none;
   border-right: none;
   border-left: none;
-  /* Kein inset 0 1px 0 rgba(255,…) oben — sonst sichtbare helle Kante unter der OSWindow-Leiste */
-  box-shadow: inset 0 0 24px rgba(0, 0, 0, 0.85);
+  /* Kein inset 0 1.5px 0 rgba(255,…) oben — sonst sichtbare helle Kante unter der OSWindow-Leiste */
+  box-shadow: inset 0 0 36px rgba(0, 0, 0, 0.85);
 }
 
 /* Nahtlos an #050508-Kopf: Verlauf startet auf gleicher Fläche, kein heller Streifen */
@@ -169,15 +171,15 @@ body {
   display: flex;
   width: 100%;
   align-items: center;
-  gap: 6px;
+  gap: 9px;
   flex-shrink: 0;
-  padding: 4px 8px 6px;
+  padding: 6px 12px 9px;
   background: linear-gradient(
     180deg,
     rgba(255, 255, 255, 0.07) 0%,
     rgba(0, 0, 0, 0.12) 100%
   );
-  border-bottom: 1px solid rgba(0, 0, 0, 0.4);
+  border-bottom: 1.5px solid rgba(0, 0, 0, 0.4);
 }
 
 .mm-wmp-nav--library-only {
@@ -186,24 +188,24 @@ body {
 
 .mm-wmp-nav-btns {
   display: flex;
-  gap: 2px;
+  gap: 3px;
 }
 
 .mm-wmp-iconbtn {
   display: flex;
-  width: 22px;
-  height: 22px;
+  width: 33px;
+  height: 33px;
   align-items: center;
   justify-content: center;
-  border-radius: 3px;
-  border: 1px solid rgba(0, 0, 0, 0.45);
+  border-radius: 4.5px;
+  border: 1.5px solid rgba(0, 0, 0, 0.45);
   background: linear-gradient(180deg, #6a9fd4 0%, #3d7cc4 45%, #2a5fa3 100%);
   color: #fff;
-  font-size: 12px;
+  font-size: 18px;
   line-height: 1;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.25),
-    0 1px 2px rgba(0, 0, 0, 0.35);
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.25),
+    0 1.5px 3px rgba(0, 0, 0, 0.35);
 }
 .mm-wmp-iconbtn:disabled {
   opacity: 0.35;
@@ -212,19 +214,19 @@ body {
 
 .mm-wmp-tabs {
   display: flex;
-  margin-left: 4px;
-  gap: 2px;
+  margin-left: 6px;
+  gap: 3px;
 }
 
 .mm-wmp-tab {
-  padding: 5px 12px 6px;
-  border-radius: 4px 4px 0 0;
-  border: 1px solid transparent;
+  padding: 7.5px 18px 9px;
+  border-radius: 6px 6px 0 0;
+  border: 1.5px solid transparent;
   background: transparent;
   color: #b8c4d4;
-  font-size: 11px;
+  font-size: 16.5px;
   cursor: pointer;
-  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.4);
+  text-shadow: 0 1.5px 0 rgba(0, 0, 0, 0.4);
 }
 .mm-wmp-tab:hover {
   color: #fff;
@@ -234,8 +236,8 @@ body {
   background: linear-gradient(180deg, #4a8fd4 0%, #2d6cb5 55%, #2563a8 100%);
   color: #fff;
   box-shadow:
-    0 0 10px rgba(74, 143, 212, 0.35),
-    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    0 0 15px rgba(74, 143, 212, 0.35),
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.2);
 }
 
 .mm-wmp-main {
@@ -256,13 +258,13 @@ body {
   min-height: 0;
   width: 0;
   overflow: hidden;
-  border-left: 1px solid transparent;
+  border-left: 1.5px solid transparent;
 }
 
 .mm-wmp-library-rail[data-docked="true"] {
-  width: 256px; /* LIBRARY_PANEL_PX in MediaAppView.js */
+  width: 384px; /* Library-Rail: 1,5× gegenüber 256px Design-Breite */
   border-left-color: rgba(0, 0, 0, 0.28);
-  box-shadow: -6px 0 14px rgba(0, 0, 0, 0.15);
+  box-shadow: -9px 0 21px rgba(0, 0, 0, 0.15);
 }
 
 /* Öffnen: von links nach rechts einfahren; Schließen: nach links ausfahren (kein Fade). */
@@ -297,28 +299,28 @@ body {
   min-width: 0;
   min-height: 0;
   background: #050508;
-  border: 1px solid #0a0d12;
+  border: 1.5px solid #0a0d12;
   box-shadow:
-    inset 0 0 24px rgba(0, 0, 0, 0.85),
-    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    inset 0 0 36px rgba(0, 0, 0, 0.85),
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.04);
 }
 
 .mm-wmp-now-playing {
   flex-shrink: 0;
   min-width: 0;
-  padding: 8px 10px 10px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.45);
+  padding: 12px 15px 15px;
+  border-bottom: 1.5px solid rgba(0, 0, 0, 0.45);
   background: linear-gradient(
     180deg,
     rgba(255, 255, 255, 0.06) 0%,
     rgba(0, 0, 0, 0.2) 100%
   );
-  font-size: 15px;
+  font-size: 22.5px;
   font-weight: 600;
   line-height: 1.3;
   letter-spacing: 0.01em;
   color: #dce6f2;
-  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.5);
+  text-shadow: 0 1.5px 0 rgba(0, 0, 0, 0.5);
 }
 
 .mm-wmp-now-playing__clip {
@@ -362,7 +364,7 @@ body {
 
 .mm-wmp-video-controls {
   /* Pause/Play zentriert; Skip/Back höher skaliert (Verhältnis ~1.15:1 zur Kreishöhe) */
-  --mm-wmp-play-size: 52px;
+  --mm-wmp-play-size: 78px;
   --mm-wmp-skip-h: calc(var(--mm-wmp-play-size) / 1.15);
   --mm-wmp-skip-w: calc(var(--mm-wmp-skip-h) * 34 / 30);
   display: flex;
@@ -370,8 +372,8 @@ body {
   flex-wrap: nowrap;
   align-items: center;
   justify-content: center;
-  gap: 2px;
-  padding: 8px 10px 9px;
+  gap: 3px;
+  padding: 12px 15px 13.5px;
   border-top: none;
   background: #050508;
 }
@@ -390,9 +392,9 @@ body {
 }
 
 .mm-wmp-playbtn--compact {
-  width: 38px;
-  height: 38px;
-  font-size: 15px;
+  width: 57px;
+  height: 57px;
+  font-size: 22.5px;
   line-height: 1;
 }
 
@@ -407,8 +409,8 @@ body {
 }
 
 .mm-wmp-playbtn.mm-wmp-playbtn--custom.mm-wmp-playbtn--compact {
-  width: var(--mm-wmp-play-size, 44px);
-  height: var(--mm-wmp-play-size, 44px);
+  width: var(--mm-wmp-play-size, 66px);
+  height: var(--mm-wmp-play-size, 66px);
   flex-shrink: 0;
 }
 
@@ -434,13 +436,13 @@ body {
 .mm-wmp-select {
   width: auto;
   max-width: 100%;
-  border-radius: 3px;
-  border: 1px solid #6a7a90;
+  border-radius: 4.5px;
+  border: 1.5px solid #6a7a90;
   background: linear-gradient(180deg, #fff 0%, #e2e8f0 100%);
-  padding: 4px 6px;
-  font-size: 11px;
+  padding: 6px 9px;
+  font-size: 16.5px;
   color: #0f1729;
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.08);
+  box-shadow: inset 0 1.5px 3px rgba(0, 0, 0, 0.08);
 }
 
 .mm-wmp-library {
@@ -449,7 +451,7 @@ body {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 8px 10px;
+  padding: 12px 15px;
   background: linear-gradient(180deg, #dfe7f0 0%, #c5d0e0 100%);
   color: #1a2332;
 }
@@ -461,18 +463,18 @@ body {
 .mm-wmp-library table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 11px;
+  font-size: 16.5px;
 }
 .mm-wmp-library th {
   text-align: left;
-  padding: 4px 8px;
-  border-bottom: 1px solid #8899ae;
+  padding: 6px 12px;
+  border-bottom: 1.5px solid #8899ae;
   color: #0f1729;
   font-weight: 600;
 }
 .mm-wmp-library td {
-  padding: 6px 8px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  padding: 9px 12px;
+  border-bottom: 1.5px solid rgba(0, 0, 0, 0.08);
 }
 .mm-wmp-library tr:hover td {
   background: rgba(59, 130, 246, 0.12);
@@ -483,35 +485,35 @@ body {
   flex-shrink: 0;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px 12px;
-  padding: 8px 10px 10px;
+  gap: 12px 18px;
+  padding: 12px 15px 15px;
   background: linear-gradient(180deg, #3d4e62 0%, #252f3d 48%, #1a222c 100%);
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  border-top: 1.5px solid rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.06);
 }
 
 .mm-wmp-time {
   font-variant-numeric: tabular-nums;
-  font-size: 11px;
+  font-size: 16.5px;
   color: #c8d4e4;
-  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.5);
+  text-shadow: 0 1.5px 0 rgba(0, 0, 0, 0.5);
   min-width: 5.5rem;
 }
 
 .mm-wmp-tinybtn {
   display: flex;
-  width: 26px;
-  height: 24px;
+  width: 39px;
+  height: 36px;
   align-items: center;
   justify-content: center;
-  border-radius: 3px;
-  border: 1px solid rgba(0, 0, 0, 0.5);
+  border-radius: 4.5px;
+  border: 1.5px solid rgba(0, 0, 0, 0.5);
   background: linear-gradient(180deg, #9aa8b8 0%, #6a7888 48%, #4a5868 100%);
   color: #1a1f26;
-  font-size: 11px;
+  font-size: 16.5px;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.35),
-    0 1px 1px rgba(0, 0, 0, 0.35);
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.35),
+    0 1.5px 1.5px rgba(0, 0, 0, 0.35);
 }
 .mm-wmp-tinybtn:hover:not(:disabled) {
   filter: brightness(1.08);
@@ -526,12 +528,12 @@ body {
 
 .mm-wmp-playbtn {
   display: flex;
-  width: 44px;
-  height: 44px;
+  width: 66px;
+  height: 66px;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  border: 1px solid #1a4a7a;
+  border: 1.5px solid #1a4a7a;
   background: radial-gradient(
     circle at 30% 28%,
     #6ab4f2 0%,
@@ -540,11 +542,11 @@ body {
     #1a4a8a 100%
   );
   color: #fff;
-  font-size: 18px;
+  font-size: 27px;
   box-shadow:
-    inset 0 2px 4px rgba(255, 255, 255, 0.35),
-    inset 0 -2px 6px rgba(0, 0, 0, 0.35),
-    0 2px 8px rgba(0, 0, 0, 0.45);
+    inset 0 3px 6px rgba(255, 255, 255, 0.35),
+    inset 0 -3px 9px rgba(0, 0, 0, 0.35),
+    0 3px 12px rgba(0, 0, 0, 0.45);
 }
 .mm-wmp-playbtn:hover:not(:disabled) {
   filter: brightness(1.06);
@@ -555,23 +557,23 @@ body {
 
 .mm-wmp-skip {
   display: flex;
-  width: 34px;
-  height: 30px;
+  width: 51px;
+  height: 45px;
   align-items: center;
   justify-content: center;
-  border-radius: 4px;
-  border: 1px solid rgba(0, 0, 0, 0.5);
+  border-radius: 6px;
+  border: 1.5px solid rgba(0, 0, 0, 0.5);
   background: linear-gradient(180deg, #b8c4d4 0%, #8898a8 45%, #586878 100%);
   color: #1a1f26;
-  font-size: 14px;
+  font-size: 21px;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.45),
-    0 1px 2px rgba(0, 0, 0, 0.35);
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.45),
+    0 1.5px 3px rgba(0, 0, 0, 0.35);
 }
 .mm-wmp-skip.mm-wmp-skip--custom {
   box-sizing: border-box;
-  width: var(--mm-wmp-skip-w, 34px);
-  height: var(--mm-wmp-skip-h, 30px);
+  width: var(--mm-wmp-skip-w, 51px);
+  height: var(--mm-wmp-skip-h, 45px);
   flex-shrink: 0;
   align-self: center;
   display: grid;
@@ -606,39 +608,39 @@ body {
 .mm-wmp-vol {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   margin-left: auto;
   color: #b8c4d4;
 }
 
 .mm-wmp-vol input[type="range"] {
-  width: 72px;
-  height: 4px;
+  width: 108px;
+  height: 6px;
   appearance: none;
-  border-radius: 2px;
+  border-radius: 3px;
   background: linear-gradient(90deg, #1a222c, #3d4e62);
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5);
+  box-shadow: inset 0 1.5px 3px rgba(0, 0, 0, 0.5);
 }
 .mm-wmp-vol input[type="range"]::-webkit-slider-thumb {
   appearance: none;
-  width: 10px;
-  height: 14px;
-  border-radius: 2px;
-  border: 1px solid #1a1f26;
+  width: 15px;
+  height: 21px;
+  border-radius: 3px;
+  border: 1.5px solid #1a1f26;
   background: linear-gradient(180deg, #8ad4ff 0%, #4a9fe8 100%);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 1.5px 3px rgba(0, 0, 0, 0.4);
 }
 
 .mm-wmp-hint {
   position: absolute;
-  bottom: 6px;
-  left: 8px;
-  right: 8px;
-  border-radius: 4px;
+  bottom: 9px;
+  left: 12px;
+  right: 12px;
+  border-radius: 6px;
   background: rgba(0, 0, 0, 0.82);
-  padding: 6px 8px;
+  padding: 9px 12px;
   text-align: center;
-  font-size: 10px;
+  font-size: 15px;
   line-height: 1.35;
   color: #fde68a;
 }

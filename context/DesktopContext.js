@@ -18,23 +18,23 @@ import {
 import { getMentionToken } from "@/lib/noteRefs";
 
 /** Höhe des Site-Headers (kompaktes Logo + Padding); Näherung für Fenster-Layout */
-const SITE_HEADER_H = 180;
+const SITE_HEADER_H = 270;
 /** OSWindow Titelleiste (entspricht Tailwind h-10; gleicher Inset zum Schließen-Button h-8) */
-const OS_TITLEBAR_H = 40;
-const MIN_WIN_W = 240;
-const MIN_WIN_H = 160;
+const OS_TITLEBAR_H = 60;
+const MIN_WIN_W = 360;
+const MIN_WIN_H = 240;
 /** Inhaltshöhe (ohne OS-Titelleiste), wenn der Media-Player nur Titelzeile + Transport hat (Video ausgeblendet). */
-const MEDIA_COMPACT_CLIENT_H = 120;
+const MEDIA_COMPACT_CLIENT_H = 180;
 /** Feste Breite im minimierten Media-Player (kleinstes Fenster). */
 const MEDIA_COMPACT_W = MIN_WIN_W;
 const MEDIA_COMPACT_TOTAL_H = OS_TITLEBAR_H + MEDIA_COMPACT_CLIENT_H;
 /** Abstand zum rechten und unteren Rand des Desktop-Layers (minimiertes Media-Fenster). */
-export const MEDIA_MINIMIZE_INSET = 12;
+export const MEDIA_MINIMIZE_INSET = 18;
 export const MEDIA_MINIMIZE_INSET_X = MEDIA_MINIMIZE_INSET;
 export const MEDIA_MINIMIZE_INSET_Y = MEDIA_MINIMIZE_INSET;
 
 /** Minimaler Rand Fenster ↔ sichtbare Viewport-/Seitenkante (links/rechts/unten/oben). */
-export const WINDOW_DESKTOP_INSET = 4;
+export const WINDOW_DESKTOP_INSET = 6;
 
 /** Entspricht Tailwind `max-md` — schmale Viewports: Fenster immer fullscreen im Desktop-Layer. */
 const MOBILE_LAYOUT_MAX_WIDTH_PX = 767;
@@ -50,7 +50,7 @@ export function isMobileViewport() {
  */
 export function windowShouldDimDock(win, desktopW, desktopH) {
   if (win.minimized) return false;
-  const DOCK_DIM_ZONE_PX = 68;
+  const DOCK_DIM_ZONE_PX = 102;
   const dockTop = desktopH - DOCK_DIM_ZONE_PX;
   const bottom = win.y + win.h;
   if (bottom <= dockTop) return false;
@@ -203,7 +203,7 @@ const WINDOWS_PERSIST_DEBOUNCE_MS = 400;
 
 function centerWindow(size) {
   if (typeof window === "undefined") {
-    return { x: 80, y: 120 };
+    return { x: 120, y: 180 };
   }
   const { desktopW, inset, maxBottomLayer, minLayerY } =
     getDesktopWindowLayoutLimits();
@@ -291,8 +291,8 @@ function sanitizeWindow(w) {
     prevBounds = {
       x: num(pb.x, 0),
       y: num(pb.y, 0),
-      w: num(pb.w, 240),
-      h: num(pb.h, 160),
+      w: num(pb.w, 360),
+      h: num(pb.h, 240),
     };
   }
 
@@ -990,9 +990,9 @@ export function DesktopProvider({ children }) {
     const ins = WINDOW_DESKTOP_INSET;
     const { innerW, maxWinH } = getDesktopWindowLayoutLimits();
     const maxCW = innerW;
-    const maxCH = Math.max(80, maxWinH - OS_TITLEBAR_H - ins);
+    const maxCH = Math.max(120, maxWinH - OS_TITLEBAR_H - ins);
     const minCW = MIN_WIN_W;
-    const minCH = Math.max(MIN_WIN_H - OS_TITLEBAR_H, 80);
+    const minCH = Math.max(MIN_WIN_H - OS_TITLEBAR_H, 120);
 
     let cw = intrinsicW;
     let ch = intrinsicH;

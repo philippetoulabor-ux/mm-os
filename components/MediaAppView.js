@@ -438,7 +438,7 @@ export function MediaAppView({ windowId, unifiedParentScroll = false }) {
                 <div
                   className={
                     videoCollapsed
-                      ? "pointer-events-none fixed left-[-2400px] top-0 z-0 h-[240px] w-[360px] overflow-hidden opacity-0"
+                      ? "pointer-events-none fixed left-[-4800px] top-0 z-0 h-[480px] w-[720px] overflow-hidden opacity-0"
                       : "absolute inset-0"
                   }
                   aria-hidden={videoCollapsed}
