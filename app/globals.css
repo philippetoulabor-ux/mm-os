@@ -138,6 +138,31 @@ body {
   height: auto;
   min-height: 0;
   width: 100%;
+  /* Bündig mit OSWindow-Kopf (#050508): gleiche Fläche, kein Aero-Verlauf an der Naht */
+  background: #050508;
+  /* Bündig mit OSWindow-Kopf (#050508): kein eigener Top-/Seitenrahmen, kein heller Inset-Streifen */
+  border-top: none;
+  border-right: none;
+  border-left: none;
+  border-bottom: 1px solid #0f1419;
+  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.35);
+}
+
+.mm-wmp-shell.mm-wmp-shell--unified .mm-wmp-video-wrap {
+  border-top: none;
+  border-right: none;
+  border-left: none;
+  /* Kein inset 0 1px 0 rgba(255,…) oben — sonst sichtbare helle Kante unter der OSWindow-Leiste */
+  box-shadow: inset 0 0 24px rgba(0, 0, 0, 0.85);
+}
+
+/* Nahtlos an #050508-Kopf: Verlauf startet auf gleicher Fläche, kein heller Streifen */
+.mm-wmp-shell.mm-wmp-shell--unified .mm-wmp-now-playing {
+  background: linear-gradient(
+    180deg,
+    #050508 0%,
+    rgba(0, 0, 0, 0.22) 100%
+  );
 }
 
 .mm-wmp-nav {

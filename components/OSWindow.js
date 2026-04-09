@@ -1,6 +1,5 @@
 "use client";
 
-import dynamic from "next/dynamic";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   getDesktopContentRect,
@@ -11,21 +10,6 @@ import {
 import { AppContent } from "@/components/AppContent";
 import { AppIcon } from "@/components/AppIcon";
 import { APPS } from "@/lib/apps";
-import { logoConfig } from "@/lib/logoConfig";
-
-const WindowHomeLogo = dynamic(
-  () => import("@/components/LogoViewer"),
-  {
-    ssr: false,
-    loading: () => (
-      <span
-        className="block h-full w-full rounded-full bg-zinc-200/50 dark:bg-zinc-600/50"
-        aria-hidden
-      />
-    ),
-  }
-);
-
 /**
  * @param {object} rs resizeState mit startWinX, startWinY, startW, startH, edge
  * @param {{ rw: number, rh: number }} aspect Inhalts-Seitenverhältnis (Breite/Höhe ohne Titelleiste)
@@ -527,35 +511,55 @@ export function OSWindow({ win }) {
         {useMobileUnifiedChrome ? (
           <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-y-contain [-webkit-overflow-scrolling:touch]">
             <div className="flex min-h-full flex-col">
-              <div className="flex min-h-[4.5rem] w-full shrink-0 items-center gap-2 px-4 pt-[max(1.125rem,env(safe-area-inset-top,0px))] pb-3">
+              <div
+                className={`flex min-h-[4.5rem] w-full shrink-0 items-center gap-2 px-4 pt-[max(1.125rem,env(safe-area-inset-top,0px))] pb-3 ${
+                  win.appId === "media" ? "bg-[#050508]" : ""
+                }`}
+              >
                 <div className="flex shrink-0 items-center">
                   <button
                     type="button"
                     aria-label="Home"
                     title="Home"
-                    className="flex h-5 w-5 shrink-0 items-center justify-center overflow-hidden rounded-full bg-transparent p-0 shadow-sm active:opacity-90"
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-transparent hover:opacity-90 active:opacity-90"
                     onMouseDown={(e) => e.stopPropagation()}
                     onClick={(e) => {
                       e.stopPropagation();
                       closeAllTabs();
                     }}
                   >
-                    <WindowHomeLogo
-                      config={logoConfig}
-                      skipRouterClick
-                      domId={false}
-                      className="h-full w-full min-h-0 min-w-0"
+                    <span
+                      className="block h-3 w-3 shrink-0 rounded-full bg-[rgb(255,0,0)]"
+                      aria-hidden
                     />
                     <span className="sr-only">Home</span>
                   </button>
                 </div>
                 <div className="min-w-0 flex-1 px-1 text-center">
-                  <p className="truncate text-sm font-medium leading-tight text-zinc-900 dark:text-zinc-100">
+                  <p
+                    className={`truncate text-sm leading-tight ${
+                      win.appId === "media"
+                        ? "font-semibold leading-[1.3] tracking-[0.01em] text-white [text-shadow:0_1px_0_rgba(0,0,0,0.5)]"
+                        : "font-medium text-zinc-900 dark:text-zinc-100"
+                    }`}
+                  >
                     {win.title}
                   </p>
                   {mobileAssetFolderChromeDir ? (
-                    <p className="mt-0.5 truncate text-center text-xs text-zinc-500">
-                      <code className="text-zinc-600 dark:text-zinc-400">
+                    <p
+                      className={`mt-0.5 truncate text-center text-xs ${
+                        win.appId === "media"
+                          ? "text-zinc-400"
+                          : "text-zinc-500"
+                      }`}
+                    >
+                      <code
+                        className={
+                          win.appId === "media"
+                            ? "text-zinc-400"
+                            : "text-zinc-600 dark:text-zinc-400"
+                        }
+                      >
                         /web/{mobileAssetFolderChromeDir}
                       </code>
                     </p>
@@ -566,7 +570,11 @@ export function OSWindow({ win }) {
                     type="button"
                     aria-label="Notes öffnen"
                     title="Notes"
-                    className="flex min-h-8 min-w-8 items-center justify-center rounded-full bg-black/5 px-1.5 py-1.5 text-black hover:bg-black/10 active:opacity-90 dark:bg-white/10 dark:text-zinc-100 dark:hover:bg-white/15"
+                    className={`flex min-h-8 min-w-8 items-center justify-center rounded-full px-1.5 py-1.5 active:opacity-90 ${
+                      win.appId === "media"
+                        ? "bg-white/10 text-white hover:bg-white/15"
+                        : "bg-black/5 text-black hover:bg-black/10 dark:bg-white/10 dark:text-zinc-100 dark:hover:bg-white/15"
+                    }`}
                     onMouseDown={(e) => e.stopPropagation()}
                     onClick={(e) => {
                       e.stopPropagation();
@@ -582,7 +590,13 @@ export function OSWindow({ win }) {
                   </button>
                 </div>
               </div>
-              <div className="flex min-h-0 flex-1 flex-col border-t border-zinc-100/80 dark:border-zinc-700/80">
+              <div
+                className={`flex min-h-0 flex-1 flex-col ${
+                  win.appId === "media"
+                    ? "bg-[#050508]"
+                    : "border-t border-zinc-100/80 dark:border-zinc-700/80"
+                }`}
+              >
                 <AppContent
                   unifiedParentScroll
                   appId={win.appId}
