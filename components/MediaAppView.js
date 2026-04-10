@@ -279,8 +279,8 @@ export function MediaAppView({ windowId, unifiedParentScroll = false }) {
     if (!embedUrl || !iframeLoaded) return undefined;
 
     let cancelled = false;
-    /** Pro YouTube-`video_id` nur ein Fade — bei Listenwechsel neu starten (Mobile setzt oft erneut stumm). */
-    let lastVolumeFadeVideoId = null;
+    /** Pro Clip nur ein Fade — Key fällt auf Mobile oft erst verzögert, daher Fallback neben `video_id`. */
+    let lastVolumeFadeKey = null;
 
     const clearVolumeFadeTimer = () => {
       if (volumeFadeTimerRef.current) {
@@ -289,14 +289,26 @@ export function MediaAppView({ windowId, unifiedParentScroll = false }) {
       }
     };
 
+    const fadeDedupeKey = (player) => {
+      const d =
+        typeof player.getVideoData === "function"
+          ? player.getVideoData() ?? {}
+          : {};
+      if (d.video_id) return d.video_id;
+      const idx =
+        typeof player.getPlaylistIndex === "function"
+          ? player.getPlaylistIndex()
+          : null;
+      const title = typeof d.title === "string" ? d.title : "";
+      if (idx != null && idx >= 0) return `${idx}:${title}`;
+      return title || null;
+    };
+
     const startVolumeFadeForVideo = (player) => {
       if (cancelled) return;
-      const vid =
-        typeof player.getVideoData === "function"
-          ? player.getVideoData()?.video_id
-          : null;
-      if (!vid || vid === lastVolumeFadeVideoId) return;
-      lastVolumeFadeVideoId = vid;
+      const key = fadeDedupeKey(player);
+      if (!key || key === lastVolumeFadeKey) return;
+      lastVolumeFadeKey = key;
       clearVolumeFadeTimer();
       try {
         if (typeof player.unMute === "function") player.unMute();
@@ -348,11 +360,15 @@ export function MediaAppView({ windowId, unifiedParentScroll = false }) {
               setPlayingTitle(t);
             }
             const YT = window.YT;
-            try {
-              if (typeof p.setShuffle === "function") p.setShuffle(true);
-            } catch {
-              /* ignore */
-            }
+            /** Shuffle kurz verzögern — sonst stößt es auf manchen Mobilgeräten den ersten Start / den Listenwechsel an. */
+            window.setTimeout(() => {
+              if (cancelled) return;
+              try {
+                if (typeof p.setShuffle === "function") p.setShuffle(true);
+              } catch {
+                /* ignore */
+              }
+            }, 200);
             try {
               if (typeof p.mute === "function") p.mute();
             } catch {
@@ -385,7 +401,15 @@ export function MediaAppView({ windowId, unifiedParentScroll = false }) {
             const YT = window.YT;
             if (YT) {
               const ps = e.data;
-              /** Pro Clip: Mobile startet Folgevideos oft wieder stumm — `unMute`/Fade je `video_id`. */
+              /** Manche Clients bleiben nach Listenwechsel in CUED — einmal anstoßen. */
+              if (ps === YT.PlayerState.CUED) {
+                try {
+                  e.target.playVideo();
+                } catch {
+                  /* ignore */
+                }
+              }
+              /** Pro Clip: Mobile startet Folgevideos oft wieder stumm — Fade je erkanntem Clip-Key. */
               if (ps === YT.PlayerState.PLAYING) {
                 startVolumeFadeForVideo(e.target);
                 errorAutoSkipCountRef.current = 0;
