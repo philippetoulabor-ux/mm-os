@@ -417,7 +417,7 @@ export function OSWindow({ win }) {
 
   return (
     <div
-      className={`absolute flex flex-col overflow-hidden border-[3px] border-black bg-white shadow-none ${
+      className={`absolute flex flex-col overflow-hidden border-[2.25px] border-black bg-white shadow-none ${
         win.maximized ? "rounded-none" : "rounded-lg"
       }`}
       style={style}
@@ -425,7 +425,7 @@ export function OSWindow({ win }) {
     >
       {!isMobile ? (
         <header
-          className="flex h-10 shrink-0 cursor-default items-center gap-2 border-b-[3px] border-black bg-[var(--mm-desktop-bg)] pl-0 pr-3 font-sans"
+          className="flex h-10 shrink-0 cursor-default items-center gap-2 border-b-[2.25px] border-black bg-[var(--mm-desktop-bg)] pl-0 pr-3 font-sans"
           onMouseDown={onBarMouseDown}
         >
           <div

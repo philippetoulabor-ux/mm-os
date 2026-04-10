@@ -150,25 +150,39 @@ export default function LogoViewer({
     let raf = 0;
     let ro = null;
 
-    const wrapper = document.createElement("div");
-    Object.assign(wrapper.style, {
-      display: "inline-block",
+    /** Klick-Hitbox ohne Transform — verhindert, dass Hover-Scale die Trefferfläche vergrößert und Ordner/Fenster darunter blockiert */
+    const hitLayer = document.createElement("div");
+    Object.assign(hitLayer.style, {
+      display: "block",
+      boxSizing: "border-box",
+      width: "100%",
+      height: "100%",
       paddingTop: `${opts.paddingTop}px`,
       paddingBottom: `${opts.paddingBottom}px`,
       lineHeight: "0",
       cursor: "pointer",
+    });
+
+    const visualLayer = document.createElement("div");
+    Object.assign(visualLayer.style, {
+      display: "inline-block",
+      width: "100%",
+      height: "100%",
+      pointerEvents: "none",
       transform: "scale(1)",
       transition: "transform 0.35s cubic-bezier(0.34,1.56,0.64,1)",
       transformOrigin: "center center",
     });
 
-    const onEnter = () => (wrapper.style.transform = "scale(1.06)");
-    const onLeave = () => (wrapper.style.transform = "scale(1)");
+    hitLayer.appendChild(visualLayer);
+
+    const onEnter = () => (visualLayer.style.transform = "scale(1.06)");
+    const onLeave = () => (visualLayer.style.transform = "scale(1)");
     const onClick = skipRouterClick ? null : () => router.push(opts.href);
-    wrapper.addEventListener("mouseenter", onEnter);
-    wrapper.addEventListener("mouseleave", onLeave);
-    if (onClick) wrapper.addEventListener("click", onClick);
-    container.appendChild(wrapper);
+    hitLayer.addEventListener("mouseenter", onEnter);
+    hitLayer.addEventListener("mouseleave", onLeave);
+    if (onClick) hitLayer.addEventListener("click", onClick);
+    container.appendChild(hitLayer);
 
     let renderer = null;
     let scene = null;
@@ -204,8 +218,13 @@ export default function LogoViewer({
       renderer.setClearColor(0x000000, 0);
 
       const canvas = renderer.domElement;
-      Object.assign(canvas.style, { display: "block", width: "100%", height: "100%" });
-      wrapper.appendChild(canvas);
+      Object.assign(canvas.style, {
+        display: "block",
+        width: "100%",
+        height: "100%",
+        pointerEvents: "none",
+      });
+      visualLayer.appendChild(canvas);
 
       scene = new THREE.Scene();
       camera = new THREE.PerspectiveCamera(35, 1, 0.001, 100);
@@ -296,9 +315,9 @@ export default function LogoViewer({
       cancelAnimationFrame(raf);
       if (ro) ro.disconnect();
       if (onMove) window.removeEventListener("mousemove", onMove);
-      wrapper.removeEventListener("mouseenter", onEnter);
-      wrapper.removeEventListener("mouseleave", onLeave);
-      if (onClick) wrapper.removeEventListener("click", onClick);
+      hitLayer.removeEventListener("mouseenter", onEnter);
+      hitLayer.removeEventListener("mouseleave", onLeave);
+      if (onClick) hitLayer.removeEventListener("click", onClick);
 
       if (mesh?.material) mesh.material.dispose();
       if (edgeMesh?.material) edgeMesh.material.dispose();
@@ -310,7 +329,7 @@ export default function LogoViewer({
         if (el?.parentNode) el.parentNode.removeChild(el);
       }
 
-      if (wrapper.parentNode) wrapper.parentNode.removeChild(wrapper);
+      if (hitLayer.parentNode) hitLayer.parentNode.removeChild(hitLayer);
     };
   }, [opts, router, skipRouterClick]);
 

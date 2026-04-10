@@ -235,7 +235,7 @@ function AssetFileListThumb({ href, file }) {
       aria-hidden
     >
       {ext ? (
-        <span className="max-w-full truncate text-center font-mono text-[20px] font-semibold leading-tight text-zinc-600 dark:text-zinc-300">
+        <span className="max-w-full truncate text-center font-mono text-[15px] font-semibold leading-tight text-zinc-600 dark:text-zinc-300">
           {ext}
         </span>
       ) : (
@@ -620,7 +620,7 @@ function FinderFileFormatThumb({ file }) {
       aria-hidden
     >
       {ext ? (
-        <span className="max-w-full truncate text-center font-mono text-[18px] font-semibold leading-tight text-zinc-600 dark:text-zinc-300">
+        <span className="max-w-full truncate text-center font-mono text-[13.5px] font-semibold leading-tight text-zinc-600 dark:text-zinc-300">
           {ext}
         </span>
       ) : (

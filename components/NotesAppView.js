@@ -73,7 +73,7 @@ function cursorParaOffset(text, cursor) {
   return { paraIndex: pi, local: cursor - start };
 }
 
-/** Gleiche Zeilenhöhe wie früher (`text-[0.65rem] leading-none` ≈ 15px bei 150%-Root). */
+/** Chip-Zeilenhöhe: `text-[0.65rem] leading-none` skaliert mit Root (112,5%). */
 const MENTION_CHIP_ICON_PX = 10;
 
 /** Wie `DesktopFolderIcon`: bei FolderPreview Vorschaubild, sonst `AppIcon` / Emoji. */

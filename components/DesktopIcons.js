@@ -18,7 +18,10 @@ import {
 } from "@/context/DesktopContext";
 
 const ICON_W = 120;
-const ICON_H = 150;
+/** Kachel inkl. größerem Icon + Label — Bounds fürs Drag-Clamping */
+const ICON_H = 180;
+/** Mobile Home-Grid: Icon-Kante (rem) — Schrift/Abstand per calc daran gekoppelt (iOS-ähnliches Verhältnis) */
+const MOBILE_GRID_ICON_REM = "3.5rem";
 /** Abstand zum linken/rechten Rand / Fallback — wie DESKTOP_ICON_GRID in lib/apps.js */
 const MARGIN_X = 180;
 const START_Y = 132;
@@ -256,7 +259,7 @@ function CornerDock() {
   );
 }
 
-function DesktopFolderIcon({ app, folderPreview }) {
+function DesktopFolderIcon({ app, folderPreview, iconVariant = "default" }) {
   const href =
     folderPreview && app.assetDir
       ? getWebAssetFolderPreviewHref(app.assetDir)
@@ -267,6 +270,11 @@ function DesktopFolderIcon({ app, folderPreview }) {
     setImgFailed(false);
   }, [href]);
 
+  const previewClass =
+    iconVariant === "desktop"
+      ? "h-14 w-14 shrink-0 rounded-lg object-cover shadow-md ring-2 ring-black/10 dark:ring-white/15"
+      : "h-9 w-9 shrink-0 rounded-lg object-cover shadow-md ring-2 ring-black/10 dark:ring-white/15";
+
   if (href && !imgFailed) {
     return (
       <>
@@ -274,14 +282,14 @@ function DesktopFolderIcon({ app, folderPreview }) {
         <img
           src={href}
           alt=""
-          className="h-9 w-9 shrink-0 rounded-lg object-cover shadow-md ring-2 ring-black/10 dark:ring-white/15"
+          className={previewClass}
           onError={() => setImgFailed(true)}
         />
       </>
     );
   }
 
-  return <AppIcon app={app} />;
+  return <AppIcon app={app} variant={iconVariant} />;
 }
 
 function DesktopIconTile({
@@ -304,15 +312,15 @@ function DesktopIconTile({
     openOrFocus(item.appId);
   };
 
-  const label = (
-    <span className="w-full min-w-0 max-w-full break-words text-center text-[0.65rem] font-medium leading-tight text-zinc-800 line-clamp-2 [text-shadow:0_2px_0_rgba(255,255,255,0.6)] min-[400px]:text-xs dark:text-zinc-100 dark:[text-shadow:0_2px_0_rgba(0,0,0,0.35)]">
+  const gridLabel = (
+    <span className="w-full min-w-0 max-w-full break-words text-center font-medium leading-tight text-zinc-800 line-clamp-2 [text-shadow:0_2px_0_rgba(255,255,255,0.6)] [font-size:calc(0.165*var(--mm-mobile-grid-icon))] dark:text-zinc-100 dark:[text-shadow:0_2px_0_rgba(0,0,0,0.35)]">
       {item.label}
     </span>
   );
 
   const iconWrap = (
     <span className="inline-flex shrink-0 drop-shadow-md filter" aria-hidden>
-      <DesktopFolderIcon app={app} folderPreview={folderPreview} />
+      <DesktopFolderIcon app={app} folderPreview={folderPreview} iconVariant="desktop" />
     </span>
   );
 
@@ -320,11 +328,12 @@ function DesktopIconTile({
     return (
       <button
         type="button"
-        className="pointer-events-auto flex min-h-0 w-full max-w-[5.25rem] flex-col items-center justify-start gap-0.5 rounded-xl px-0.5 py-1.5 text-center outline-none transition-colors active:bg-black/10 min-[400px]:gap-1 min-[400px]:px-1 min-[400px]:py-2 dark:active:bg-white/15"
+        className="pointer-events-auto flex min-h-0 w-full max-w-[6rem] flex-col items-center justify-start rounded-xl px-0.5 py-1.5 text-center outline-none transition-colors active:bg-black/10 [gap:calc(0.09*var(--mm-mobile-grid-icon))] min-[400px]:px-1 min-[400px]:py-2 dark:active:bg-white/15"
+        style={{ "--mm-mobile-grid-icon": MOBILE_GRID_ICON_REM }}
         onClick={onClick}
       >
         {iconWrap}
-        {label}
+        {gridLabel}
       </button>
     );
   }
@@ -333,12 +342,12 @@ function DesktopIconTile({
     <button
       type="button"
       style={positionStyle}
-      className="pointer-events-auto absolute flex min-h-[var(--mm-desktop-folder-tile)] w-20 flex-col items-center gap-1 rounded-lg p-2 text-center outline-none transition-colors hover:bg-black/5 active:bg-black/10 dark:hover:bg-white/10 dark:active:bg-white/15"
+      className="pointer-events-auto absolute flex min-h-[var(--mm-desktop-folder-tile)] w-20 flex-col items-center gap-3 rounded-lg p-2 text-center outline-none transition-colors hover:bg-black/5 active:bg-black/10 dark:hover:bg-white/10 dark:active:bg-white/15"
       onPointerDown={onPointerDown}
       onClick={onClick}
     >
       {iconWrap}
-      <span className="w-full min-w-0 max-w-full break-words text-center text-xs font-medium leading-tight text-zinc-800 line-clamp-2 [text-shadow:0_2px_0_rgba(255,255,255,0.6)] dark:text-zinc-100 dark:[text-shadow:0_2px_0_rgba(0,0,0,0.35)]">
+      <span className="w-full min-w-0 max-w-full break-words text-center text-xs font-semibold leading-tight text-zinc-800 line-clamp-2 [text-shadow:0_2px_0_rgba(255,255,255,0.6)] dark:text-zinc-100 dark:[text-shadow:0_2px_0_rgba(0,0,0,0.35)]">
         {item.label}
       </span>
     </button>
@@ -352,35 +361,44 @@ export function DesktopIcons() {
     setDesktopIconPosition,
     folderPreview,
   } = useDesktop();
-  const [containerW, setContainerW] = useState(0);
+  /** Desktop-Layer: Breite/Höhe wie bisher; `top` = Abstand Layer-Oberkante → Viewport-Oberkante (= Header-Höhe) */
+  const [layerMetrics, setLayerMetrics] = useState({
+    top: 0,
+    w: 0,
+    h: 0,
+  });
   const desktopRef = useRef(null);
   const dragRef = useRef(null);
   const blockClickRef = useRef(false);
 
   useLayoutEffect(() => {
-    const el = desktopRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver(() => {
-      const r = el.getBoundingClientRect();
-      setContainerW(r.width);
-    });
-    ro.observe(el);
-    const r = el.getBoundingClientRect();
-    setContainerW(r.width);
-    return () => ro.disconnect();
+    const layer = document.querySelector("[data-mm-desktop-layer]");
+    if (!layer) return undefined;
+    const sync = () => {
+      const r = layer.getBoundingClientRect();
+      setLayerMetrics({ top: r.top, w: r.width, h: r.height });
+    };
+    sync();
+    const ro = new ResizeObserver(sync);
+    ro.observe(layer);
+    window.addEventListener("resize", sync);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", sync);
+    };
   }, []);
 
   const clamp = useCallback((x, y) => {
-    const el = desktopRef.current;
-    if (!el) return { x, y };
-    const rect = el.getBoundingClientRect();
-    const maxX = Math.max(0, rect.width - ICON_W);
-    const maxY = Math.max(0, rect.height - ICON_H);
+    const { w, h, top: layerTop } = layerMetrics;
+    if (w <= 0 || h <= 0) return { x, y };
+    const maxX = Math.max(0, w - ICON_W);
+    const maxY = Math.max(0, h - ICON_H);
+    const minY = -layerTop;
     return {
       x: Math.max(0, Math.min(x, maxX)),
-      y: Math.max(0, Math.min(y, maxY)),
+      y: Math.max(minY, Math.min(y, maxY)),
     };
-  }, []);
+  }, [layerMetrics]);
 
   useEffect(() => {
     const onMove = (e) => {
@@ -389,15 +407,18 @@ export function DesktopIcons() {
       const el = desktopRef.current;
       if (!el) return;
       const rect = el.getBoundingClientRect();
-      const nx = e.clientX - rect.left - d.offX;
-      const ny = e.clientY - rect.top - d.offY;
+      const { top: layerTop } = layerMetrics;
+      const nxCont = e.clientX - rect.left - d.offX;
+      const nyCont = e.clientY - rect.top - d.offY;
+      const nxLayer = nxCont;
+      const nyLayer = nyCont - layerTop;
       if (
         Math.abs(e.clientX - d.startClientX) > 8 ||
         Math.abs(e.clientY - d.startClientY) > 8
       ) {
         d.didDrag = true;
       }
-      const c = clamp(nx, ny);
+      const c = clamp(nxLayer, nyLayer);
       setDesktopIconPosition(d.appId, c.x, c.y);
     };
     const onUp = () => {
@@ -413,7 +434,7 @@ export function DesktopIcons() {
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onUp);
     };
-  }, [clamp, setDesktopIconPosition]);
+  }, [clamp, layerMetrics, setDesktopIconPosition]);
 
   const onPointerDown = (e, appId) => {
     if (e.button !== 0) return;
@@ -421,13 +442,14 @@ export function DesktopIcons() {
     const el = desktopRef.current;
     if (!el) return;
     const raw = desktopIconPositions[appId] ?? { x: MARGIN_X, y: START_Y };
-    const r = el.getBoundingClientRect();
-    const pos = toPixelPosition(raw, r.width);
     const rect = el.getBoundingClientRect();
+    const pos = toPixelPosition(raw, layerMetrics.w);
+    const { top: layerTop } = layerMetrics;
+    const topPx = pos.y + layerTop;
     dragRef.current = {
       appId,
       offX: e.clientX - rect.left - pos.x,
-      offY: e.clientY - rect.top - pos.y,
+      offY: e.clientY - rect.top - topPx,
       startClientX: e.clientX,
       startClientY: e.clientY,
       didDrag: false,
@@ -444,14 +466,13 @@ export function DesktopIcons() {
     Math.ceil(floatingIcons.length / MOBILE_HOME_GRID_COLS)
   );
 
+  const layerTopPx = layerMetrics.top;
+
   return (
-    <div
-      ref={desktopRef}
-      className="pointer-events-none absolute inset-0"
-    >
+    <>
       {/* Mobile: festes 4×4-Raster; Dock unten separat — kein Drag */}
       <div
-        className="absolute inset-0 flex flex-col md:hidden"
+        className="pointer-events-none absolute inset-0 flex flex-col md:hidden"
         style={{
           paddingBottom:
             "max(5.25rem, calc(4.25rem + env(safe-area-inset-bottom, 0px)))",
@@ -484,8 +505,15 @@ export function DesktopIcons() {
         </div>
       </div>
 
-      {/* Desktop: frei positionierbare Icons */}
-      <div className="hidden md:contents">
+      {/* Desktop: Schreibtisch inkl. Site-Header — Container reicht bis zur Viewport-Oberkante */}
+      <div
+        ref={desktopRef}
+        className="pointer-events-none absolute left-0 right-0 z-[1] hidden md:block"
+        style={{
+          top: layerTopPx ? -layerTopPx : 0,
+          height: layerTopPx ? `calc(100% + ${layerTopPx}px)` : "100%",
+        }}
+      >
         {floatingIcons.map((item) => {
           const app = APPS[item.appId];
           if (!app) return null;
@@ -493,7 +521,7 @@ export function DesktopIcons() {
             x: MARGIN_X,
             y: START_Y,
           };
-          const pos = toPixelPosition(raw, containerW);
+          const pos = toPixelPosition(raw, layerMetrics.w);
           return (
             <DesktopIconTile
               key={item.appId}
@@ -501,7 +529,7 @@ export function DesktopIcons() {
               folderPreview={folderPreview}
               openOrFocus={openOrFocus}
               layout="absolute"
-              positionStyle={{ left: pos.x, top: pos.y }}
+              positionStyle={{ left: pos.x, top: pos.y + layerTopPx }}
               onPointerDown={(e) => onPointerDown(e, item.appId)}
               blockClickRef={blockClickRef}
             />
@@ -509,7 +537,8 @@ export function DesktopIcons() {
         })}
       </div>
 
+      {/* Eigenes Layer: muss nicht unter `hidden md:block` liegen — sonst fehlen Dock + Zurück auf Mobile. */}
       <CornerDock />
-    </div>
+    </>
   );
 }

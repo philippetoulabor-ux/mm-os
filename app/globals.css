@@ -7,7 +7,8 @@
   :root {
     --mm-desktop-bg: #d9d9d9;
     --mm-shell-text: #18181b;
-    --mm-desktop-folder-tile: 5rem;
+    /* Mindesthöhe Kachel: großes Icon (3,5rem) + gap ≈ Zeile + 2 Zeilen Label */
+    --mm-desktop-folder-tile: 7.5rem;
     /* Kompaktes 3D-Logo */
     --mm-logo-max: 7.5rem;
     /* Media-Library & OSWindow-Bounds: gleiche Dauer/Easing für gemeinsame Bewegung */
@@ -21,8 +22,8 @@
   }
 
   html {
-    /* Globale UI-Skalierung 1,5× (Tailwind/rem-Utilities folgen der Root-Schriftgröße) */
-    font-size: 150%;
+    /* Globale UI-Skalierung 1,125× (0,75× der vorherigen 1,5×; Tailwind/rem folgt der Root) */
+    font-size: 112.5%;
     height: 100%;
     margin: 0;
     overflow: hidden;
@@ -100,6 +101,11 @@ body {
   pointer-events: auto;
 }
 
+/* WebGL-Canvas: keine eigene Trefferfläche — Klicks auf Logo-Hitbox (LogoViewer), kein Blockieren darunter */
+.mm-os-site-header canvas[data-engine] {
+  pointer-events: none;
+}
+
 #logo-container,
 .logo-placeholder {
   box-sizing: border-box;
@@ -127,7 +133,7 @@ body {
   );
   color: #e8eef5;
   font-family: Tahoma, "Segoe UI", system-ui, sans-serif;
-  font-size: 18px;
+  font-size: 13.5px;
   border: 1.5px solid #0f1419;
   box-shadow:
     inset 0 1.5px 0 rgba(255, 255, 255, 0.1),
@@ -201,7 +207,7 @@ body {
   border: 1.5px solid rgba(0, 0, 0, 0.45);
   background: linear-gradient(180deg, #6a9fd4 0%, #3d7cc4 45%, #2a5fa3 100%);
   color: #fff;
-  font-size: 18px;
+  font-size: 13.5px;
   line-height: 1;
   box-shadow:
     inset 0 1.5px 0 rgba(255, 255, 255, 0.25),
@@ -224,7 +230,7 @@ body {
   border: 1.5px solid transparent;
   background: transparent;
   color: #b8c4d4;
-  font-size: 16.5px;
+  font-size: 12.375px;
   cursor: pointer;
   text-shadow: 0 1.5px 0 rgba(0, 0, 0, 0.4);
 }
@@ -315,7 +321,7 @@ body {
     rgba(255, 255, 255, 0.06) 0%,
     rgba(0, 0, 0, 0.2) 100%
   );
-  font-size: 22.5px;
+  font-size: 16.875px;
   font-weight: 600;
   line-height: 1.3;
   letter-spacing: 0.01em;
@@ -394,7 +400,7 @@ body {
 .mm-wmp-playbtn--compact {
   width: 57px;
   height: 57px;
-  font-size: 22.5px;
+  font-size: 16.875px;
   line-height: 1;
 }
 
@@ -440,7 +446,7 @@ body {
   border: 1.5px solid #6a7a90;
   background: linear-gradient(180deg, #fff 0%, #e2e8f0 100%);
   padding: 6px 9px;
-  font-size: 16.5px;
+  font-size: 12.375px;
   color: #0f1729;
   box-shadow: inset 0 1.5px 3px rgba(0, 0, 0, 0.08);
 }
@@ -463,7 +469,7 @@ body {
 .mm-wmp-library table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 16.5px;
+  font-size: 12.375px;
 }
 .mm-wmp-library th {
   text-align: left;
@@ -494,7 +500,7 @@ body {
 
 .mm-wmp-time {
   font-variant-numeric: tabular-nums;
-  font-size: 16.5px;
+  font-size: 12.375px;
   color: #c8d4e4;
   text-shadow: 0 1.5px 0 rgba(0, 0, 0, 0.5);
   min-width: 5.5rem;
@@ -510,7 +516,7 @@ body {
   border: 1.5px solid rgba(0, 0, 0, 0.5);
   background: linear-gradient(180deg, #9aa8b8 0%, #6a7888 48%, #4a5868 100%);
   color: #1a1f26;
-  font-size: 16.5px;
+  font-size: 12.375px;
   box-shadow:
     inset 0 1.5px 0 rgba(255, 255, 255, 0.35),
     0 1.5px 1.5px rgba(0, 0, 0, 0.35);
@@ -542,7 +548,7 @@ body {
     #1a4a8a 100%
   );
   color: #fff;
-  font-size: 27px;
+  font-size: 20.25px;
   box-shadow:
     inset 0 3px 6px rgba(255, 255, 255, 0.35),
     inset 0 -3px 9px rgba(0, 0, 0, 0.35),
@@ -565,7 +571,7 @@ body {
   border: 1.5px solid rgba(0, 0, 0, 0.5);
   background: linear-gradient(180deg, #b8c4d4 0%, #8898a8 45%, #586878 100%);
   color: #1a1f26;
-  font-size: 21px;
+  font-size: 15.75px;
   box-shadow:
     inset 0 1.5px 0 rgba(255, 255, 255, 0.45),
     0 1.5px 3px rgba(0, 0, 0, 0.35);
@@ -640,7 +646,7 @@ body {
   background: rgba(0, 0, 0, 0.82);
   padding: 9px 12px;
   text-align: center;
-  font-size: 15px;
+  font-size: 11.25px;
   line-height: 1.35;
   color: #fde68a;
 }
