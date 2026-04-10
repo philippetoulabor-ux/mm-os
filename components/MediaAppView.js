@@ -120,11 +120,7 @@ const SKIP_BACK_RESTART_SEC = 2.5;
 /** Max. automatische Weiterschaltungen bei Fehler (Alter, Embed, nicht gefunden, …). */
 const MAX_ERROR_AUTO_SKIPS = 48;
 
-/** Lautstärke beim Start (0) bis Ziel nach dieser Dauer (ms) einblenden (Autoplay-freundlich). */
-const VOLUME_FADE_MS = 7000;
 const VOLUME_TARGET = 100;
-/** Nicht jedes Frame setVolume (YouTube-API / Main Thread); ~58–60 Updates statt ~400+. */
-const VOLUME_FADE_STEP_MS = 120;
 
 /** @returns {Promise<void>} */
 function loadYoutubeIframeApi() {
@@ -178,7 +174,6 @@ export function MediaAppView({ windowId, unifiedParentScroll = false }) {
   const nowPlayingMarqueeRef = useRef(null);
   const nowPlayingMarqueeSegRef = useRef(null);
   const reduceMotionRef = useRef(false);
-  const volumeFadeTimerRef = useRef(0);
   /** Letzte UI-Werte — vermeidet setState bei jedem YT-State-Event ohne Änderung. */
   const isPlayingUiRef = useRef(false);
   const titleUiRef = useRef("");
@@ -279,17 +274,10 @@ export function MediaAppView({ windowId, unifiedParentScroll = false }) {
     if (!embedUrl || !iframeLoaded) return undefined;
 
     let cancelled = false;
-    /** Pro Clip nur ein Fade — Key fällt auf Mobile oft erst verzögert, daher Fallback neben `video_id`. */
-    let lastVolumeFadeKey = null;
+    /** Pro Clip einmal Ton setzen (kein Fade — viele `setVolume`-Updates störten iOS Safari). */
+    let lastAudibleClipKey = null;
 
-    const clearVolumeFadeTimer = () => {
-      if (volumeFadeTimerRef.current) {
-        window.clearInterval(volumeFadeTimerRef.current);
-        volumeFadeTimerRef.current = 0;
-      }
-    };
-
-    const fadeDedupeKey = (player) => {
+    const clipDedupeKey = (player) => {
       const d =
         typeof player.getVideoData === "function"
           ? player.getVideoData() ?? {}
@@ -304,40 +292,21 @@ export function MediaAppView({ windowId, unifiedParentScroll = false }) {
       return title || null;
     };
 
-    const startVolumeFadeForVideo = (player) => {
+    const applyAudibleOncePerClip = (player) => {
       if (cancelled) return;
-      const key = fadeDedupeKey(player);
-      if (!key || key === lastVolumeFadeKey) return;
-      lastVolumeFadeKey = key;
-      clearVolumeFadeTimer();
+      const key = clipDedupeKey(player);
+      if (!key || key === lastAudibleClipKey) return;
+      lastAudibleClipKey = key;
       try {
         if (typeof player.unMute === "function") player.unMute();
       } catch {
         /* ignore */
       }
       try {
-        player.setVolume(0);
+        player.setVolume(VOLUME_TARGET);
       } catch {
         /* ignore */
       }
-      const fadeStart = performance.now();
-      const tick = () => {
-        if (cancelled) return;
-        const u = Math.min(1, (performance.now() - fadeStart) / VOLUME_FADE_MS);
-        try {
-          player.setVolume(Math.round(VOLUME_TARGET * u));
-        } catch {
-          /* ignore */
-        }
-        if (u >= 1) {
-          clearVolumeFadeTimer();
-        }
-      };
-      tick();
-      volumeFadeTimerRef.current = window.setInterval(
-        tick,
-        VOLUME_FADE_STEP_MS
-      );
     };
 
     loadYoutubeIframeApi().then(() => {
@@ -375,11 +344,6 @@ export function MediaAppView({ windowId, unifiedParentScroll = false }) {
               /* ignore */
             }
             try {
-              p.setVolume(0);
-            } catch {
-              /* ignore */
-            }
-            try {
               p.playVideo();
             } catch {
               /* ignore */
@@ -393,7 +357,7 @@ export function MediaAppView({ windowId, unifiedParentScroll = false }) {
               setIsPlaying(nextPlaying);
             }
             if (ps != null && YT && ps === YT.PlayerState.PLAYING) {
-              startVolumeFadeForVideo(p);
+              applyAudibleOncePerClip(p);
             }
           },
           onStateChange: (e) => {
@@ -409,9 +373,9 @@ export function MediaAppView({ windowId, unifiedParentScroll = false }) {
                   /* ignore */
                 }
               }
-              /** Pro Clip: Mobile startet Folgevideos oft wieder stumm — Fade je erkanntem Clip-Key. */
+              /** Pro Clip: nach Autoplay stumm → einmal `unMute` + Ziel-Lautstärke. */
               if (ps === YT.PlayerState.PLAYING) {
-                startVolumeFadeForVideo(e.target);
+                applyAudibleOncePerClip(e.target);
                 errorAutoSkipCountRef.current = 0;
               }
               const nextPlaying =
@@ -467,7 +431,6 @@ export function MediaAppView({ windowId, unifiedParentScroll = false }) {
 
     return () => {
       cancelled = true;
-      clearVolumeFadeTimer();
       try {
         ytPlayerRef.current?.destroy?.();
       } catch {
