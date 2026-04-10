@@ -42,8 +42,12 @@ function readPlaylistIndex() {
   }
 }
 
-/** @param {{ youtubePlaylistId?: string; videos?: string[] }} entry @param {string} [origin] */
-function embedUrlForEntry(entry, origin) {
+/**
+ * @param {{ youtubePlaylistId?: string; videos?: string[] }} entry
+ * @param {string} [origin]
+ * @param {{ iosSafariMute?: boolean }} [opts] nur iOS-Safari: `mute=1` für stabileren Autoplay+Ton
+ */
+function embedUrlForEntry(entry, origin, opts = {}) {
   if (!entry) return null;
   const base = {
     rel: "0",
@@ -55,9 +59,10 @@ function embedUrlForEntry(entry, origin) {
     iv_load_policy: "3",
     playsinline: "1",
     /**
-     * Kein `mute`/`autoplay` in der URL: sonst zeigt der mobile Player oft zusätzliche Bedienelemente.
-     * Stummschaltung nur per IFrame-API (`mute()` vor `playVideo()`), siehe Player-`onReady`.
+     * Standard: kein mute in der URL (weniger Chrome im Player).
+     * iOS-Safari: optional `mute=1` — zusammen mit verzögertem `unMute` oft zuverlässiger als nur API.
      */
+    ...(opts.iosSafariMute ? { mute: "1" } : {}),
   };
   if (entry.youtubePlaylistId) {
     const q = new URLSearchParams({
@@ -122,6 +127,12 @@ const MAX_ERROR_AUTO_SKIPS = 48;
 
 const VOLUME_TARGET = 100;
 
+/**
+ * iOS-in-app-Safari: sofortiges `unMute` nach `PLAYING` kann die Wiedergabe stoppen.
+ * Kurz verzögern, damit der Decoder/WebKit den Start abgeschlossen hat.
+ */
+const IOS_SAFARI_UNMUTE_DELAY_MS = 160;
+
 /** In-app Safari auf iPhone/iPad (nicht Brave, Chrome, Firefox, …). */
 function isIosAppleWebKitSafari() {
   if (typeof navigator === "undefined") return false;
@@ -133,20 +144,6 @@ function isIosAppleWebKitSafari() {
   if (!iOSLike) return false;
   if (/CriOS|FxiOS|OPiOS|EdgiOS|GSA|Brave/i.test(ua)) return false;
   return true;
-}
-
-function unmuteYoutubePlayerForUserGesture(p) {
-  if (!p || !isIosAppleWebKitSafari()) return;
-  try {
-    if (typeof p.unMute === "function") p.unMute();
-  } catch {
-    /* ignore */
-  }
-  try {
-    p.setVolume(VOLUME_TARGET);
-  } catch {
-    /* ignore */
-  }
 }
 
 /** @returns {Promise<void>} */
@@ -206,14 +203,22 @@ export function MediaAppView({ windowId, unifiedParentScroll = false }) {
   const titleUiRef = useRef("");
 
   const [playlistIndex, setPlaylistIndex] = useState(() => readPlaylistIndex());
+  const [iosSafariMuteEmbed, setIosSafariMuteEmbed] = useState(false);
 
   useEffect(() => {
     setApiOrigin(window.location.origin);
   }, []);
 
+  useEffect(() => {
+    setIosSafariMuteEmbed(isIosAppleWebKitSafari());
+  }, []);
+
   const embedUrl = useMemo(
-    () => embedUrlForEntry(PLAYLISTS[playlistIndex], apiOrigin || undefined),
-    [playlistIndex, apiOrigin]
+    () =>
+      embedUrlForEntry(PLAYLISTS[playlistIndex], apiOrigin || undefined, {
+        iosSafariMute: iosSafariMuteEmbed,
+      }),
+    [playlistIndex, apiOrigin, iosSafariMuteEmbed]
   );
 
   useEffect(() => {
@@ -303,6 +308,7 @@ export function MediaAppView({ windowId, unifiedParentScroll = false }) {
     let cancelled = false;
     /** Pro Clip einmal Ton setzen (kein Fade — viele `setVolume`-Updates störten iOS Safari). */
     let lastAudibleClipKey = null;
+    let iosSafariUnmuteTimer = 0;
 
     const clipDedupeKey = (player) => {
       const d =
@@ -324,21 +330,34 @@ export function MediaAppView({ windowId, unifiedParentScroll = false }) {
       const key = clipDedupeKey(player);
       if (!key || key === lastAudibleClipKey) return;
       lastAudibleClipKey = key;
-      /**
-       * iOS Safari: programmatisches `unMute`/`setVolume` nach `PLAYING` bricht die Wiedergabe oft ab.
-       * Stumm weiterlaufen lassen; Ton nur bei Nutzeraktion (siehe Play/Skip-Handler).
-       */
-      if (isIosAppleWebKitSafari()) return;
-      try {
-        if (typeof player.unMute === "function") player.unMute();
-      } catch {
-        /* ignore */
+
+      const applyUnmuteNow = () => {
+        try {
+          if (typeof player.unMute === "function") player.unMute();
+        } catch {
+          /* ignore */
+        }
+        try {
+          player.setVolume(VOLUME_TARGET);
+        } catch {
+          /* ignore */
+        }
+      };
+
+      if (isIosAppleWebKitSafari()) {
+        if (iosSafariUnmuteTimer) {
+          window.clearTimeout(iosSafariUnmuteTimer);
+          iosSafariUnmuteTimer = 0;
+        }
+        iosSafariUnmuteTimer = window.setTimeout(() => {
+          iosSafariUnmuteTimer = 0;
+          if (cancelled) return;
+          applyUnmuteNow();
+        }, IOS_SAFARI_UNMUTE_DELAY_MS);
+        return;
       }
-      try {
-        player.setVolume(VOLUME_TARGET);
-      } catch {
-        /* ignore */
-      }
+
+      applyUnmuteNow();
     };
 
     loadYoutubeIframeApi().then(() => {
@@ -361,9 +380,9 @@ export function MediaAppView({ windowId, unifiedParentScroll = false }) {
               setPlayingTitle(t);
             }
             const YT = window.YT;
-            /** Shuffle verzögert; auf iOS Safari weglassen (stabilerer Start). */
+            /** Shuffle kurz verzögern — sonst stößt es auf manchen Mobilgeräten den Start an. */
             window.setTimeout(() => {
-              if (cancelled || isIosAppleWebKitSafari()) return;
+              if (cancelled) return;
               try {
                 if (typeof p.setShuffle === "function") p.setShuffle(true);
               } catch {
@@ -397,8 +416,8 @@ export function MediaAppView({ windowId, unifiedParentScroll = false }) {
             const YT = window.YT;
             if (YT) {
               const ps = e.data;
-              /** Nicht in iOS Safari: zusätzliches `playVideo` bei CUED kann die Wiedergabe stören. */
-              if (ps === YT.PlayerState.CUED && !isIosAppleWebKitSafari()) {
+              /** Manche Clients bleiben nach Listenwechsel in CUED — einmal anstoßen. */
+              if (ps === YT.PlayerState.CUED) {
                 try {
                   e.target.playVideo();
                 } catch {
@@ -463,6 +482,10 @@ export function MediaAppView({ windowId, unifiedParentScroll = false }) {
 
     return () => {
       cancelled = true;
+      if (iosSafariUnmuteTimer) {
+        window.clearTimeout(iosSafariUnmuteTimer);
+        iosSafariUnmuteTimer = 0;
+      }
       try {
         ytPlayerRef.current?.destroy?.();
       } catch {
@@ -477,7 +500,6 @@ export function MediaAppView({ windowId, unifiedParentScroll = false }) {
     if (!p || typeof p.getPlayerState !== "function") return;
     const YT = window.YT;
     if (!YT) return;
-    unmuteYoutubePlayerForUserGesture(p);
     const s = p.getPlayerState();
     if (s === YT.PlayerState.PLAYING || s === YT.PlayerState.BUFFERING) {
       p.pauseVideo();
@@ -487,15 +509,12 @@ export function MediaAppView({ windowId, unifiedParentScroll = false }) {
   }, []);
 
   const skipForward = useCallback(() => {
-    const p = ytPlayerRef.current;
-    if (p) unmuteYoutubePlayerForUserGesture(p);
     skipPlaylistForward(ytPlayerRef);
   }, []);
 
   const skipBackward = useCallback(() => {
     const p = ytPlayerRef.current;
     if (!p) return;
-    unmuteYoutubePlayerForUserGesture(p);
     if (typeof p.getCurrentTime !== "function") return;
     const t = p.getCurrentTime();
     if (t > SKIP_BACK_RESTART_SEC && typeof p.seekTo === "function") {
