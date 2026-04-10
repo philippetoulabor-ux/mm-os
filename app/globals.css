@@ -9,8 +9,8 @@
     --mm-shell-text: #18181b;
     /* Mindesthöhe Kachel: großes Icon (3,5rem) + gap ≈ Zeile + 2 Zeilen Label */
     --mm-desktop-folder-tile: 7.5rem;
-    /* Kompaktes 3D-Logo */
-    --mm-logo-max: 7.5rem;
+    /* Kompaktes 3D-Logo (1,25× gegenüber 7,5rem) */
+    --mm-logo-max: 9.375rem;
     /* Media-Library & OSWindow-Bounds: gleiche Dauer/Easing für gemeinsame Bewegung */
     --mm-library-motion-duration: 280ms;
     --mm-library-motion-easing: cubic-bezier(0.25, 0.46, 0.45, 0.94);
@@ -109,10 +109,10 @@ body {
 #logo-container,
 .logo-placeholder {
   box-sizing: border-box;
-  width: min(18vw, var(--mm-logo-max));
-  height: min(18vw, var(--mm-logo-max));
-  min-width: 66px;
-  min-height: 66px;
+  width: min(22.5vw, var(--mm-logo-max));
+  height: min(22.5vw, var(--mm-logo-max));
+  min-width: 82.5px;
+  min-height: 82.5px;
   max-width: var(--mm-logo-max);
   max-height: var(--mm-logo-max);
   flex-shrink: 0;
