@@ -54,10 +54,10 @@ function embedUrlForEntry(entry, origin) {
     fs: "0",
     iv_load_policy: "3",
     playsinline: "1",
-    /** Mobile Autoplay: nur stumm erlaubt — `setVolume(0)` reicht nicht als „muted“. */
-    mute: "1",
-    /** Ergänzt programmatisches `playVideo()` / mobile Start. */
-    autoplay: "1",
+    /**
+     * Kein `mute`/`autoplay` in der URL: sonst zeigt der mobile Player oft zusätzliche Bedienelemente.
+     * Stummschaltung nur per IFrame-API (`mute()` vor `playVideo()`), siehe Player-`onReady`.
+     */
   };
   if (entry.youtubePlaylistId) {
     const q = new URLSearchParams({
@@ -279,11 +279,25 @@ export function MediaAppView({ windowId, unifiedParentScroll = false }) {
     if (!embedUrl || !iframeLoaded) return undefined;
 
     let cancelled = false;
-    let volumeFadeStarted = false;
+    /** Pro YouTube-`video_id` nur ein Fade — bei Listenwechsel neu starten (Mobile setzt oft erneut stumm). */
+    let lastVolumeFadeVideoId = null;
 
-    const startVolumeFadeOnce = (player) => {
-      if (volumeFadeStarted || cancelled) return;
-      volumeFadeStarted = true;
+    const clearVolumeFadeTimer = () => {
+      if (volumeFadeTimerRef.current) {
+        window.clearInterval(volumeFadeTimerRef.current);
+        volumeFadeTimerRef.current = 0;
+      }
+    };
+
+    const startVolumeFadeForVideo = (player) => {
+      if (cancelled) return;
+      const vid =
+        typeof player.getVideoData === "function"
+          ? player.getVideoData()?.video_id
+          : null;
+      if (!vid || vid === lastVolumeFadeVideoId) return;
+      lastVolumeFadeVideoId = vid;
+      clearVolumeFadeTimer();
       try {
         if (typeof player.unMute === "function") player.unMute();
       } catch {
@@ -304,10 +318,7 @@ export function MediaAppView({ windowId, unifiedParentScroll = false }) {
           /* ignore */
         }
         if (u >= 1) {
-          if (volumeFadeTimerRef.current) {
-            window.clearInterval(volumeFadeTimerRef.current);
-            volumeFadeTimerRef.current = 0;
-          }
+          clearVolumeFadeTimer();
         }
       };
       tick();
@@ -366,7 +377,7 @@ export function MediaAppView({ windowId, unifiedParentScroll = false }) {
               setIsPlaying(nextPlaying);
             }
             if (ps != null && YT && ps === YT.PlayerState.PLAYING) {
-              startVolumeFadeOnce(p);
+              startVolumeFadeForVideo(p);
             }
           },
           onStateChange: (e) => {
@@ -374,9 +385,9 @@ export function MediaAppView({ windowId, unifiedParentScroll = false }) {
             const YT = window.YT;
             if (YT) {
               const ps = e.data;
-              /** Ton erst bei PLAYING einblenden — bei BUFFERING `unMute` kann auf iOS die Wiedergabe stören. */
+              /** Pro Clip: Mobile startet Folgevideos oft wieder stumm — `unMute`/Fade je `video_id`. */
               if (ps === YT.PlayerState.PLAYING) {
-                startVolumeFadeOnce(e.target);
+                startVolumeFadeForVideo(e.target);
                 errorAutoSkipCountRef.current = 0;
               }
               const nextPlaying =
@@ -432,10 +443,7 @@ export function MediaAppView({ windowId, unifiedParentScroll = false }) {
 
     return () => {
       cancelled = true;
-      if (volumeFadeTimerRef.current) {
-        window.clearInterval(volumeFadeTimerRef.current);
-        volumeFadeTimerRef.current = 0;
-      }
+      clearVolumeFadeTimer();
       try {
         ytPlayerRef.current?.destroy?.();
       } catch {
