@@ -17,15 +17,15 @@ import {
   windowShouldDimDock,
 } from "@/context/DesktopContext";
 
-const ICON_W = 120;
-/** Kachel inkl. größerem Icon + Label — Bounds fürs Drag-Clamping */
-const ICON_H = 180;
+/** Bounds fürs Drag-Clamping — an max. Kachelbreite/-höhe mit mehrzeiligem Label angepasst */
+const ICON_W = 200;
+const ICON_H = 240;
 /** Mobile Home-Grid: Icon-Kante (rem) — Schrift/Abstand per calc daran gekoppelt (iOS-ähnliches Verhältnis) */
 const MOBILE_GRID_ICON_REM = "3.5rem";
 /** Abstand zum linken/rechten Rand / Fallback — wie DESKTOP_ICON_GRID in lib/apps.js */
 const MARGIN_X = 180;
 const START_Y = 132;
-const ROW_H = 165;
+const ROW_H = 128;
 /** Notes + Media: gleicher Zeilenabstand wie links, aber etwas höher am Rand */
 const RIGHT_START_Y = START_Y - 60;
 
@@ -35,6 +35,14 @@ const DOCK_LAUNCHER_APP_IDS = new Set(["finder", "settings"]);
 /** Mobile: festes iOS-ähnliches Raster (4 Spalten × min. 4 Zeilen); Finder/Settings nur im Dock wie auf Desktop. */
 const MOBILE_HOME_GRID_COLS = 4;
 const MOBILE_HOME_GRID_ROWS = 4;
+
+/** Nach diesen Zeichen Zero-Width-Space: Zeilenumbruch nur an Trennern, nicht mitten in Wörtern/CamelCase. */
+const DESKTOP_LABEL_BREAK_AFTER = /[-_.,\s/\\:;|]/g;
+
+function desktopLabelBreakable(text) {
+  if (typeof text !== "string") return text;
+  return text.replace(DESKTOP_LABEL_BREAK_AFTER, (ch) => `${ch}\u200B`);
+}
 
 function toPixelPosition(pos, containerWidth) {
   if (pos?.align === "right" && typeof pos.row === "number") {
@@ -205,9 +213,9 @@ function CornerDock() {
   const showNav = displayVariant === "nav";
 
   return (
-    <div className="pointer-events-none absolute bottom-3 right-3 z-[10000] md:left-3 md:right-auto">
+    <div className="pointer-events-none absolute left-1/2 z-[10000] max-w-[calc(100vw-1rem)] -translate-x-1/2 max-md:bottom-[max(0.75rem,calc(0.75rem+env(safe-area-inset-bottom,0px)+var(--mm-vv-bottom-inset,0px)))] md:bottom-3 md:left-3 md:right-auto md:translate-x-0 md:max-w-none">
       <nav
-        className="group/dock pointer-events-auto relative flex items-end justify-center rounded-2xl transition-opacity duration-200 ease-out"
+        className="group/dock pointer-events-auto relative mx-auto flex w-max max-w-full items-end justify-center rounded-2xl transition-opacity duration-200 ease-out"
         style={{ opacity }}
         aria-label={showNav ? "Navigation" : "Application dock"}
         onMouseEnter={() => setHovered(true)}
@@ -271,9 +279,11 @@ function DesktopFolderIcon({ app, folderPreview, iconVariant = "default" }) {
   }, [href]);
 
   const previewClass =
-    iconVariant === "desktop"
+    iconVariant === "desktopGrid"
       ? "h-14 w-14 shrink-0 rounded-lg object-cover shadow-md ring-2 ring-black/10 dark:ring-white/15"
-      : "h-9 w-9 shrink-0 rounded-lg object-cover shadow-md ring-2 ring-black/10 dark:ring-white/15";
+      : iconVariant === "desktop"
+        ? "h-10 w-10 shrink-0 rounded-lg object-cover shadow-md ring-2 ring-black/10 dark:ring-white/15"
+        : "h-9 w-9 shrink-0 rounded-lg object-cover shadow-md ring-2 ring-black/10 dark:ring-white/15";
 
   if (href && !imgFailed) {
     return (
@@ -313,14 +323,18 @@ function DesktopIconTile({
   };
 
   const gridLabel = (
-    <span className="w-full min-w-0 max-w-full break-words text-center font-medium leading-tight text-zinc-800 line-clamp-2 [text-shadow:0_2px_0_rgba(255,255,255,0.6)] [font-size:calc(0.165*var(--mm-mobile-grid-icon))] dark:text-zinc-100 dark:[text-shadow:0_2px_0_rgba(0,0,0,0.35)]">
-      {item.label}
+    <span className="w-full min-w-0 max-w-full break-normal text-center font-medium leading-tight text-zinc-800 [text-shadow:0_2px_0_rgba(255,255,255,0.6)] [font-size:calc(0.165*var(--mm-mobile-grid-icon))] dark:text-zinc-100 dark:[text-shadow:0_2px_0_rgba(0,0,0,0.35)]">
+      {desktopLabelBreakable(item.label)}
     </span>
   );
 
   const iconWrap = (
     <span className="inline-flex shrink-0 drop-shadow-md filter" aria-hidden>
-      <DesktopFolderIcon app={app} folderPreview={folderPreview} iconVariant="desktop" />
+      <DesktopFolderIcon
+        app={app}
+        folderPreview={folderPreview}
+        iconVariant={layout === "grid" ? "desktopGrid" : "desktop"}
+      />
     </span>
   );
 
@@ -342,13 +356,13 @@ function DesktopIconTile({
     <button
       type="button"
       style={positionStyle}
-      className="pointer-events-auto absolute flex min-h-[var(--mm-desktop-folder-tile)] w-20 flex-col items-center gap-3 rounded-lg p-2 text-center outline-none transition-colors hover:bg-black/5 active:bg-black/10 dark:hover:bg-white/10 dark:active:bg-white/15"
+      className="pointer-events-auto absolute flex min-h-[var(--mm-desktop-folder-tile)] min-w-16 w-max max-w-[11rem] flex-col items-center gap-1.5 rounded-lg px-1.5 py-1.5 text-center outline-none transition-colors hover:bg-black/5 active:bg-black/10 dark:hover:bg-white/10 dark:active:bg-white/15"
       onPointerDown={onPointerDown}
       onClick={onClick}
     >
       {iconWrap}
-      <span className="w-full min-w-0 max-w-full break-words text-center text-xs font-semibold leading-tight text-zinc-800 line-clamp-2 [text-shadow:0_2px_0_rgba(255,255,255,0.6)] dark:text-zinc-100 dark:[text-shadow:0_2px_0_rgba(0,0,0,0.35)]">
-        {item.label}
+      <span className="w-full min-w-0 max-w-full shrink-0 break-normal text-center text-[0.6875rem] font-semibold leading-tight text-zinc-800 [text-shadow:0_2px_0_rgba(255,255,255,0.6)] dark:text-zinc-100 dark:[text-shadow:0_2px_0_rgba(0,0,0,0.35)]">
+        {desktopLabelBreakable(item.label)}
       </span>
     </button>
   );
@@ -475,7 +489,7 @@ export function DesktopIcons() {
         className="pointer-events-none absolute inset-0 flex flex-col md:hidden"
         style={{
           paddingBottom:
-            "max(5.25rem, calc(4.25rem + env(safe-area-inset-bottom, 0px)))",
+            "max(5.25rem, calc(4.25rem + env(safe-area-inset-bottom, 0px) + var(--mm-vv-bottom-inset, 0px)))",
           paddingLeft: "max(0.5rem, env(safe-area-inset-left, 0px))",
           paddingRight: "max(0.5rem, env(safe-area-inset-right, 0px))",
         }}

@@ -509,7 +509,7 @@ export function OSWindow({ win }) {
         }
       >
         {useMobileUnifiedChrome ? (
-          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-y-contain [-webkit-overflow-scrolling:touch]">
+          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-y-contain pb-[max(0.5rem,calc(env(safe-area-inset-bottom,0px)+var(--mm-vv-bottom-inset,0px)))] [-webkit-overflow-scrolling:touch]">
             <div className="flex min-h-full flex-col">
               <div
                 className={`flex min-h-[4.5rem] w-full shrink-0 items-center gap-2 px-4 pt-[max(1.125rem,env(safe-area-inset-top,0px))] pb-3 ${
@@ -565,30 +565,7 @@ export function OSWindow({ win }) {
                     </p>
                   ) : null}
                 </div>
-                <div className="flex shrink-0 items-center">
-                  <button
-                    type="button"
-                    aria-label="Notes öffnen"
-                    title="Notes"
-                    className={`flex min-h-8 min-w-8 items-center justify-center rounded-full px-1.5 py-1.5 active:opacity-90 ${
-                      win.appId === "media"
-                        ? "bg-white/10 text-white hover:bg-white/15"
-                        : "bg-black/5 text-black hover:bg-black/10 dark:bg-white/10 dark:text-zinc-100 dark:hover:bg-white/15"
-                    }`}
-                    onMouseDown={(e) => e.stopPropagation()}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      openOrFocus("notes");
-                    }}
-                  >
-                    <span
-                      className="flex h-4 w-4 shrink-0 items-center justify-center [&_svg]:!h-4 [&_svg]:!w-4"
-                      aria-hidden
-                    >
-                      <AppIcon app={APPS.notes} variant="compact" />
-                    </span>
-                  </button>
-                </div>
+                <div className="h-8 w-8 shrink-0" aria-hidden />
               </div>
               <div
                 className={`flex min-h-0 flex-1 flex-col ${

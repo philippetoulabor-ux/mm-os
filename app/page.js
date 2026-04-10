@@ -5,7 +5,6 @@ export default function Home() {
     <div
       className="mm-os-page-root"
       style={{
-        minHeight: "max(100dvh, 800px)",
         backgroundColor: "var(--mm-desktop-bg)",
       }}
     >

@@ -6,6 +6,32 @@ import {
   syncDesktopLayerMetrics,
   useDesktop,
 } from "@/context/DesktopContext";
+
+/** Mobile Safari: Abstand zwischen Layout- und Sichtfenster (Adress-/Toolleiste). */
+function useSyncVisualViewportInsets() {
+  useLayoutEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const vv = window.visualViewport;
+    if (!vv) return undefined;
+    const sync = () => {
+      const bottom = Math.max(
+        0,
+        window.innerHeight - vv.height - vv.offsetTop
+      );
+      document.documentElement.style.setProperty(
+        "--mm-vv-bottom-inset",
+        `${bottom}px`
+      );
+    };
+    sync();
+    vv.addEventListener("resize", sync);
+    vv.addEventListener("scroll", sync);
+    return () => {
+      vv.removeEventListener("resize", sync);
+      vv.removeEventListener("scroll", sync);
+    };
+  }, []);
+}
 import { DesktopIcons } from "@/components/DesktopIcons";
 import { OSWindow } from "@/components/OSWindow";
 import { SiteHeader } from "@/components/SiteHeader";
@@ -25,6 +51,7 @@ function DesktopLayers() {
 
 function DesktopShellInner() {
   const layerRef = useRef(null);
+  useSyncVisualViewportInsets();
 
   useLayoutEffect(() => {
     const el = layerRef.current;
@@ -42,7 +69,7 @@ function DesktopShellInner() {
 
   return (
     <div
-      className="flex min-h-0 w-full flex-1 flex-col overflow-x-hidden min-h-[max(100dvh,800px)]"
+      className="flex min-h-0 w-full min-h-[100dvh] min-h-[100svh] flex-1 flex-col overflow-x-hidden md:min-h-[max(100dvh,800px)]"
       style={{
         backgroundColor: "var(--mm-desktop-bg)",
         color: "var(--mm-shell-text)",

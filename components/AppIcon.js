@@ -64,25 +64,29 @@ export function NotesAppIcon({ className = "" }) {
 }
 
 /**
- * @param {{ app: { id: string; icon: string; iconSrc?: string }; variant?: "default" | "compact" | "desktop" }} props
+ * @param {{ app: { id: string; icon: string; iconSrc?: string }; variant?: "default" | "compact" | "desktop" | "desktopGrid" }} props
  */
 export function AppIcon({ app, variant = "default" }) {
   if (app.id === "notes") {
     const sz =
       variant === "compact"
         ? "h-6 w-6"
-        : variant === "desktop"
+        : variant === "desktopGrid"
           ? "h-14 w-14"
-          : "h-9 w-9";
+          : variant === "desktop"
+            ? "h-10 w-10"
+            : "h-9 w-9";
     return <NotesAppIcon className={sz} />;
   }
   if (app.iconSrc) {
     const sz =
       variant === "compact"
         ? "h-6 w-6"
-        : variant === "desktop"
+        : variant === "desktopGrid"
           ? "h-14 w-14"
-          : "h-9 w-9";
+          : variant === "desktop"
+            ? "h-10 w-10"
+            : "h-9 w-9";
     return (
       <span
         className={`inline-flex overflow-hidden rounded-full ${sz} shrink-0 shadow-md ring-2 ring-black/10 dark:ring-white/15`}
@@ -101,9 +105,11 @@ export function AppIcon({ app, variant = "default" }) {
   const text =
     variant === "compact"
       ? "text-lg leading-none"
-      : variant === "desktop"
+      : variant === "desktopGrid"
         ? "text-[3.5rem] leading-none"
-        : "text-4xl leading-none";
+        : variant === "desktop"
+          ? "text-[2.5rem] leading-none"
+          : "text-4xl leading-none";
   return (
     <span className={`inline-flex items-center justify-center ${text}`}>
       {app.icon}

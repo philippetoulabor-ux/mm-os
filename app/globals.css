@@ -7,13 +7,15 @@
   :root {
     --mm-desktop-bg: #d9d9d9;
     --mm-shell-text: #18181b;
-    /* Mindesthöhe Kachel: großes Icon (3,5rem) + gap ≈ Zeile + 2 Zeilen Label */
-    --mm-desktop-folder-tile: 7.5rem;
+    /* Mindesthöhe Kachel: Desktop-Icon (2,5rem) + knapper Abstand + 2 Zeilen Label */
+    --mm-desktop-folder-tile: 5.5rem;
     /* Kompaktes 3D-Logo (1,25× gegenüber 7,5rem) */
     --mm-logo-max: 9.375rem;
     /* Media-Library & OSWindow-Bounds: gleiche Dauer/Easing für gemeinsame Bewegung */
     --mm-library-motion-duration: 280ms;
     --mm-library-motion-easing: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    /* Mobile Safari: Abstand zur Browser-UI (wird per visualViewport gesetzt) */
+    --mm-vv-bottom-inset: 0px;
   }
 
   html.dark {
@@ -34,7 +36,6 @@
 
   body {
     min-height: 100%;
-    min-height: max(100dvh, 800px);
     min-height: -webkit-fill-available;
     margin: 0;
     overflow: hidden;
@@ -59,12 +60,39 @@ body {
   color: var(--mm-shell-text);
 }
 
+@media (max-width: 767px) {
+  body {
+    min-height: 100dvh;
+    min-height: 100svh;
+    min-height: -webkit-fill-available;
+  }
+}
+
+@media (min-width: 768px) {
+  body {
+    min-height: max(100dvh, 800px);
+  }
+}
+
 /* Volle Höhe auch in eingebetteten Previews, wenn Eltern-höhe / dvh kollabiert */
 .mm-os-page-root {
   display: flex;
   flex-direction: column;
   width: 100%;
-  min-height: max(100dvh, 800px);
+}
+
+@media (max-width: 767px) {
+  .mm-os-page-root {
+    min-height: 100dvh;
+    min-height: 100svh;
+    min-height: -webkit-fill-available;
+  }
+}
+
+@media (min-width: 768px) {
+  .mm-os-page-root {
+    min-height: max(100dvh, 800px);
+  }
 }
 
 /* Mobile (max-md): keine sichtbaren Scrollbars — Entspricht Tailwind md / DesktopContext 767px */
@@ -341,6 +369,10 @@ body {
   white-space: nowrap;
 }
 
+.mm-wmp-shell--unified .mm-wmp-now-playing__static {
+  text-align: center;
+}
+
 .mm-wmp-now-playing__marquee {
   display: inline-flex;
   flex-shrink: 0;
@@ -389,7 +421,10 @@ body {
   box-sizing: border-box;
   min-height: 4.5rem;
   padding: 0.5rem 1rem;
-  padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px));
+  padding-bottom: max(
+    0.5rem,
+    calc(env(safe-area-inset-bottom, 0px) + var(--mm-vv-bottom-inset, 0px))
+  );
   gap: 0.125rem;
   /* 4.5rem Zeile − vertikales Padding ≈ große Touch-Ziele wie im Header */
   --mm-wmp-play-size: 3.5rem;

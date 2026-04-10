@@ -515,7 +515,7 @@ function AssetFileViewer({ dir, file, basePath, windowId, unifiedParentScroll = 
         className={`flex w-full min-h-0 flex-col ${
           unifiedParentScroll
             ? // Viewport-Höhe minus Mobile-Chrome: Zentrierung bezieht sich auf den sichtbaren Screen, nicht auf einen hohen flex-1-Block
-              "max-md:my-auto max-md:h-[calc(100dvh-5.75rem-env(safe-area-inset-top,0px))] max-md:max-h-[calc(100dvh-5.75rem-env(safe-area-inset-top,0px))] max-md:min-h-0 max-md:shrink-0 max-md:bg-transparent max-md:p-0 md:min-h-[50vh] md:items-center md:justify-center md:bg-zinc-200 md:p-2"
+              "max-md:my-auto max-md:h-[calc(100dvh-5.75rem-env(safe-area-inset-top,0px)-var(--mm-vv-bottom-inset,0px))] max-md:max-h-[calc(100dvh-5.75rem-env(safe-area-inset-top,0px)-var(--mm-vv-bottom-inset,0px))] max-md:min-h-0 max-md:shrink-0 max-md:bg-transparent max-md:p-0 md:min-h-[50vh] md:items-center md:justify-center md:bg-zinc-200 md:p-2"
             : "h-full min-h-0 items-center justify-center overflow-auto bg-zinc-200 p-2"
         }`}
       >

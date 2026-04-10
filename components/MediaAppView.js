@@ -59,18 +59,51 @@ function embedUrlForEntry(entry, origin) {
     const q = new URLSearchParams({
       ...base,
       list: entry.youtubePlaylistId,
+      /** Playlist-Endlosschleife (offizielles Player-Parameter-Verhalten bei List-Playern). */
+      loop: "1",
     });
     if (origin) q.set("origin", origin);
     return `https://www.youtube.com/embed/videoseries?${q.toString()}`;
   }
   if (entry.videos?.length) {
     const [first, ...rest] = entry.videos;
-    const q = new URLSearchParams({ ...base });
+    const q = new URLSearchParams({
+      ...base,
+      loop: rest.length ? "1" : "0",
+    });
     if (origin) q.set("origin", origin);
     if (rest.length) q.set("playlist", rest.join(","));
     return `https://www.youtube.com/embed/${encodeURIComponent(first)}?${q.toString()}`;
   }
   return null;
+}
+
+/** Am letzten Listen-Video: vorwärts = wieder von vorne (YouTube-`nextVideo` endet dort). */
+function skipPlaylistForward(playerRef) {
+  const p = playerRef.current;
+  if (!p || typeof p.nextVideo !== "function") return;
+  const pl = typeof p.getPlaylist === "function" ? p.getPlaylist() : null;
+  const idx =
+    typeof p.getPlaylistIndex === "function" ? p.getPlaylistIndex() : null;
+  if (
+    pl &&
+    pl.length > 0 &&
+    idx != null &&
+    idx >= pl.length - 1 &&
+    typeof p.playVideoAt === "function"
+  ) {
+    try {
+      p.playVideoAt(0);
+      return;
+    } catch {
+      /* fall through */
+    }
+  }
+  try {
+    p.nextVideo();
+  } catch {
+    /* ignore */
+  }
 }
 
 const YT_IFRAME_ID = "mm-wmp-yt-iframe";
@@ -86,6 +119,8 @@ const MAX_ERROR_AUTO_SKIPS = 48;
 /** Lautstärke beim Start (0) bis Ziel nach dieser Dauer (ms) einblenden (Autoplay-freundlich). */
 const VOLUME_FADE_MS = 7000;
 const VOLUME_TARGET = 100;
+/** Nicht jedes Frame setVolume (YouTube-API / Main Thread); ~58–60 Updates statt ~400+. */
+const VOLUME_FADE_STEP_MS = 120;
 
 /** @returns {Promise<void>} */
 function loadYoutubeIframeApi() {
@@ -139,7 +174,10 @@ export function MediaAppView({ windowId, unifiedParentScroll = false }) {
   const nowPlayingMarqueeRef = useRef(null);
   const nowPlayingMarqueeSegRef = useRef(null);
   const reduceMotionRef = useRef(false);
-  const volumeFadeRafRef = useRef(0);
+  const volumeFadeTimerRef = useRef(0);
+  /** Letzte UI-Werte — vermeidet setState bei jedem YT-State-Event ohne Änderung. */
+  const isPlayingUiRef = useRef(false);
+  const titleUiRef = useRef("");
 
   const [playlistIndex, setPlaylistIndex] = useState(() => readPlaylistIndex());
 
@@ -159,6 +197,8 @@ export function MediaAppView({ windowId, unifiedParentScroll = false }) {
     setPlayerReady(false);
     setTitleNeedsMarquee(false);
     errorAutoSkipCountRef.current = 0;
+    isPlayingUiRef.current = false;
+    titleUiRef.current = "";
   }, [embedUrl]);
 
   useEffect(() => {
@@ -251,7 +291,10 @@ export function MediaAppView({ windowId, unifiedParentScroll = false }) {
             const p = e.target;
             setPlayerReady(true);
             const t = p.getVideoData()?.title;
-            if (t) setPlayingTitle(t);
+            if (t) {
+              titleUiRef.current = t;
+              setPlayingTitle(t);
+            }
             const YT = window.YT;
             try {
               if (typeof p.setShuffle === "function") p.setShuffle(true);
@@ -270,26 +313,36 @@ export function MediaAppView({ windowId, unifiedParentScroll = false }) {
             }
             const ps = p.getPlayerState?.();
             if (ps != null && YT) {
-              setIsPlaying(
-                ps === YT.PlayerState.PLAYING || ps === YT.PlayerState.BUFFERING
-              );
+              const nextPlaying =
+                ps === YT.PlayerState.PLAYING ||
+                ps === YT.PlayerState.BUFFERING;
+              isPlayingUiRef.current = nextPlaying;
+              setIsPlaying(nextPlaying);
             }
             const fadeStart = performance.now();
-            const tick = (now) => {
+            const tick = () => {
               if (cancelled) return;
-              const u = Math.min(1, (now - fadeStart) / VOLUME_FADE_MS);
+              const u = Math.min(
+                1,
+                (performance.now() - fadeStart) / VOLUME_FADE_MS
+              );
               try {
                 p.setVolume(Math.round(VOLUME_TARGET * u));
               } catch {
                 /* ignore */
               }
-              if (u < 1) {
-                volumeFadeRafRef.current = requestAnimationFrame(tick);
-              } else {
-                volumeFadeRafRef.current = 0;
+              if (u >= 1) {
+                if (volumeFadeTimerRef.current) {
+                  window.clearInterval(volumeFadeTimerRef.current);
+                  volumeFadeTimerRef.current = 0;
+                }
               }
             };
-            volumeFadeRafRef.current = requestAnimationFrame(tick);
+            tick();
+            volumeFadeTimerRef.current = window.setInterval(
+              tick,
+              VOLUME_FADE_STEP_MS
+            );
           },
           onStateChange: (e) => {
             if (cancelled) return;
@@ -299,12 +352,40 @@ export function MediaAppView({ windowId, unifiedParentScroll = false }) {
               if (ps === YT.PlayerState.PLAYING) {
                 errorAutoSkipCountRef.current = 0;
               }
-              setIsPlaying(
-                ps === YT.PlayerState.PLAYING || ps === YT.PlayerState.BUFFERING
-              );
+              const nextPlaying =
+                ps === YT.PlayerState.PLAYING ||
+                ps === YT.PlayerState.BUFFERING;
+              if (isPlayingUiRef.current !== nextPlaying) {
+                isPlayingUiRef.current = nextPlaying;
+                setIsPlaying(nextPlaying);
+              }
             }
             const t = e.target.getVideoData()?.title;
-            if (t) setPlayingTitle(t);
+            if (t && t !== titleUiRef.current) {
+              titleUiRef.current = t;
+              setPlayingTitle(t);
+            }
+            if (YT && e.data === YT.PlayerState.ENDED) {
+              const p = e.target;
+              const pl = typeof p.getPlaylist === "function" ? p.getPlaylist() : null;
+              const idx =
+                typeof p.getPlaylistIndex === "function"
+                  ? p.getPlaylistIndex()
+                  : null;
+              if (
+                pl &&
+                pl.length > 0 &&
+                idx != null &&
+                idx >= pl.length - 1 &&
+                typeof p.playVideoAt === "function"
+              ) {
+                try {
+                  p.playVideoAt(0);
+                } catch {
+                  /* ignore */
+                }
+              }
+            }
           },
           onError: (e) => {
             if (cancelled) return;
@@ -324,9 +405,9 @@ export function MediaAppView({ windowId, unifiedParentScroll = false }) {
 
     return () => {
       cancelled = true;
-      if (volumeFadeRafRef.current) {
-        cancelAnimationFrame(volumeFadeRafRef.current);
-        volumeFadeRafRef.current = 0;
+      if (volumeFadeTimerRef.current) {
+        window.clearInterval(volumeFadeTimerRef.current);
+        volumeFadeTimerRef.current = 0;
       }
       try {
         ytPlayerRef.current?.destroy?.();
@@ -351,9 +432,7 @@ export function MediaAppView({ windowId, unifiedParentScroll = false }) {
   }, []);
 
   const skipForward = useCallback(() => {
-    const p = ytPlayerRef.current;
-    if (!p || typeof p.nextVideo !== "function") return;
-    p.nextVideo();
+    skipPlaylistForward(ytPlayerRef);
   }, []);
 
   const skipBackward = useCallback(() => {
