@@ -54,6 +54,10 @@ function embedUrlForEntry(entry, origin) {
     fs: "0",
     iv_load_policy: "3",
     playsinline: "1",
+    /** Mobile Autoplay: nur stumm erlaubt — `setVolume(0)` reicht nicht als „muted“. */
+    mute: "1",
+    /** Ergänzt programmatisches `playVideo()` / mobile Start. */
+    autoplay: "1",
   };
   if (entry.youtubePlaylistId) {
     const q = new URLSearchParams({
@@ -275,6 +279,43 @@ export function MediaAppView({ windowId, unifiedParentScroll = false }) {
     if (!embedUrl || !iframeLoaded) return undefined;
 
     let cancelled = false;
+    let volumeFadeStarted = false;
+
+    const startVolumeFadeOnce = (player) => {
+      if (volumeFadeStarted || cancelled) return;
+      volumeFadeStarted = true;
+      try {
+        if (typeof player.unMute === "function") player.unMute();
+      } catch {
+        /* ignore */
+      }
+      try {
+        player.setVolume(0);
+      } catch {
+        /* ignore */
+      }
+      const fadeStart = performance.now();
+      const tick = () => {
+        if (cancelled) return;
+        const u = Math.min(1, (performance.now() - fadeStart) / VOLUME_FADE_MS);
+        try {
+          player.setVolume(Math.round(VOLUME_TARGET * u));
+        } catch {
+          /* ignore */
+        }
+        if (u >= 1) {
+          if (volumeFadeTimerRef.current) {
+            window.clearInterval(volumeFadeTimerRef.current);
+            volumeFadeTimerRef.current = 0;
+          }
+        }
+      };
+      tick();
+      volumeFadeTimerRef.current = window.setInterval(
+        tick,
+        VOLUME_FADE_STEP_MS
+      );
+    };
 
     loadYoutubeIframeApi().then(() => {
       if (cancelled || typeof window === "undefined" || !window.YT?.Player)
@@ -302,6 +343,11 @@ export function MediaAppView({ windowId, unifiedParentScroll = false }) {
               /* ignore */
             }
             try {
+              if (typeof p.mute === "function") p.mute();
+            } catch {
+              /* ignore */
+            }
+            try {
               p.setVolume(0);
             } catch {
               /* ignore */
@@ -319,37 +365,18 @@ export function MediaAppView({ windowId, unifiedParentScroll = false }) {
               isPlayingUiRef.current = nextPlaying;
               setIsPlaying(nextPlaying);
             }
-            const fadeStart = performance.now();
-            const tick = () => {
-              if (cancelled) return;
-              const u = Math.min(
-                1,
-                (performance.now() - fadeStart) / VOLUME_FADE_MS
-              );
-              try {
-                p.setVolume(Math.round(VOLUME_TARGET * u));
-              } catch {
-                /* ignore */
-              }
-              if (u >= 1) {
-                if (volumeFadeTimerRef.current) {
-                  window.clearInterval(volumeFadeTimerRef.current);
-                  volumeFadeTimerRef.current = 0;
-                }
-              }
-            };
-            tick();
-            volumeFadeTimerRef.current = window.setInterval(
-              tick,
-              VOLUME_FADE_STEP_MS
-            );
+            if (ps != null && YT && ps === YT.PlayerState.PLAYING) {
+              startVolumeFadeOnce(p);
+            }
           },
           onStateChange: (e) => {
             if (cancelled) return;
             const YT = window.YT;
             if (YT) {
               const ps = e.data;
+              /** Ton erst bei PLAYING einblenden — bei BUFFERING `unMute` kann auf iOS die Wiedergabe stören. */
               if (ps === YT.PlayerState.PLAYING) {
+                startVolumeFadeOnce(e.target);
                 errorAutoSkipCountRef.current = 0;
               }
               const nextPlaying =
