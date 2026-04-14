@@ -44,12 +44,24 @@ function desktopLabelBreakable(text) {
   return text.replace(DESKTOP_LABEL_BREAK_AFTER, (ch) => `${ch}\u200B`);
 }
 
-function toPixelPosition(pos, containerWidth) {
+function toPixelPosition(pos, containerWidth, containerHeight) {
+  const w = containerWidth > 0 ? containerWidth : 1200;
+  const h = containerHeight > 0 ? containerHeight : 800;
   if (pos?.align === "right" && typeof pos.row === "number") {
-    const w = containerWidth > 0 ? containerWidth : 1200;
     return {
       x: Math.max(0, w - ICON_W - MARGIN_X),
       y: RIGHT_START_Y + pos.row * ROW_H,
+    };
+  }
+  if (
+    typeof pos?.xp === "number" &&
+    Number.isFinite(pos.xp) &&
+    typeof pos?.yp === "number" &&
+    Number.isFinite(pos.yp)
+  ) {
+    return {
+      x: Math.max(0, pos.xp * w - ICON_W / 2),
+      y: Math.max(0, pos.yp * h - ICON_H / 2),
     };
   }
   return { x: pos?.x ?? MARGIN_X, y: pos?.y ?? START_Y };
@@ -211,7 +223,7 @@ function CornerDock() {
   return (
     <div className="pointer-events-none absolute left-1/2 z-[10000] max-w-[calc(100vw-1rem)] -translate-x-1/2 max-md:bottom-[max(0.75rem,calc(0.75rem+env(safe-area-inset-bottom,0px)+var(--mm-vv-bottom-inset,0px)))] md:bottom-3 md:left-3 md:right-auto md:translate-x-0 md:max-w-none">
       <nav
-        className="group/dock pointer-events-auto relative mx-auto flex w-max max-w-full items-end justify-center rounded-2xl transition-opacity duration-200 ease-out"
+        className="group/dock pointer-events-auto relative mx-auto flex w-max max-w-full items-end justify-center rounded-lg transition-opacity duration-200 ease-out"
         style={{ opacity }}
         aria-label={showNav ? "Navigation" : "Application dock"}
         onMouseEnter={() => setHovered(true)}
@@ -232,7 +244,7 @@ function CornerDock() {
           >
             {!showNav && (
               <div
-                className="pointer-events-none absolute inset-0 rounded-2xl border border-black/10 bg-white/55 shadow-lg shadow-black/10 backdrop-blur-xl [transform-origin:bottom] dark:border-white/10 dark:bg-zinc-800/75 dark:shadow-black/40"
+                className="pointer-events-none absolute inset-0 rounded-lg border border-black/10 bg-white/55 shadow-lg shadow-black/10 backdrop-blur-xl [transform-origin:bottom] dark:border-white/10 dark:bg-zinc-800/75 dark:shadow-black/40"
                 aria-hidden
               />
             )}
@@ -276,10 +288,10 @@ function DesktopFolderIcon({ app, folderPreview, iconVariant = "default" }) {
 
   const previewClass =
     iconVariant === "desktopGrid"
-      ? "h-14 w-14 shrink-0 rounded-lg object-cover"
+      ? "h-14 w-14 shrink-0 rounded object-cover"
       : iconVariant === "desktop"
-        ? "h-10 w-10 shrink-0 rounded-lg object-cover"
-        : "h-9 w-9 shrink-0 rounded-lg object-cover";
+        ? "h-10 w-10 shrink-0 rounded object-cover"
+        : "h-9 w-9 shrink-0 rounded object-cover";
 
   if (href && !imgFailed) {
     return (
@@ -352,13 +364,15 @@ function DesktopIconTile({
     <button
       type="button"
       style={positionStyle}
-      className="pointer-events-auto absolute flex min-h-[var(--mm-desktop-folder-tile)] min-w-16 w-max max-w-[11rem] flex-col items-center gap-1.5 rounded-lg px-1.5 py-1.5 text-center outline-none transition-colors hover:bg-black/5 active:bg-black/10 dark:hover:bg-white/10 dark:active:bg-white/15"
+      className="group pointer-events-auto absolute flex min-h-[var(--mm-desktop-folder-tile)] min-w-16 w-max max-w-[11rem] items-center justify-center text-center outline-none transition-transform active:scale-95"
       onPointerDown={onPointerDown}
       onClick={onClick}
     >
-      {iconWrap}
-      <span className="w-full min-w-0 max-w-full shrink-0 break-normal text-center text-[0.6875rem] font-semibold leading-tight text-zinc-800 dark:text-zinc-100">
-        {desktopLabelBreakable(item.label)}
+      <span className="inline-flex max-w-full flex-col items-center gap-1.5 rounded px-1.5 py-1.5 transition-colors duration-200 ease-out group-hover:bg-black/5 group-active:bg-black/10 dark:group-hover:bg-white/10 dark:group-active:bg-white/15">
+        {iconWrap}
+        <span className="w-full min-w-0 max-w-full shrink-0 break-normal text-center text-[0.6875rem] font-semibold leading-tight text-zinc-800 dark:text-zinc-100">
+          {desktopLabelBreakable(item.label)}
+        </span>
       </span>
     </button>
   );
@@ -453,7 +467,7 @@ export function DesktopIcons() {
     if (!el) return;
     const raw = desktopIconPositions[appId] ?? { x: MARGIN_X, y: START_Y };
     const rect = el.getBoundingClientRect();
-    const pos = toPixelPosition(raw, layerMetrics.w);
+    const pos = toPixelPosition(raw, layerMetrics.w, layerMetrics.h);
     const { top: layerTop } = layerMetrics;
     const topPx = pos.y + layerTop;
     dragRef.current = {
@@ -531,7 +545,7 @@ export function DesktopIcons() {
             x: MARGIN_X,
             y: START_Y,
           };
-          const pos = toPixelPosition(raw, layerMetrics.w);
+          const pos = toPixelPosition(raw, layerMetrics.w, layerMetrics.h);
           return (
             <DesktopIconTile
               key={item.appId}

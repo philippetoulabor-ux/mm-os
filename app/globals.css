@@ -108,6 +108,13 @@ body {
   }
 }
 
+/* Desktop: Scrollbar-Daumen — gleicher Radius wie Tailwind `rounded` (Finder-Listen, Buttons) */
+@media (min-width: 768px) {
+  *::-webkit-scrollbar-thumb {
+    border-radius: 0.25rem;
+  }
+}
+
 /* Site-Header mit 3D-Logo (wie webdata3d/landing-page; nicht global `header` – OSWindow-Titelzeilen bleiben unberührt) */
 .mm-os-site-header {
   position: relative;

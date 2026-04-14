@@ -193,8 +193,8 @@ const DesktopContext = createContext(null);
 const DARK_MODE_STORAGE_KEY = "mm-os-dark";
 const FOLDER_PREVIEW_STORAGE_KEY = "mm-os-folder-preview";
 const DESKTOP_ICONS_POS_KEY = "mm-os-desktop-icons";
-/** Einmalig: gespeicherte `webasset_*`-Koordinaten verwerfen, damit das Raster aus lib/apps.js greift. */
-const DESKTOP_FOLDER_GRID_VERSION = 3;
+/** Einmalig: gespeicherte Schreibtisch-Positionen verwerfen, damit das Layout aus lib/apps.js greift. */
+const DESKTOP_FOLDER_GRID_VERSION = 4;
 const DESKTOP_FOLDER_GRID_KEY = "mm-os-desktop-folder-grid-v";
 const NOTES_TEXT_KEY = "mm-os-notes-text";
 const WINDOWS_STATE_KEY = "mm-os-windows-v1";
@@ -246,9 +246,7 @@ function loadDesktopIconPositions() {
     }
     const gridVer = Number(localStorage.getItem(DESKTOP_FOLDER_GRID_KEY)) || 0;
     if (gridVer < DESKTOP_FOLDER_GRID_VERSION) {
-      for (const key of Object.keys(migrated)) {
-        if (key.startsWith("webasset_")) delete migrated[key];
-      }
+      migrated = {};
       try {
         localStorage.setItem(
           DESKTOP_FOLDER_GRID_KEY,
