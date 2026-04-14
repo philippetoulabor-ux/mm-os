@@ -101,7 +101,7 @@ function MentionChipIcon({ app, folderPreview }) {
           src={href}
           alt=""
           style={boxStyle}
-          className="shrink-0 rounded-[4px] object-cover ring-2 ring-black/15 dark:ring-white/20"
+          className="shrink-0 rounded-[4px] object-cover"
           onError={() => setImgFailed(true)}
         />
       </>

@@ -682,7 +682,7 @@ function FinderFileVideoThumb({ href, file }) {
       muted
       playsInline
       preload="metadata"
-      className="h-9 w-9 shrink-0 rounded-lg object-cover shadow-md ring-1 ring-black/10 dark:ring-white/15"
+      className="h-9 w-9 shrink-0 rounded-lg object-cover"
       aria-hidden
     />
   );
@@ -749,7 +749,7 @@ function FinderListIcon({ row, folderPreview }) {
         <img
           src={folderPreviewHref}
           alt=""
-          className="h-9 w-9 shrink-0 rounded-lg object-cover shadow-md ring-1 ring-black/10 dark:ring-white/15"
+          className="h-9 w-9 shrink-0 rounded-lg object-cover"
           onError={() => setImgFailed(true)}
         />
       </>
@@ -763,7 +763,7 @@ function FinderListIcon({ row, folderPreview }) {
         <img
           src={fileImageHref}
           alt=""
-          className="h-9 w-9 shrink-0 rounded-lg object-cover shadow-md ring-1 ring-black/10 dark:ring-white/15"
+          className="h-9 w-9 shrink-0 rounded-lg object-cover"
           onError={() => setImgFailed(true)}
         />
       </>

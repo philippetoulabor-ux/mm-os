@@ -80,7 +80,7 @@ function LauncherDockButtons({ dockItems, windows, openOrFocus, focusWindow }) {
             </span>
             <span className="relative inline-flex flex-col items-center">
               <span
-                className="inline-flex drop-shadow-md transition-transform duration-200 ease-out [transform-origin:center] group-hover:scale-[1.15]"
+                className="inline-flex transition-transform duration-200 ease-out [transform-origin:center] group-hover:scale-[1.15]"
                 aria-hidden
               >
                 <AppIcon app={app} />
@@ -276,10 +276,10 @@ function DesktopFolderIcon({ app, folderPreview, iconVariant = "default" }) {
 
   const previewClass =
     iconVariant === "desktopGrid"
-      ? "h-14 w-14 shrink-0 rounded-lg object-cover shadow-md ring-2 ring-black/10 dark:ring-white/15"
+      ? "h-14 w-14 shrink-0 rounded-lg object-cover"
       : iconVariant === "desktop"
-        ? "h-10 w-10 shrink-0 rounded-lg object-cover shadow-md ring-2 ring-black/10 dark:ring-white/15"
-        : "h-9 w-9 shrink-0 rounded-lg object-cover shadow-md ring-2 ring-black/10 dark:ring-white/15";
+        ? "h-10 w-10 shrink-0 rounded-lg object-cover"
+        : "h-9 w-9 shrink-0 rounded-lg object-cover";
 
   if (href && !imgFailed) {
     return (
@@ -319,13 +319,13 @@ function DesktopIconTile({
   };
 
   const gridLabel = (
-    <span className="w-full min-w-0 max-w-full break-normal text-center font-medium leading-tight text-zinc-800 [text-shadow:0_2px_0_rgba(255,255,255,0.6)] [font-size:calc(0.165*var(--mm-mobile-grid-icon))] dark:text-zinc-100 dark:[text-shadow:0_2px_0_rgba(0,0,0,0.35)]">
+    <span className="w-full min-w-0 max-w-full break-normal text-center font-medium leading-tight text-zinc-800 [font-size:calc(0.165*var(--mm-mobile-grid-icon))] dark:text-zinc-100">
       {desktopLabelBreakable(item.label)}
     </span>
   );
 
   const iconWrap = (
-    <span className="inline-flex shrink-0 drop-shadow-md filter" aria-hidden>
+    <span className="inline-flex shrink-0" aria-hidden>
       <DesktopFolderIcon
         app={app}
         folderPreview={folderPreview}
@@ -357,7 +357,7 @@ function DesktopIconTile({
       onClick={onClick}
     >
       {iconWrap}
-      <span className="w-full min-w-0 max-w-full shrink-0 break-normal text-center text-[0.6875rem] font-semibold leading-tight text-zinc-800 [text-shadow:0_2px_0_rgba(255,255,255,0.6)] dark:text-zinc-100 dark:[text-shadow:0_2px_0_rgba(0,0,0,0.35)]">
+      <span className="w-full min-w-0 max-w-full shrink-0 break-normal text-center text-[0.6875rem] font-semibold leading-tight text-zinc-800 dark:text-zinc-100">
         {desktopLabelBreakable(item.label)}
       </span>
     </button>
