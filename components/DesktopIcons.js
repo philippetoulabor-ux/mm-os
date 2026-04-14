@@ -126,7 +126,8 @@ function MobileNavDockButtons({ onBack }) {
 const DESKTOP_MIN_WIDTH_PX = 768;
 
 function CornerDock() {
-  const { windows, openOrFocus, focusWindow, closeWindow } = useDesktop();
+  const { windows, openOrFocus, focusWindow, closeTopVisibleWindow } =
+    useDesktop();
   const [coveredByWindow, setCoveredByWindow] = useState(false);
   const [hovered, setHovered] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
@@ -166,12 +167,7 @@ function CornerDock() {
     return () => window.clearTimeout(id);
   }, [wantNavDock, displayVariant]);
 
-  const closeTopWindow = useCallback(() => {
-    const visible = windows.filter((w) => !w.minimized);
-    if (visible.length === 0) return;
-    const top = visible.reduce((a, b) => (a.z >= b.z ? a : b));
-    closeWindow(top.id);
-  }, [windows, closeWindow]);
+  const closeTopWindow = closeTopVisibleWindow;
 
   const topVisibleWindow = useMemo(() => {
     const visible = windows.filter((w) => !w.minimized);

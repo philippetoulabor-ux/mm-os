@@ -1,11 +1,15 @@
 "use client";
 
-import { useLayoutEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import {
   DesktopProvider,
+  isMobileViewport,
   syncDesktopLayerMetrics,
   useDesktop,
 } from "@/context/DesktopContext";
+import { DesktopIcons } from "@/components/DesktopIcons";
+import { OSWindow } from "@/components/OSWindow";
+import { SiteHeader } from "@/components/SiteHeader";
 
 /** Mobile Safari: Abstand zwischen Layout- und Sichtfenster (Adress-/Toolleiste). */
 function useSyncVisualViewportInsets() {
@@ -32,9 +36,7 @@ function useSyncVisualViewportInsets() {
     };
   }, []);
 }
-import { DesktopIcons } from "@/components/DesktopIcons";
-import { OSWindow } from "@/components/OSWindow";
-import { SiteHeader } from "@/components/SiteHeader";
+
 function DesktopLayers() {
   const { windows } = useDesktop();
   const sorted = [...windows].sort((a, b) => a.z - b.z);
@@ -51,7 +53,24 @@ function DesktopLayers() {
 
 function DesktopShellInner() {
   const layerRef = useRef(null);
+  const { closeTopVisibleWindow } = useDesktop();
   useSyncVisualViewportInsets();
+
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if (e.key !== "Escape") return;
+      if (isMobileViewport()) return;
+      const t = e.target;
+      if (t instanceof HTMLElement) {
+        if (t.closest("textarea")) return;
+        if (t.isContentEditable) return;
+      }
+      e.preventDefault();
+      closeTopVisibleWindow();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [closeTopVisibleWindow]);
 
   useLayoutEffect(() => {
     const el = layerRef.current;

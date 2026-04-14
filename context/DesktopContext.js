@@ -214,6 +214,20 @@ function centerWindow(size) {
   };
 }
 
+/** Einheitlicher Schlüssel für „eine Datei = ein Fenster“. */
+export function assetFileDedupeKey({ dir, file, basePath = "/web" }) {
+  return `${basePath}::${dir}::${file}`;
+}
+
+function findAssetFileWindow(prev, key) {
+  return prev.find(
+    (w) =>
+      w.appId === "assetFile" &&
+      w.assetFile &&
+      assetFileDedupeKey(w.assetFile) === key
+  );
+}
+
 function loadDesktopIconPositions() {
   const defaults = getDefaultDesktopIconPositions();
   if (typeof window === "undefined") return defaults;
@@ -721,13 +735,87 @@ export function DesktopProvider({ children }) {
     });
   }, []);
 
-  /** Datei aus einem Asset-Ordner: immer ein neues Fenster (kein Fokus auf bestehendes). */
-  const openAssetFileWindow = useCallback(
+  /** Datei aus einem Asset-Ordner: höchstens ein Fenster pro Pfad; bestehendes nach vorne. */
+  const openAssetFileWindow = useCallback(({ dir, file, basePath = "/web" }) => {
+    const def = APPS.assetFile;
+    if (!def || !dir || !file) return;
+
+    const key = assetFileDedupeKey({ dir, file, basePath });
+
+    setWindows((prev) => {
+      const existing = findAssetFileWindow(prev, key);
+      if (existing) {
+        zCounter.current += 1;
+        return prev.map((w) =>
+          w.id === existing.id
+            ? { ...w, minimized: false, z: zCounter.current }
+            : w
+        );
+      }
+
+      zCounter.current += 1;
+      const id = `assetFile-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+      if (isMobileViewport()) {
+        const pos = centerWindow(def.defaultSize);
+        const pb = {
+          x: pos.x,
+          y: pos.y,
+          w: def.defaultSize.w,
+          h: def.defaultSize.h,
+        };
+        const fs = getDesktopLayerFullscreenRect();
+        return [
+          ...prev,
+          {
+            id,
+            appId: def.id,
+            title: file,
+            ...fs,
+            z: zCounter.current,
+            minimized: false,
+            maximized: true,
+            prevBounds: pb,
+            mobileImmersive: true,
+            assetFile: { dir, file, basePath },
+          },
+        ];
+      }
+      const pos = centerWindow(def.defaultSize);
+      return [
+        ...prev,
+        {
+          id,
+          appId: def.id,
+          title: file,
+          x: pos.x,
+          y: pos.y,
+          w: def.defaultSize.w,
+          h: def.defaultSize.h,
+          z: zCounter.current,
+          minimized: false,
+          maximized: false,
+          prevBounds: null,
+          mobileImmersive: false,
+          assetFile: { dir, file, basePath },
+        },
+      ];
+    });
+  }, []);
+
+  /** Leertaste im Finder/Baum: Fenster zur Datei öffnen oder schließen. */
+  const toggleAssetFileWindow = useCallback(
     ({ dir, file, basePath = "/web" }) => {
       const def = APPS.assetFile;
       if (!def || !dir || !file) return;
 
+      const key = assetFileDedupeKey({ dir, file, basePath });
+
       setWindows((prev) => {
+        const existing = findAssetFileWindow(prev, key);
+        if (existing) {
+          return prev.filter((w) => w.id !== existing.id);
+        }
+
         zCounter.current += 1;
         const id = `assetFile-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
         if (isMobileViewport()) {
@@ -779,8 +867,30 @@ export function DesktopProvider({ children }) {
     []
   );
 
+  /** Gleiches Asset-Fenster: andere Datei im selben Ordner (Pfeiltasten-Navigation). */
+  const setAssetFileForWindow = useCallback((windowId, { dir, file, basePath = "/web" }) => {
+    if (!windowId || !dir || !file) return;
+    setWindows((prev) =>
+      prev.map((w) =>
+        w.id === windowId && w.appId === "assetFile"
+          ? { ...w, title: file, assetFile: { dir, file, basePath } }
+          : w
+      )
+    );
+  }, []);
+
   const closeWindow = useCallback((id) => {
     setWindows((prev) => prev.filter((w) => w.id !== id));
+  }, []);
+
+  /** Oberstes nicht minimiertes Fenster schließen (Desktop-Tastatur / Dock). */
+  const closeTopVisibleWindow = useCallback(() => {
+    setWindows((prev) => {
+      const visible = prev.filter((w) => !w.minimized);
+      if (visible.length === 0) return prev;
+      const top = visible.reduce((a, b) => (a.z >= b.z ? a : b));
+      return prev.filter((w) => w.id !== top.id);
+    });
   }, []);
 
   const closeAllTabs = useCallback(() => {
@@ -1048,7 +1158,10 @@ export function DesktopProvider({ children }) {
       windows,
       openOrFocus,
       openAssetFileWindow,
+      toggleAssetFileWindow,
+      setAssetFileForWindow,
       closeWindow,
+      closeTopVisibleWindow,
       closeAllTabs,
       focusWindow,
       minimizeWindow,
@@ -1082,7 +1195,10 @@ export function DesktopProvider({ children }) {
       windows,
       openOrFocus,
       openAssetFileWindow,
+      toggleAssetFileWindow,
+      setAssetFileForWindow,
       closeWindow,
+      closeTopVisibleWindow,
       closeAllTabs,
       focusWindow,
       minimizeWindow,

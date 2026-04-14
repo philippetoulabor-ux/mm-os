@@ -4,12 +4,13 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
+import { flushSync } from "react-dom";
 import {
   APPS,
-  assetDirDisplayName,
   isDesktopAtDefaultLayout,
   webAssetAppId,
 } from "@/lib/apps";
@@ -170,6 +171,13 @@ function fileExtensionDisplay(name) {
 
 function fileHref(basePath, dir, file) {
   return `${basePath}/${encodeURIComponent(dir)}/${encodeURIComponent(file)}`;
+}
+
+/** PDF im iframe: Toolbar aus; view=FitH = Seite an Breite anpassen (skaliert mit Fenster/iframe, v. a. Chromium). */
+function assetIframeSrc(file, url) {
+  if (!/\.pdf$/i.test(file)) return url;
+  const params = "toolbar=0&view=FitH";
+  return url.includes("#") ? `${url}&${params}` : `${url}#${params}`;
 }
 
 function isPreviewImageFile(name) {
@@ -433,8 +441,24 @@ function AssetImageMobileZoom({ url, alt, onLoad, className = "" }) {
   );
 }
 
+/** Oberstes sichtbares Fenster (höchstes z), für Tastatur nur dort reagieren. */
+function topVisibleWindowId(windows) {
+  const visible = windows.filter((w) => !w.minimized);
+  if (visible.length === 0) return null;
+  return visible.reduce((a, b) => (a.z >= b.z ? a : b)).id;
+}
+
+/** Index der Datei in `files` (Manifest), tolerant bei Pfad-Varianten. */
+function manifestFileIndex(files, file) {
+  if (!files?.length) return -1;
+  let i = files.indexOf(file);
+  if (i >= 0) return i;
+  const tail = file.includes("/") ? file.slice(file.lastIndexOf("/") + 1) : file;
+  return files.findIndex((f) => f === tail || file.endsWith(f));
+}
+
 function AssetFileViewer({ dir, file, basePath, windowId, unifiedParentScroll = false }) {
-  const { fitWindowToContentSize } = useDesktop();
+  const { fitWindowToContentSize, setAssetFileForWindow, windows } = useDesktop();
   const videoRef = useRef(null);
   const url = fileHref(basePath, dir, file);
   const manifestEntry = webAssetManifest.find((x) => x.dir === dir);
@@ -494,8 +518,53 @@ function AssetFileViewer({ dir, file, basePath, windowId, unifiedParentScroll = 
   useEffect(() => {
     if (!windowId || isImage || isVideo || is3d) return;
     const { w, h } = iframeAspectHint(file);
-    fitWindowToContentSize(windowId, w, h);
+    const isPdf = /\.pdf$/i.test(file);
+    fitWindowToContentSize(windowId, w, h, {
+      lockAspectForResize: !isPdf,
+    });
   }, [windowId, file, url, isImage, isVideo, is3d, fitWindowToContentSize]);
+
+  useEffect(() => {
+    if (!windowId) return;
+    const files = webAssetManifest.find((x) => x.dir === dir)?.files ?? [];
+    if (files.length < 2) return;
+
+    const onKeyDown = (e) => {
+      if (
+        e.key !== "ArrowLeft" &&
+        e.key !== "ArrowRight" &&
+        e.key !== "ArrowUp" &&
+        e.key !== "ArrowDown"
+      ) {
+        return;
+      }
+      const t = e.target;
+      if (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement) {
+        return;
+      }
+      if (t instanceof HTMLElement && t.isContentEditable) return;
+      if (topVisibleWindowId(windows) !== windowId) return;
+
+      const idx = manifestFileIndex(files, file);
+      if (idx < 0) return;
+
+      const forward = e.key === "ArrowRight" || e.key === "ArrowDown";
+      const next = forward
+        ? Math.min(files.length - 1, idx + 1)
+        : Math.max(0, idx - 1);
+      if (next === idx) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setAssetFileForWindow(windowId, {
+        dir,
+        file: files[next],
+        basePath,
+      });
+    };
+
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [windowId, dir, file, basePath, windows, setAssetFileForWindow]);
 
   if (is3d) {
     return (
@@ -563,15 +632,23 @@ function AssetFileViewer({ dir, file, basePath, windowId, unifiedParentScroll = 
     );
   }
   return (
-    <iframe
-      title={file}
-      src={url}
-      className={`min-h-0 w-full border-0 bg-white dark:bg-zinc-950 ${
+    <div
+      className={
         unifiedParentScroll
-          ? "min-h-[70vh] flex-none"
-          : "h-full flex-1"
-      }`}
-    />
+          ? "flex w-full min-h-[70vh] flex-none flex-col"
+          : "flex min-h-0 w-full min-w-0 flex-1 flex-col"
+      }
+    >
+      <iframe
+        title={file}
+        src={assetIframeSrc(file, url)}
+        className={
+          unifiedParentScroll
+            ? "min-h-[70vh] w-full flex-none border-0 bg-white dark:bg-zinc-950"
+            : "min-h-0 w-full flex-1 basis-0 border-0 bg-white dark:bg-zinc-950"
+        }
+      />
+    </div>
   );
 }
 
@@ -719,29 +796,203 @@ function FinderListIcon({ row, folderPreview }) {
   );
 }
 
-function FinderView({ unifiedParentScroll = false }) {
-  const { openOrFocus, openAssetFileWindow, folderPreview } = useDesktop();
-  const [query, setQuery] = useState("");
-  const q = query.trim();
-  const searchHits = filterFinderSearchIndex(q);
-  const showSearch = q.length > 0;
-  const rows = showSearch ? searchHits : FINDER_BROWSE_ROWS;
+const DESKTOP_MIN_WIDTH_FINDER_KB = 768;
 
-  const openHit = (row) => {
-    if (row.kind === "file") {
-      openAssetFileWindow({ dir: row.dir, file: row.file, basePath: "/web" });
-    } else {
-      openOrFocus(row.appId);
-    }
-  };
+/** Verhindert, dass Pfeiltasten die scrollbare Liste oder die Seite scrollen (Auswahl läuft separat). */
+function blockArrowScrollOnRow(e, isDesktopKb) {
+  if (!isDesktopKb) return;
+  if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+}
+
+function FinderView({ unifiedParentScroll = false }) {
+  const {
+    openOrFocus,
+    openAssetFileWindow,
+    toggleAssetFileWindow,
+    folderPreview,
+  } = useDesktop();
+  const [query, setQuery] = useState("");
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [isDesktopKb, setIsDesktopKb] = useState(false);
+  const rowElRefs = useRef([]);
+  /** Gleiche Reihenfolge wie Anzeige — vermeidet useEffect auf instabilem rows-Array. */
+  const rowsRef = useRef([]);
+  const selectedIndexRef = useRef(0);
+  const finderRootRef = useRef(null);
+  const finderSearchRef = useRef(null);
+
+  useLayoutEffect(() => {
+    const mq = window.matchMedia(
+      `(min-width: ${DESKTOP_MIN_WIDTH_FINDER_KB}px)`
+    );
+    const apply = () => {
+      setIsDesktopKb(mq.matches);
+    };
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
+
+  const q = query.trim();
+  const showSearch = q.length > 0;
+  const rows = useMemo(
+    () => (showSearch ? filterFinderSearchIndex(q) : FINDER_BROWSE_ROWS),
+    [q, showSearch]
+  );
+  rowsRef.current = rows;
+
+  /** Pfeiltasten: natives window-capture + flushSync — verhindert Scroll und stellt Index zuverlässig ein (React preventDefault reicht oft nicht). */
+  useEffect(() => {
+    if (!isDesktopKb) return;
+    const onKeyDown = (e) => {
+      if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+      const root = finderRootRef.current;
+      if (!root) return;
+      const t = e.target;
+      if (!(t instanceof Node) || !root.contains(t)) return;
+      const list = rowsRef.current;
+      if (!list.length) return;
+
+      /** Suche: ↓ geht zur ersten Zeile (Index 0), nicht 0→1. ↑ bleibt normale Caret-Bewegung im Text. */
+      if (t instanceof HTMLInputElement && t.id === "finder-search") {
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          e.stopPropagation();
+          flushSync(() => {
+            setSelectedIndex(0);
+            selectedIndexRef.current = 0;
+          });
+          rowElRefs.current[0]?.focus({ preventScroll: true });
+        }
+        return;
+      }
+
+      /** Erste Listezeile: ↑ zurück ins Suchfeld. */
+      if (e.key === "ArrowUp" && selectedIndexRef.current === 0) {
+        e.preventDefault();
+        e.stopPropagation();
+        finderSearchRef.current?.focus();
+        return;
+      }
+
+      e.preventDefault();
+      e.stopPropagation();
+      flushSync(() => {
+        setSelectedIndex((i) => {
+          const next =
+            e.key === "ArrowDown"
+              ? Math.min(list.length - 1, i + 1)
+              : Math.max(0, i - 1);
+          selectedIndexRef.current = next;
+          return next;
+        });
+      });
+      rowElRefs.current[selectedIndexRef.current]?.focus({
+        preventScroll: true,
+      });
+    };
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [isDesktopKb]);
+
+  /** Neue Suche / Modus: Auswahl wieder von oben (erste Zeile). */
+  useEffect(() => {
+    setSelectedIndex(0);
+  }, [q]);
+
+  useEffect(() => {
+    selectedIndexRef.current = selectedIndex;
+  }, [selectedIndex]);
+
+  useLayoutEffect(() => {
+    if (!isDesktopKb || rows.length === 0) return;
+    const el = rowElRefs.current[selectedIndex];
+    if (el) el.scrollIntoView({ block: "nearest" });
+  }, [selectedIndex, rows, isDesktopKb]);
+
+  const openHit = useCallback(
+    (row) => {
+      if (row.kind === "file") {
+        openAssetFileWindow({ dir: row.dir, file: row.file, basePath: "/web" });
+      } else {
+        openOrFocus(row.appId);
+      }
+    },
+    [openAssetFileWindow, openOrFocus]
+  );
+
+  const runFinderListKeys = useCallback(
+    (e) => {
+      const list = rowsRef.current;
+      const target = e.target;
+      if (!isDesktopKb) {
+        return;
+      }
+      if (!list.length) {
+        return;
+      }
+
+      if (target instanceof HTMLInputElement && target.id === "finder-search") {
+        return;
+      }
+
+      if (e.key === "Enter") {
+        if (e.repeat) return;
+        if (
+          target instanceof HTMLTextAreaElement ||
+          (target instanceof HTMLElement && target.isContentEditable)
+        ) {
+          return;
+        }
+        e.preventDefault();
+        e.stopPropagation();
+        const row = list[selectedIndexRef.current];
+        if (!row) return;
+        openHit(row);
+        return;
+      }
+
+      if (e.key === " " || e.code === "Space") {
+        if (e.repeat) return;
+        if (
+          target instanceof HTMLTextAreaElement ||
+          (target instanceof HTMLElement && target.isContentEditable)
+        ) {
+          return;
+        }
+        const row = list[selectedIndexRef.current];
+        if (!row) return;
+        e.preventDefault();
+        /** Nur Dateien: Toggle per Leertaste (Apps/Ordner → Enter). Kein stopPropagation — sonst fehlen oft Caret/Maus-Cursor bis zur nächsten Bewegung. */
+        if (row.kind === "file") {
+          toggleAssetFileWindow({
+            dir: row.dir,
+            file: row.file,
+            basePath: "/web",
+          });
+        } else {
+          rowElRefs.current[selectedIndexRef.current]?.focus({
+            preventScroll: true,
+          });
+        }
+      }
+    },
+    [isDesktopKb, toggleAssetFileWindow, openHit]
+  );
 
   return (
     <div
+      ref={finderRootRef}
+      data-mm-finder-root
       className={`flex min-h-0 flex-col bg-white text-sm text-zinc-800 ${
         unifiedParentScroll
           ? "h-auto overflow-visible"
           : "h-full overflow-hidden"
       }`}
+      onKeyDownCapture={runFinderListKeys}
     >
       <div className="shrink-0 border-b-2 border-black px-3 py-2">
         <label htmlFor="finder-search" className="sr-only">
@@ -752,22 +1003,34 @@ function FinderView({ unifiedParentScroll = false }) {
             🔍
           </span>
           <input
+            ref={finderSearchRef}
             id="finder-search"
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
+            onKeyUp={(e) => {
+              if (e.key !== " ") return;
+              const el = e.currentTarget;
+              requestAnimationFrame(() => {
+                const s = el.selectionStart;
+                const t = el.selectionEnd;
+                if (s != null && t != null) el.setSelectionRange(s, t);
+              });
+            }}
             placeholder="search"
-            className="min-w-0 flex-1 border-0 bg-transparent text-sm text-zinc-900 outline-none placeholder:text-zinc-400"
+            className="min-w-0 flex-1 border-0 bg-transparent text-sm text-zinc-900 outline-none placeholder:text-zinc-400 [&::-webkit-search-cancel-button]:hidden [&::-moz-search-clear]:hidden"
             autoComplete="off"
             spellCheck={false}
           />
         </div>
       </div>
       <ul
+        role="listbox"
+        aria-label="Apps und Dateien"
         className={
           unifiedParentScroll
             ? "space-y-0.5 p-2"
-            : "min-h-0 flex-1 space-y-0.5 overflow-auto p-2"
+            : "min-h-0 flex-1 space-y-0.5 overflow-auto overscroll-contain p-2"
         }
       >
         {rows.length === 0 ? (
@@ -775,12 +1038,22 @@ function FinderView({ unifiedParentScroll = false }) {
             {showSearch ? "Keine Treffer." : "Keine Einträge."}
           </li>
         ) : (
-          rows.map((row) => (
+          rows.map((row, index) => (
             <li key={row.id}>
               <button
                 type="button"
-                onClick={() => openHit(row)}
-                className="flex w-full min-w-0 items-center gap-3 px-2 py-2.5 text-left transition-colors hover:bg-zinc-100"
+                role="option"
+                aria-selected={isDesktopKb && index === selectedIndex}
+                ref={(el) => {
+                  rowElRefs.current[index] = el;
+                }}
+                onClick={() => {
+                  setSelectedIndex(index);
+                  openHit(row);
+                }}
+                className={`flex w-full min-w-0 items-center gap-3 px-2 py-2.5 text-left transition-colors hover:bg-zinc-100 ${
+                  isDesktopKb && index === selectedIndex ? "bg-zinc-100" : ""
+                }`}
               >
                 <FinderListIcon row={row} folderPreview={folderPreview} />
                 <span className="min-w-0 flex-1 truncate font-medium text-zinc-900">
@@ -801,50 +1074,254 @@ function FinderView({ unifiedParentScroll = false }) {
   );
 }
 
+/** Manifest-Pfade → Baum (Unterordner = eigene Knoten). */
+function buildAssetFileTree(paths) {
+  const root = { children: new Map(), files: [] };
+  for (const fullPath of paths) {
+    const parts = fullPath.split("/");
+    let node = root;
+    for (let i = 0; i < parts.length; i++) {
+      const seg = parts[i];
+      if (i === parts.length - 1) {
+        node.files.push({ segment: seg, fullPath });
+      } else {
+        if (!node.children.has(seg)) {
+          node.children.set(seg, { children: new Map(), files: [] });
+        }
+        node = node.children.get(seg);
+      }
+    }
+  }
+  return root;
+}
+
+/** Sichtbare Zeilen in Baum-Reihenfolge; `collapsedKeys` = Ordner-Pfade, die zugeklappt sind. */
+function collectAssetTreeFlatRows(
+  node,
+  dir,
+  basePath,
+  collapsedKeys,
+  parentPath = "",
+  depth = 0
+) {
+  const out = [];
+  const childNames = [...node.children.keys()].sort((a, b) =>
+    a.localeCompare(b)
+  );
+  const fileRows = [...node.files].sort((a, b) =>
+    a.segment.localeCompare(b.segment)
+  );
+  for (const name of childNames) {
+    const folderPath = parentPath ? `${parentPath}/${name}` : name;
+    const folderKey = `${dir}::${folderPath}`;
+    out.push({
+      kind: "folder",
+      name,
+      folderPath,
+      folderKey,
+      dir,
+      basePath,
+      depth,
+    });
+    if (!collapsedKeys.has(folderKey)) {
+      const child = node.children.get(name);
+      out.push(
+        ...collectAssetTreeFlatRows(
+          child,
+          dir,
+          basePath,
+          collapsedKeys,
+          folderPath,
+          depth + 1
+        )
+      );
+    }
+  }
+  for (const f of fileRows) {
+    out.push({
+      kind: "file",
+      segment: f.segment,
+      fullPath: f.fullPath,
+      dir,
+      basePath,
+      depth,
+    });
+  }
+  return out;
+}
+
 function AssetSubfolderView({ dir, basePath = "/web", unifiedParentScroll = false }) {
-  const { openAssetFileWindow } = useDesktop();
+  const { openAssetFileWindow, toggleAssetFileWindow } = useDesktop();
+  const [collapsedKeys, setCollapsedKeys] = useState(() => new Set());
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [isDesktopKb, setIsDesktopKb] = useState(false);
+  const rowElRefs = useRef([]);
+
+  useLayoutEffect(() => {
+    const mq = window.matchMedia(
+      `(min-width: ${DESKTOP_MIN_WIDTH_FINDER_KB}px)`
+    );
+    const apply = () => setIsDesktopKb(mq.matches);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
+
   const entry = webAssetManifest.find((x) => x.dir === dir);
   const files = entry?.files ?? [];
+  const tree = useMemo(
+    () => buildAssetFileTree(entry?.files ?? []),
+    [entry]
+  );
+
+  const flatRows = useMemo(
+    () =>
+      collectAssetTreeFlatRows(tree, dir, basePath, collapsedKeys),
+    [tree, dir, basePath, collapsedKeys]
+  );
+
+  useEffect(() => {
+    setSelectedIndex((i) => {
+      if (flatRows.length === 0) return 0;
+      return Math.min(Math.max(0, i), flatRows.length - 1);
+    });
+  }, [flatRows]);
+
+  useLayoutEffect(() => {
+    if (!isDesktopKb || flatRows.length === 0) return;
+    const el = rowElRefs.current[selectedIndex];
+    if (el) el.scrollIntoView({ block: "nearest" });
+  }, [selectedIndex, flatRows, isDesktopKb]);
+
+  const toggleFolderCollapsed = useCallback((folderKey) => {
+    setCollapsedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(folderKey)) next.delete(folderKey);
+      else next.add(folderKey);
+      return next;
+    });
+  }, []);
+
+  const handleKeyDownCapture = useCallback(
+    (e) => {
+      if (!isDesktopKb || flatRows.length === 0) return;
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        e.stopPropagation();
+        setSelectedIndex((i) => Math.min(flatRows.length - 1, i + 1));
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        e.stopPropagation();
+        setSelectedIndex((i) => Math.max(0, i - 1));
+        return;
+      }
+      if (e.key === " " || e.code === "Space") {
+        if (e.repeat) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const row = flatRows[selectedIndex];
+        if (!row) return;
+        if (row.kind === "file") {
+          toggleAssetFileWindow({
+            dir: row.dir,
+            file: row.fullPath,
+            basePath: row.basePath,
+          });
+        } else {
+          toggleFolderCollapsed(row.folderKey);
+        }
+      }
+    },
+    [
+      isDesktopKb,
+      flatRows,
+      selectedIndex,
+      toggleAssetFileWindow,
+      toggleFolderCollapsed,
+    ]
+  );
+
   return (
     <div
       className={`flex flex-col gap-2 bg-white p-3 text-sm text-zinc-800 max-md:items-center ${
-        unifiedParentScroll ? "h-auto overflow-visible" : "h-full overflow-auto"
+        unifiedParentScroll
+          ? "h-auto overflow-visible"
+          : "h-full overflow-auto overscroll-contain"
       }`}
+      onKeyDownCapture={handleKeyDownCapture}
     >
-      {!unifiedParentScroll ? (
-        <>
-          <p className="w-full shrink-0 text-center font-medium text-zinc-900 md:text-left">
-            📁 {assetDirDisplayName(dir)}
-          </p>
-          <p className="w-full text-center text-xs text-zinc-500 md:text-left">
-            <code className="text-zinc-600">{basePath}/{dir}</code>
-          </p>
-        </>
-      ) : null}
       {files.length === 0 ? (
         <p className="w-full text-center text-zinc-500 md:text-left">
           Keine Dateien im Manifest —{" "}
           <code className="text-zinc-700">npm run sync:web</code> ausführen.
         </p>
       ) : (
-        <ul className="w-full space-y-0.5 text-left text-zinc-700">
-          {files.map((file) => (
-            <li key={file}>
-              <button
-                type="button"
-                onClick={() =>
-                  openAssetFileWindow({ dir, file, basePath })
-                }
-                className="flex w-full min-w-0 items-center gap-2 rounded px-1 py-1 text-left text-zinc-900 underline decoration-zinc-400 md:hover:bg-zinc-100 md:hover:decoration-zinc-900"
-              >
-                <AssetFileListThumb
-                  href={fileHref(basePath, dir, file)}
-                  file={file}
-                />
-                <span className="min-w-0 truncate">{file}</span>
-              </button>
-            </li>
-          ))}
+        <ul
+          role="listbox"
+          aria-label="Dateien"
+          className="w-full space-y-0.5 overscroll-contain text-left text-zinc-700"
+        >
+          {flatRows.map((row, index) => {
+            const padStyle = { paddingLeft: `${0.75 * row.depth}rem` };
+            if (row.kind === "folder") {
+              const expanded = !collapsedKeys.has(row.folderKey);
+              return (
+                <li key={row.folderKey} className="list-none">
+                  <button
+                    type="button"
+                    aria-expanded={expanded}
+                    ref={(el) => {
+                      rowElRefs.current[index] = el;
+                    }}
+                    style={padStyle}
+                    onKeyDownCapture={(e) => blockArrowScrollOnRow(e, isDesktopKb)}
+                    onClick={() => {
+                      setSelectedIndex(index);
+                      toggleFolderCollapsed(row.folderKey);
+                    }}
+                    className={`flex w-full min-w-0 items-center gap-2 rounded py-0.5 text-left font-medium text-zinc-800 md:hover:bg-zinc-100 ${
+                      isDesktopKb && index === selectedIndex ? "bg-zinc-100" : ""
+                    }`}
+                  >
+                    <span className="min-w-0 truncate">{row.name}</span>
+                  </button>
+                </li>
+              );
+            }
+            return (
+              <li key={row.fullPath} className="list-none">
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={isDesktopKb && index === selectedIndex}
+                  ref={(el) => {
+                    rowElRefs.current[index] = el;
+                  }}
+                  style={padStyle}
+                  onKeyDownCapture={(e) => blockArrowScrollOnRow(e, isDesktopKb)}
+                  onClick={() => {
+                    setSelectedIndex(index);
+                    openAssetFileWindow({
+                      dir: row.dir,
+                      file: row.fullPath,
+                      basePath: row.basePath,
+                    });
+                  }}
+                  className={`flex w-full min-w-0 items-center gap-2 rounded px-1 py-1 text-left text-zinc-900 underline decoration-zinc-400 md:hover:bg-zinc-100 md:hover:decoration-zinc-900 ${
+                    isDesktopKb && index === selectedIndex ? "bg-zinc-100" : ""
+                  }`}
+                >
+                  <AssetFileListThumb
+                    href={fileHref(basePath, dir, row.fullPath)}
+                    file={row.fullPath}
+                  />
+                  <span className="min-w-0 truncate">{row.segment}</span>
+                </button>
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>
@@ -860,13 +1337,21 @@ export function AppContent({
   const app = APPS[appId];
   if (appId === "assetFile" && assetFile?.dir && assetFile?.file) {
     return (
-      <AssetFileViewer
-        dir={assetFile.dir}
-        file={assetFile.file}
-        basePath={assetFile.basePath ?? "/web"}
-        windowId={windowId}
-        unifiedParentScroll={unifiedParentScroll}
-      />
+      <div
+        className={
+          unifiedParentScroll
+            ? "flex w-full min-h-0 flex-col"
+            : "flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
+        }
+      >
+        <AssetFileViewer
+          dir={assetFile.dir}
+          file={assetFile.file}
+          basePath={assetFile.basePath ?? "/web"}
+          windowId={windowId}
+          unifiedParentScroll={unifiedParentScroll}
+        />
+      </div>
     );
   }
 
