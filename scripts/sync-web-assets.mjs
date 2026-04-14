@@ -2,7 +2,8 @@
 /**
  * Kopiert public/web aus webdata3d/landing-page nach mm-os/public/web,
  * setzt public/webdata3d → Symlink auf web (eine physische Kopie),
- * und schreibt lib/webAssetManifest.js für die Desktop-Ordneransicht.
+ * und schreibt lib/webAssetManifest.js für die Desktop-Ordneransicht
+ * (Dateien rekursiv, Pfade relativ mit `/` bei Unterordnern).
  *
  * Nach rsync: Legacy-Ordnernamen aus der Quelle werden in die kanonischen Namen
  * umbenannt (gleiche wie Desktop-Labels), siehe FOLDER_RENAMES_FROM_LEGACY_SOURCE.
@@ -51,16 +52,28 @@ function renameLegacyFolders(webRoot) {
   }
 }
 
+/** Alle Dateien unter einem Asset-Topordner, relativ mit `/` (Unterordner bleiben erhalten). */
+function collectFilesRecursive(dirPath, relBase = "") {
+  const out = [];
+  for (const ent of fs.readdirSync(dirPath, { withFileTypes: true })) {
+    if (ent.name.startsWith(".")) continue;
+    const rel = relBase ? `${relBase}/${ent.name}` : ent.name;
+    const full = path.join(dirPath, ent.name);
+    if (ent.isDirectory()) {
+      out.push(...collectFilesRecursive(full, rel));
+    } else if (ent.isFile()) {
+      out.push(rel);
+    }
+  }
+  return out.sort((a, b) => a.localeCompare(b));
+}
+
 function buildManifest(webRoot) {
   const rows = [];
   for (const name of fs.readdirSync(webRoot, { withFileTypes: true })) {
     if (name.name.startsWith(".") || !name.isDirectory()) continue;
     const dirPath = path.join(webRoot, name.name);
-    const files = fs
-      .readdirSync(dirPath, { withFileTypes: true })
-      .filter((f) => f.isFile() && !f.name.startsWith("."))
-      .map((f) => f.name)
-      .sort((a, b) => a.localeCompare(b));
+    const files = collectFilesRecursive(dirPath);
     rows.push({ dir: name.name, files });
   }
   rows.sort((a, b) => a.dir.localeCompare(b.dir));
