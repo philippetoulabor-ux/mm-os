@@ -77,7 +77,7 @@ function LauncherDockButtons({ dockItems, windows, openOrFocus, focusWindow }) {
           <button
             key={item.appId}
             type="button"
-            className="group relative flex min-h-[3.25rem] min-w-[2.5rem] items-center justify-center bg-transparent px-2 py-2 transition-transform active:scale-95"
+            className="group relative flex min-h-11 min-w-[2.25rem] items-center justify-center bg-transparent px-1.5 py-1.5 transition-transform active:scale-95"
             onClick={() => {
               const openWin = windows.find((x) => x.appId === item.appId);
               if (openWin && !openWin.minimized) focusWindow(openWin.id);
@@ -110,7 +110,7 @@ function MobileNavDockButtons({ onBack }) {
   return (
     <button
       type="button"
-      className="flex min-h-[3.25rem] min-w-[2.5rem] items-center justify-center bg-transparent px-2 py-2 transition-transform active:scale-95"
+      className="flex min-h-11 min-w-[2.25rem] items-center justify-center bg-transparent px-1.5 py-1.5 transition-transform active:scale-95"
       onClick={onBack}
       aria-label="Zurück"
     >
@@ -235,7 +235,7 @@ function CornerDock() {
           }
         }}
       >
-        <div className="relative origin-bottom scale-100 transition-transform duration-300 ease-[cubic-bezier(0.25,0.8,0.25,1)] md:scale-[0.72] md:group-hover/dock:scale-100">
+        <div className="relative origin-bottom scale-100 transition-transform duration-300 ease-[cubic-bezier(0.25,0.8,0.25,1)] md:scale-[0.62] md:group-hover/dock:scale-100">
           <div
             className="origin-bottom transition-transform duration-[220ms] ease-[cubic-bezier(0.25,0.8,0.25,1)]"
             style={{
@@ -252,7 +252,7 @@ function CornerDock() {
               className={
                 showNav && topVisibleWindow?.appId === "media"
                   ? "hidden"
-                  : "relative z-[1] flex items-center gap-1 px-3 py-2"
+                  : "relative z-[1] flex items-center gap-0.5 px-2 py-1.5"
               }
             >
               {showNav ? (

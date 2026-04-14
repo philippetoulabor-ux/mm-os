@@ -264,10 +264,17 @@ function iframeAspectHint(name) {
 
 const ASSET_IMG_ZOOM_MIN = 1;
 const ASSET_IMG_ZOOM_MAX = 4;
-/** Horizontales Wischen zwischen Assets (nur bei Zoom 1). */
-const ASSET_SWIPE_MIN_DX = 56;
+/** Horizontal + vertikal zwischen Assets (nur bei Zoom 1). */
+const ASSET_SWIPE_MIN_DIST = 56;
 const ASSET_SWIPE_DOMINANCE = 1.12;
 const ASSET_SWIPE_MAX_MS = 700;
+const ASSET_SWIPE_AXIS_LOCK_PX = 10;
+/** Ausfahren / Einfahren — bewusst langsam und weich auslaufend */
+const ASSET_SWIPE_EXIT_MS = 560;
+const ASSET_SWIPE_ENTER_MS = 520;
+const ASSET_SWIPE_SNAP_MS = 440;
+const ASSET_SWIPE_EASE = "cubic-bezier(0.18, 0.82, 0.22, 1)";
+const ASSET_SWIPE_EDGE_RESIST = 0.22;
 
 function touchDistance(a, b) {
   const dx = a.clientX - b.clientX;
@@ -301,6 +308,9 @@ function AssetImageMobileZoom({
   const [scale, setScale] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [layoutTick, setLayoutTick] = useState(0);
+  const [navOffset, setNavOffset] = useState({ x: 0, y: 0 });
+  const [navTween, setNavTween] = useState(false);
+  const [navTweenMs, setNavTweenMs] = useState(ASSET_SWIPE_EXIT_MS);
   const containerRef = useRef(null);
   const imgRef = useRef(null);
   const scaleRef = useRef(1);
@@ -310,6 +320,10 @@ function AssetImageMobileZoom({
   const swipePrevRef = useRef(onSwipePrevious);
   const swipeNextRef = useRef(onSwipeNext);
   const swipeTrackRef = useRef(null);
+  const navOffsetRef = useRef({ x: 0, y: 0 });
+  const interactionLockRef = useRef(false);
+  const pendingExitCallbackRef = useRef(null);
+  const pendingEnterRef = useRef(null);
 
   useLayoutEffect(() => {
     scaleRef.current = scale;
@@ -317,14 +331,56 @@ function AssetImageMobileZoom({
   });
 
   useLayoutEffect(() => {
+    navOffsetRef.current = navOffset;
+  });
+
+  useLayoutEffect(() => {
     swipePrevRef.current = onSwipePrevious;
     swipeNextRef.current = onSwipeNext;
   });
+
+  const handleNavTransitionEnd = useCallback((e) => {
+    if (e.propertyName !== "transform") return;
+    if (pendingExitCallbackRef.current) {
+      const fn = pendingExitCallbackRef.current;
+      pendingExitCallbackRef.current = null;
+      fn();
+      return;
+    }
+    interactionLockRef.current = false;
+  }, []);
 
   useEffect(() => {
     setScale(ASSET_IMG_ZOOM_MIN);
     setPan({ x: 0, y: 0 });
     swipeTrackRef.current = null;
+
+    const pe = pendingEnterRef.current;
+    if (pe) {
+      pendingEnterRef.current = null;
+      const c = containerRef.current;
+      const w = c?.clientWidth ?? 0;
+      const h = c?.clientHeight ?? 0;
+      let start = { x: 0, y: 0 };
+      if (pe.axis === "h") {
+        start = { x: pe.isNext ? w : -w, y: 0 };
+      } else {
+        start = { x: 0, y: pe.isNext ? h : -h };
+      }
+      interactionLockRef.current = true;
+      setNavTween(false);
+      setNavTweenMs(ASSET_SWIPE_ENTER_MS);
+      setNavOffset(start);
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          setNavTween(true);
+          setNavOffset({ x: 0, y: 0 });
+        });
+      });
+    } else {
+      setNavOffset({ x: 0, y: 0 });
+      setNavTween(false);
+    }
   }, [url]);
 
   const clampPanFromDom = useCallback((nextScale, px, py) => {
@@ -368,6 +424,15 @@ function AssetImageMobileZoom({
     const el = containerRef.current;
     if (!el) return;
 
+    const snapNavToOrigin = () => {
+      const o = navOffsetRef.current;
+      if (o.x === 0 && o.y === 0) return;
+      interactionLockRef.current = true;
+      setNavTweenMs(ASSET_SWIPE_SNAP_MS);
+      setNavTween(true);
+      setNavOffset({ x: 0, y: 0 });
+    };
+
     const onTouchStart = (e) => {
       if (e.touches.length === 2) {
         swipeTrackRef.current = null;
@@ -376,6 +441,9 @@ function AssetImageMobileZoom({
           scale0: scaleRef.current,
         };
         panTouchRef.current = null;
+        return;
+      }
+      if (e.touches.length === 1 && interactionLockRef.current) {
         return;
       }
       if (e.touches.length === 1 && scaleRef.current > ASSET_IMG_ZOOM_MIN) {
@@ -398,7 +466,11 @@ function AssetImageMobileZoom({
         swipeTrackRef.current = {
           sx: t.clientX,
           sy: t.clientY,
-          t0: typeof performance !== "undefined" ? performance.now() : Date.now(),
+          t0:
+            typeof performance !== "undefined"
+              ? performance.now()
+              : Date.now(),
+          axis: null,
         };
         pinchRef.current = null;
         panTouchRef.current = null;
@@ -441,9 +513,38 @@ function AssetImageMobileZoom({
         const t = e.touches[0];
         const dx = t.clientX - tr.sx;
         const dy = t.clientY - tr.sy;
+        const ax = Math.abs(dx);
+        const ay = Math.abs(dy);
+        if (!tr.axis) {
+          if (
+            ax > ASSET_SWIPE_AXIS_LOCK_PX ||
+            ay > ASSET_SWIPE_AXIS_LOCK_PX
+          ) {
+            if (ax > ay * 1.1) tr.axis = "h";
+            else if (ay > ax * 1.1) tr.axis = "v";
+          }
+        }
+        if (tr.axis === "h") {
+          let nx = dx;
+          if (nx > 0 && !swipePrevRef.current) nx *= ASSET_SWIPE_EDGE_RESIST;
+          if (nx < 0 && !swipeNextRef.current) nx *= ASSET_SWIPE_EDGE_RESIST;
+          setNavTween(false);
+          setNavOffset({ x: nx, y: 0 });
+        } else if (tr.axis === "v") {
+          let ny = dy;
+          if (ny < 0 && !swipePrevRef.current) ny *= ASSET_SWIPE_EDGE_RESIST;
+          if (ny > 0 && !swipeNextRef.current) ny *= ASSET_SWIPE_EDGE_RESIST;
+          setNavTween(false);
+          setNavOffset({ x: 0, y: ny });
+        }
         if (
-          Math.abs(dx) > 12 &&
-          Math.abs(dx) > Math.abs(dy) * ASSET_SWIPE_DOMINANCE
+          ax > 12 &&
+          ax > ay * ASSET_SWIPE_DOMINANCE
+        ) {
+          e.preventDefault();
+        } else if (
+          ay > 12 &&
+          ay > ax * ASSET_SWIPE_DOMINANCE
         ) {
           e.preventDefault();
         }
@@ -453,6 +554,12 @@ function AssetImageMobileZoom({
     const onTouchEnd = (e) => {
       if (e.touches.length < 2) pinchRef.current = null;
       if (e.touches.length === 0) panTouchRef.current = null;
+
+      if (e.type === "touchcancel" && swipeTrackRef.current) {
+        swipeTrackRef.current = null;
+        snapNavToOrigin();
+        return;
+      }
 
       if (
         e.changedTouches.length === 1 &&
@@ -467,14 +574,99 @@ function AssetImageMobileZoom({
           typeof performance !== "undefined" ? performance.now() : Date.now();
         const dt = t1 - tr.t0;
         swipeTrackRef.current = null;
-        if (
-          dt <= ASSET_SWIPE_MAX_MS &&
-          Math.abs(dx) >= ASSET_SWIPE_MIN_DX &&
-          Math.abs(dx) > Math.abs(dy) * ASSET_SWIPE_DOMINANCE
-        ) {
-          if (dx > 0) swipePrevRef.current?.();
-          else swipeNextRef.current?.();
+
+        if (dt > ASSET_SWIPE_MAX_MS) {
+          snapNavToOrigin();
+          return;
         }
+
+        const ax = Math.abs(dx);
+        const ay = Math.abs(dy);
+        const horiz =
+          ax >= ASSET_SWIPE_MIN_DIST &&
+          ax > ay * ASSET_SWIPE_DOMINANCE;
+        const vert =
+          ay >= ASSET_SWIPE_MIN_DIST &&
+          ay > ax * ASSET_SWIPE_DOMINANCE;
+
+        if (!horiz && !vert) {
+          snapNavToOrigin();
+          return;
+        }
+
+        const reduceMotion =
+          typeof window !== "undefined" &&
+          window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+        if (reduceMotion) {
+          setNavTween(false);
+          setNavOffset({ x: 0, y: 0 });
+          if (horiz && !vert) {
+            if (dx > 0) swipePrevRef.current?.();
+            else swipeNextRef.current?.();
+          } else if (vert && !horiz) {
+            if (dy < 0) swipePrevRef.current?.();
+            else swipeNextRef.current?.();
+          } else if (horiz && vert) {
+            if (ax >= ay) {
+              if (dx > 0) swipePrevRef.current?.();
+              else swipeNextRef.current?.();
+            } else {
+              if (dy < 0) swipePrevRef.current?.();
+              else swipeNextRef.current?.();
+            }
+          }
+          return;
+        }
+
+        const c = containerRef.current;
+        const w = c?.clientWidth ?? 0;
+        const h = c?.clientHeight ?? 0;
+        let tx = 0;
+        let ty = 0;
+        if (horiz && !vert) {
+          tx = dx > 0 ? w : -w;
+        } else if (vert && !horiz) {
+          ty = dy > 0 ? h : -h;
+        } else if (horiz && vert) {
+          if (ax >= ay) tx = dx > 0 ? w : -w;
+          else ty = dy > 0 ? h : -h;
+        }
+
+        const axis =
+          horiz && vert ? (ax >= ay ? "h" : "v") : horiz ? "h" : "v";
+        const isNext =
+          horiz && vert
+            ? ax >= ay
+              ? dx < 0
+              : dy > 0
+            : horiz
+              ? dx < 0
+              : dy > 0;
+
+        pendingExitCallbackRef.current = () => {
+          pendingEnterRef.current = { axis, isNext };
+          if (horiz && !vert) {
+            if (dx > 0) swipePrevRef.current?.();
+            else swipeNextRef.current?.();
+          } else if (vert && !horiz) {
+            if (dy < 0) swipePrevRef.current?.();
+            else swipeNextRef.current?.();
+          } else if (horiz && vert) {
+            if (ax >= ay) {
+              if (dx > 0) swipePrevRef.current?.();
+              else swipeNextRef.current?.();
+            } else {
+              if (dy < 0) swipePrevRef.current?.();
+              else swipeNextRef.current?.();
+            }
+          }
+        };
+
+        interactionLockRef.current = true;
+        setNavTweenMs(ASSET_SWIPE_EXIT_MS);
+        setNavTween(true);
+        setNavOffset({ x: tx, y: ty });
       } else if (e.touches.length === 0) {
         swipeTrackRef.current = null;
       }
@@ -501,7 +693,17 @@ function AssetImageMobileZoom({
           touchAction: scale > ASSET_IMG_ZOOM_MIN ? "none" : "pan-y",
         }}
       >
-        <div className="flex h-full w-full items-center justify-center">
+        <div
+          className="flex h-full w-full items-center justify-center"
+          onTransitionEnd={handleNavTransitionEnd}
+          style={{
+            transform: `translate(${navOffset.x}px, ${navOffset.y}px)`,
+            transition: navTween
+              ? `transform ${navTweenMs}ms ${ASSET_SWIPE_EASE}`
+              : "none",
+            willChange: "transform",
+          }}
+        >
           <div
             style={{
               transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})`,
