@@ -264,6 +264,10 @@ function iframeAspectHint(name) {
 
 const ASSET_IMG_ZOOM_MIN = 1;
 const ASSET_IMG_ZOOM_MAX = 4;
+/** Horizontales Wischen zwischen Assets (nur bei Zoom 1). */
+const ASSET_SWIPE_MIN_DX = 56;
+const ASSET_SWIPE_DOMINANCE = 1.12;
+const ASSET_SWIPE_MAX_MS = 700;
 
 function touchDistance(a, b) {
   const dx = a.clientX - b.clientX;
@@ -286,7 +290,14 @@ function clampAssetImagePan(scale, px, py, cw, ch, iw, ih) {
 }
 
 /** Pinch-Zoom + Pan; nur für Mobile-Asset-Layout. */
-function AssetImageMobileZoom({ url, alt, onLoad, className = "" }) {
+function AssetImageMobileZoom({
+  url,
+  alt,
+  onLoad,
+  className = "",
+  onSwipePrevious,
+  onSwipeNext,
+}) {
   const [scale, setScale] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [layoutTick, setLayoutTick] = useState(0);
@@ -296,11 +307,25 @@ function AssetImageMobileZoom({ url, alt, onLoad, className = "" }) {
   const panRef = useRef({ x: 0, y: 0 });
   const pinchRef = useRef(null);
   const panTouchRef = useRef(null);
+  const swipePrevRef = useRef(onSwipePrevious);
+  const swipeNextRef = useRef(onSwipeNext);
+  const swipeTrackRef = useRef(null);
 
   useLayoutEffect(() => {
     scaleRef.current = scale;
     panRef.current = pan;
   });
+
+  useLayoutEffect(() => {
+    swipePrevRef.current = onSwipePrevious;
+    swipeNextRef.current = onSwipeNext;
+  });
+
+  useEffect(() => {
+    setScale(ASSET_IMG_ZOOM_MIN);
+    setPan({ x: 0, y: 0 });
+    swipeTrackRef.current = null;
+  }, [url]);
 
   const clampPanFromDom = useCallback((nextScale, px, py) => {
     const c = containerRef.current;
@@ -345,6 +370,7 @@ function AssetImageMobileZoom({ url, alt, onLoad, className = "" }) {
 
     const onTouchStart = (e) => {
       if (e.touches.length === 2) {
+        swipeTrackRef.current = null;
         pinchRef.current = {
           d0: touchDistance(e.touches[0], e.touches[1]),
           scale0: scaleRef.current,
@@ -353,6 +379,7 @@ function AssetImageMobileZoom({ url, alt, onLoad, className = "" }) {
         return;
       }
       if (e.touches.length === 1 && scaleRef.current > ASSET_IMG_ZOOM_MIN) {
+        swipeTrackRef.current = null;
         const t = e.touches[0];
         panTouchRef.current = {
           startPan: { ...panRef.current },
@@ -360,6 +387,21 @@ function AssetImageMobileZoom({ url, alt, onLoad, className = "" }) {
           sy: t.clientY,
         };
         pinchRef.current = null;
+        return;
+      }
+      if (
+        e.touches.length === 1 &&
+        scaleRef.current <= ASSET_IMG_ZOOM_MIN &&
+        (swipePrevRef.current || swipeNextRef.current)
+      ) {
+        const t = e.touches[0];
+        swipeTrackRef.current = {
+          sx: t.clientX,
+          sy: t.clientY,
+          t0: typeof performance !== "undefined" ? performance.now() : Date.now(),
+        };
+        pinchRef.current = null;
+        panTouchRef.current = null;
       }
     };
 
@@ -388,12 +430,54 @@ function AssetImageMobileZoom({ url, alt, onLoad, className = "" }) {
         const nx = startPan.x + (t.clientX - sx);
         const ny = startPan.y + (t.clientY - sy);
         setPan(clampPanFromDom(scaleRef.current, nx, ny));
+        return;
+      }
+      if (
+        e.touches.length === 1 &&
+        swipeTrackRef.current &&
+        scaleRef.current <= ASSET_IMG_ZOOM_MIN
+      ) {
+        const tr = swipeTrackRef.current;
+        const t = e.touches[0];
+        const dx = t.clientX - tr.sx;
+        const dy = t.clientY - tr.sy;
+        if (
+          Math.abs(dx) > 12 &&
+          Math.abs(dx) > Math.abs(dy) * ASSET_SWIPE_DOMINANCE
+        ) {
+          e.preventDefault();
+        }
       }
     };
 
     const onTouchEnd = (e) => {
       if (e.touches.length < 2) pinchRef.current = null;
       if (e.touches.length === 0) panTouchRef.current = null;
+
+      if (
+        e.changedTouches.length === 1 &&
+        swipeTrackRef.current &&
+        scaleRef.current <= ASSET_IMG_ZOOM_MIN
+      ) {
+        const tr = swipeTrackRef.current;
+        const t = e.changedTouches[0];
+        const dx = t.clientX - tr.sx;
+        const dy = t.clientY - tr.sy;
+        const t1 =
+          typeof performance !== "undefined" ? performance.now() : Date.now();
+        const dt = t1 - tr.t0;
+        swipeTrackRef.current = null;
+        if (
+          dt <= ASSET_SWIPE_MAX_MS &&
+          Math.abs(dx) >= ASSET_SWIPE_MIN_DX &&
+          Math.abs(dx) > Math.abs(dy) * ASSET_SWIPE_DOMINANCE
+        ) {
+          if (dx > 0) swipePrevRef.current?.();
+          else swipeNextRef.current?.();
+        }
+      } else if (e.touches.length === 0) {
+        swipeTrackRef.current = null;
+      }
     };
 
     el.addEventListener("touchstart", onTouchStart, { passive: true });
@@ -507,6 +591,36 @@ function AssetFileViewer({ dir, file, basePath, windowId, unifiedParentScroll = 
   const isVideo = /\.(mov|mp4|webm)$/i.test(file);
   const is3d = /\.(stl|glb|gltf|obj)$/i.test(file);
 
+  const manifestFiles = manifestEntry?.files ?? [];
+  const assetIdx = manifestFileIndex(manifestFiles, file);
+  const swipeToPrevImage =
+    unifiedParentScroll &&
+    windowId &&
+    isImage &&
+    assetIdx > 0
+      ? () => {
+          setAssetFileForWindow(windowId, {
+            dir,
+            file: manifestFiles[assetIdx - 1],
+            basePath,
+          });
+        }
+      : undefined;
+  const swipeToNextImage =
+    unifiedParentScroll &&
+    windowId &&
+    isImage &&
+    assetIdx >= 0 &&
+    assetIdx < manifestFiles.length - 1
+      ? () => {
+          setAssetFileForWindow(windowId, {
+            dir,
+            file: manifestFiles[assetIdx + 1],
+            basePath,
+          });
+        }
+      : undefined;
+
   useEffect(() => {
     if (!isVideo) return;
     const el = videoRef.current;
@@ -594,6 +708,8 @@ function AssetFileViewer({ dir, file, basePath, windowId, unifiedParentScroll = 
             alt={file}
             onLoad={onImgLoad}
             className="min-h-0"
+            onSwipePrevious={swipeToPrevImage}
+            onSwipeNext={swipeToNextImage}
           />
         ) : (
           <>
