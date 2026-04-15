@@ -9,6 +9,7 @@ import {
   useState,
 } from "react";
 import { flushSync } from "react-dom";
+import dynamic from "next/dynamic";
 import {
   APPS,
   isDesktopAtDefaultLayout,
@@ -21,10 +22,50 @@ import {
 import { webAssetManifest } from "@/lib/webAssetManifest";
 import { useDesktop } from "@/context/DesktopContext";
 import { AppIcon } from "@/components/AppIcon";
-import { NotesAppView } from "@/components/NotesAppView";
-import { MediaAppView } from "@/components/MediaAppView";
-import { Model3DViewer } from "@/components/Model3DViewer";
 import { resolveModelBackground } from "@/lib/model3dBackground";
+
+const NotesAppView = dynamic(
+  () =>
+    import("@/components/NotesAppView").then((m) => ({
+      default: m.NotesAppView,
+    })),
+  {
+    loading: () => (
+      <div className="flex h-full min-h-[40vh] items-center justify-center bg-white text-sm text-zinc-500">
+        …
+      </div>
+    ),
+  }
+);
+
+const MediaAppView = dynamic(
+  () =>
+    import("@/components/MediaAppView").then((m) => ({
+      default: m.MediaAppView,
+    })),
+  {
+    loading: () => (
+      <div className="flex h-full min-h-[40vh] items-center justify-center bg-white text-sm text-zinc-500">
+        …
+      </div>
+    ),
+  }
+);
+
+const Model3DViewer = dynamic(
+  () =>
+    import("@/components/Model3DViewer").then((m) => ({
+      default: m.Model3DViewer,
+    })),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex min-h-[50vh] w-full items-center justify-center bg-zinc-200 text-sm text-zinc-500">
+        …
+      </div>
+    ),
+  }
+);
 import { getWebAssetFolderPreviewHref } from "@/lib/webAssetFolderPreview";
 
 function SettingsPanel({ windowId }) {
@@ -272,11 +313,11 @@ const ASSET_SWIPE_DOMINANCE = 1.2;
 const ASSET_SWIPE_AXIS_CHOOSE_RATIO = 1.14;
 const ASSET_SWIPE_MAX_MS = 700;
 const ASSET_SWIPE_AXIS_LOCK_PX = 12;
-/** Ausfahren / Einfahren — bewusst langsam und weich auslaufend */
-const ASSET_SWIPE_EXIT_MS = 560;
-const ASSET_SWIPE_ENTER_MS = 520;
-const ASSET_SWIPE_SNAP_MS = 440;
-const ASSET_SWIPE_EASE = "cubic-bezier(0.18, 0.82, 0.22, 1)";
+/** Aktuelles Bild aus dem View; nächstes schiebt nach — kurz, damit die Kette lesbar bleibt */
+const ASSET_SWIPE_EXIT_MS = 420;
+const ASSET_SWIPE_ENTER_MS = 380;
+const ASSET_SWIPE_SNAP_MS = 360;
+const ASSET_SWIPE_EASE = "cubic-bezier(0.22, 0.99, 0.22, 1)";
 const ASSET_SWIPE_EDGE_RESIST = 0.22;
 
 function touchDistance(a, b) {
@@ -535,8 +576,9 @@ function AssetImageMobileZoom({
           setNavOffset({ x: nx, y: 0 });
         } else if (tr.axis === "v") {
           let ny = dy;
-          if (ny < 0 && !swipePrevRef.current) ny *= ASSET_SWIPE_EDGE_RESIST;
-          if (ny > 0 && !swipeNextRef.current) ny *= ASSET_SWIPE_EDGE_RESIST;
+          /* Nach oben = nächstes Bild, nach unten = vorheriges (wie ArrowDown / ArrowUp). */
+          if (ny < 0 && !swipeNextRef.current) ny *= ASSET_SWIPE_EDGE_RESIST;
+          if (ny > 0 && !swipePrevRef.current) ny *= ASSET_SWIPE_EDGE_RESIST;
           setNavTween(false);
           setNavOffset({ x: 0, y: ny });
         }
@@ -608,15 +650,15 @@ function AssetImageMobileZoom({
             if (dx > 0) swipePrevRef.current?.();
             else swipeNextRef.current?.();
           } else if (vert && !horiz) {
-            if (dy < 0) swipePrevRef.current?.();
-            else swipeNextRef.current?.();
+            if (dy < 0) swipeNextRef.current?.();
+            else swipePrevRef.current?.();
           } else if (horiz && vert) {
             if (ax >= ay) {
               if (dx > 0) swipePrevRef.current?.();
               else swipeNextRef.current?.();
             } else {
-              if (dy < 0) swipePrevRef.current?.();
-              else swipeNextRef.current?.();
+              if (dy < 0) swipeNextRef.current?.();
+              else swipePrevRef.current?.();
             }
           }
           return;
@@ -630,10 +672,11 @@ function AssetImageMobileZoom({
         if (horiz && !vert) {
           tx = dx > 0 ? w : -w;
         } else if (vert && !horiz) {
-          ty = dy > 0 ? h : -h;
+          /* Aktuelles Bild folgt dem Finger aus dem View: oben raus = next, unten raus = prev. */
+          ty = dy < 0 ? -h : h;
         } else if (horiz && vert) {
           if (ax >= ay) tx = dx > 0 ? w : -w;
-          else ty = dy > 0 ? h : -h;
+          else ty = dy < 0 ? -h : h;
         }
 
         const axis =
@@ -642,10 +685,10 @@ function AssetImageMobileZoom({
           horiz && vert
             ? ax >= ay
               ? dx < 0
-              : dy > 0
+              : dy < 0
             : horiz
               ? dx < 0
-              : dy > 0;
+              : dy < 0;
 
         pendingExitCallbackRef.current = () => {
           pendingEnterRef.current = { axis, isNext };
@@ -653,15 +696,15 @@ function AssetImageMobileZoom({
             if (dx > 0) swipePrevRef.current?.();
             else swipeNextRef.current?.();
           } else if (vert && !horiz) {
-            if (dy < 0) swipePrevRef.current?.();
-            else swipeNextRef.current?.();
+            if (dy < 0) swipeNextRef.current?.();
+            else swipePrevRef.current?.();
           } else if (horiz && vert) {
             if (ax >= ay) {
               if (dx > 0) swipePrevRef.current?.();
               else swipeNextRef.current?.();
             } else {
-              if (dy < 0) swipePrevRef.current?.();
-              else swipeNextRef.current?.();
+              if (dy < 0) swipeNextRef.current?.();
+              else swipePrevRef.current?.();
             }
           }
         };
