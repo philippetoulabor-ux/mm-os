@@ -8,6 +8,7 @@ import {
   useDesktop,
 } from "@/context/DesktopContext";
 import { DesktopIcons } from "@/components/DesktopIcons";
+import { DesktopWidgets } from "@/components/DesktopWidgets";
 import { MobileEdgeBackGesture } from "@/components/MobileEdgeBackGesture";
 import { OSWindow } from "@/components/OSWindow";
 import { SiteHeader } from "@/components/SiteHeader";
@@ -45,6 +46,7 @@ function DesktopLayers() {
   return (
     <>
       <DesktopIcons />
+      <DesktopWidgets />
       {sorted.map((w) => (
         <OSWindow key={w.id} win={w} />
       ))}

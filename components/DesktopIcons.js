@@ -9,6 +9,7 @@ import {
   useState,
 } from "react";
 import { AppIcon } from "@/components/AppIcon";
+import { DesktopWidgetsMobile } from "@/components/DesktopWidgets";
 import { APPS, DESKTOP_ICONS } from "@/lib/apps";
 import { getWebAssetFolderPreviewHref } from "@/lib/webAssetFolderPreview";
 import {
@@ -504,6 +505,7 @@ export function DesktopIcons() {
           paddingRight: "max(0.5rem, env(safe-area-inset-right, 0px))",
         }}
       >
+        <DesktopWidgetsMobile />
         <div
           className={`grid min-h-0 w-full flex-1 gap-x-1 gap-y-0.5 px-1 pt-1 min-[400px]:gap-x-2 min-[400px]:gap-y-2 min-[400px]:px-2 ${
             mobileGridRows > MOBILE_HOME_GRID_ROWS ? "overflow-y-auto" : ""

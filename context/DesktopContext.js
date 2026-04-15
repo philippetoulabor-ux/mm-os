@@ -11,6 +11,11 @@ import {
 } from "react";
 import { APPS, getDefaultDesktopIconPositions } from "@/lib/apps";
 import {
+  DESKTOP_WIDGETS_STORAGE_KEY,
+  getDefaultDesktopWidgets,
+  loadDesktopWidgets,
+} from "@/lib/desktopWidgets";
+import {
   migrateDesktopIconPositions,
   migrateNotesText,
   migrateWindowState,
@@ -200,6 +205,7 @@ const NOTES_TEXT_KEY = "mm-os-notes-text";
 const WINDOWS_STATE_KEY = "mm-os-windows-v1";
 
 const WINDOWS_PERSIST_DEBOUNCE_MS = 400;
+const DESKTOP_WIDGETS_PERSIST_DEBOUNCE_MS = 400;
 
 function centerWindow(size) {
   if (typeof window === "undefined") {
@@ -469,9 +475,14 @@ export function DesktopProvider({ children }) {
   const [desktopIconPositions, setDesktopIconPositions] = useState(() =>
     getDefaultDesktopIconPositions()
   );
+  const [desktopWidgets, setDesktopWidgets] = useState(() =>
+    getDefaultDesktopWidgets()
+  );
   const skipDesktopIconPersist = useRef(true);
   const skipWindowsPersist = useRef(true);
   const windowsPersistTimerRef = useRef(null);
+  const skipDesktopWidgetsPersist = useRef(true);
+  const desktopWidgetsPersistTimerRef = useRef(null);
   const skipNotesPersist = useRef(true);
   const zCounter = useRef(20);
   /** Ein Notiz-Dokument (Absätze durch \\n\\n); ältere Absätze werden in der UI durchgestrichen. */
@@ -500,6 +511,10 @@ export function DesktopProvider({ children }) {
 
   useEffect(() => {
     setDesktopIconPositions(loadDesktopIconPositions());
+  }, []);
+
+  useEffect(() => {
+    setDesktopWidgets(loadDesktopWidgets());
   }, []);
 
   useEffect(() => {
@@ -548,6 +563,33 @@ export function DesktopProvider({ children }) {
       }
     };
   }, [windows]);
+
+  useEffect(() => {
+    if (skipDesktopWidgetsPersist.current) {
+      skipDesktopWidgetsPersist.current = false;
+      return;
+    }
+    if (desktopWidgetsPersistTimerRef.current) {
+      clearTimeout(desktopWidgetsPersistTimerRef.current);
+    }
+    desktopWidgetsPersistTimerRef.current = setTimeout(() => {
+      desktopWidgetsPersistTimerRef.current = null;
+      try {
+        localStorage.setItem(
+          DESKTOP_WIDGETS_STORAGE_KEY,
+          JSON.stringify(desktopWidgets)
+        );
+      } catch {
+        /* ignore */
+      }
+    }, DESKTOP_WIDGETS_PERSIST_DEBOUNCE_MS);
+    return () => {
+      if (desktopWidgetsPersistTimerRef.current) {
+        clearTimeout(desktopWidgetsPersistTimerRef.current);
+        desktopWidgetsPersistTimerRef.current = null;
+      }
+    };
+  }, [desktopWidgets]);
 
   useEffect(() => {
     try {
@@ -600,6 +642,14 @@ export function DesktopProvider({ children }) {
 
   const resetDesktopIconPositions = useCallback(() => {
     setDesktopIconPositions(getDefaultDesktopIconPositions());
+  }, []);
+
+  const setDesktopWidgetPosition = useCallback((id, x, y) => {
+    setDesktopWidgets((prev) =>
+      prev.map((w) =>
+        w.id === id ? { ...w, desktop: { x, y } } : w
+      )
+    );
   }, []);
 
   const setDarkMode = useCallback((value) => {
@@ -1279,6 +1329,8 @@ export function DesktopProvider({ children }) {
       desktopIconPositions,
       setDesktopIconPosition,
       resetDesktopIconPositions,
+      desktopWidgets,
+      setDesktopWidgetPosition,
       darkMode,
       setDarkMode,
       folderPreview,
@@ -1316,6 +1368,8 @@ export function DesktopProvider({ children }) {
       desktopIconPositions,
       setDesktopIconPosition,
       resetDesktopIconPositions,
+      desktopWidgets,
+      setDesktopWidgetPosition,
       darkMode,
       setDarkMode,
       folderPreview,

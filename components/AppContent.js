@@ -19,7 +19,12 @@ import {
   FINDER_BROWSE_ROWS,
   filterFinderSearchIndex,
 } from "@/lib/finderSearch";
+import {
+  buildAssetFileTree,
+  collectAssetTreeFlatRows,
+} from "@/lib/assetManifestTree";
 import { webAssetManifest } from "@/lib/webAssetManifest";
+import { fileHref, isSlideImageFile as isPreviewImageFile } from "@/lib/webAssetUrls";
 import { useDesktop } from "@/context/DesktopContext";
 import { AppIcon } from "@/components/AppIcon";
 import { resolveModelBackground } from "@/lib/model3dBackground";
@@ -210,19 +215,11 @@ function fileExtensionDisplay(name) {
   return name.slice(i).toLowerCase();
 }
 
-function fileHref(basePath, dir, file) {
-  return `${basePath}/${encodeURIComponent(dir)}/${encodeURIComponent(file)}`;
-}
-
 /** PDF im iframe: Toolbar aus; view=FitH = Seite an Breite anpassen (skaliert mit Fenster/iframe, v. a. Chromium). */
 function assetIframeSrc(file, url) {
   if (!/\.pdf$/i.test(file)) return url;
   const params = "toolbar=0&view=FitH";
   return url.includes("#") ? `${url}&${params}` : `${url}#${params}`;
-}
-
-function isPreviewImageFile(name) {
-  return /\.(jpg|jpeg|png|gif|webp)$/i.test(name);
 }
 
 function isPreviewVideoFile(name) {
@@ -1436,82 +1433,6 @@ function FinderView({ unifiedParentScroll = false }) {
       </ul>
     </div>
   );
-}
-
-/** Manifest-Pfade → Baum (Unterordner = eigene Knoten). */
-function buildAssetFileTree(paths) {
-  const root = { children: new Map(), files: [] };
-  for (const fullPath of paths) {
-    const parts = fullPath.split("/");
-    let node = root;
-    for (let i = 0; i < parts.length; i++) {
-      const seg = parts[i];
-      if (i === parts.length - 1) {
-        node.files.push({ segment: seg, fullPath });
-      } else {
-        if (!node.children.has(seg)) {
-          node.children.set(seg, { children: new Map(), files: [] });
-        }
-        node = node.children.get(seg);
-      }
-    }
-  }
-  return root;
-}
-
-/** Sichtbare Zeilen in Baum-Reihenfolge; `collapsedKeys` = Ordner-Pfade, die zugeklappt sind. */
-function collectAssetTreeFlatRows(
-  node,
-  dir,
-  basePath,
-  collapsedKeys,
-  parentPath = "",
-  depth = 0
-) {
-  const out = [];
-  const childNames = [...node.children.keys()].sort((a, b) =>
-    a.localeCompare(b)
-  );
-  const fileRows = [...node.files].sort((a, b) =>
-    a.segment.localeCompare(b.segment)
-  );
-  for (const name of childNames) {
-    const folderPath = parentPath ? `${parentPath}/${name}` : name;
-    const folderKey = `${dir}::${folderPath}`;
-    out.push({
-      kind: "folder",
-      name,
-      folderPath,
-      folderKey,
-      dir,
-      basePath,
-      depth,
-    });
-    if (!collapsedKeys.has(folderKey)) {
-      const child = node.children.get(name);
-      out.push(
-        ...collectAssetTreeFlatRows(
-          child,
-          dir,
-          basePath,
-          collapsedKeys,
-          folderPath,
-          depth + 1
-        )
-      );
-    }
-  }
-  for (const f of fileRows) {
-    out.push({
-      kind: "file",
-      segment: f.segment,
-      fullPath: f.fullPath,
-      dir,
-      basePath,
-      depth,
-    });
-  }
-  return out;
 }
 
 function AssetSubfolderView({ dir, basePath = "/web", unifiedParentScroll = false }) {
