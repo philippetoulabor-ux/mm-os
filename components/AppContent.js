@@ -265,10 +265,13 @@ function iframeAspectHint(name) {
 const ASSET_IMG_ZOOM_MIN = 1;
 const ASSET_IMG_ZOOM_MAX = 4;
 /** Horizontal + vertikal zwischen Assets (nur bei Zoom 1). */
-const ASSET_SWIPE_MIN_DIST = 56;
-const ASSET_SWIPE_DOMINANCE = 1.12;
+const ASSET_SWIPE_MIN_DIST = 60;
+/** Abgeschlossene Geste / preventDefault: strengere Dominanz. */
+const ASSET_SWIPE_DOMINANCE = 1.2;
+/** Frühe Achsenwahl nach Lock-Pixeln: etwas lockerer als Abschluss, damit die Achse zuverlässig greift. */
+const ASSET_SWIPE_AXIS_CHOOSE_RATIO = 1.14;
 const ASSET_SWIPE_MAX_MS = 700;
-const ASSET_SWIPE_AXIS_LOCK_PX = 10;
+const ASSET_SWIPE_AXIS_LOCK_PX = 12;
 /** Ausfahren / Einfahren — bewusst langsam und weich auslaufend */
 const ASSET_SWIPE_EXIT_MS = 560;
 const ASSET_SWIPE_ENTER_MS = 520;
@@ -520,8 +523,8 @@ function AssetImageMobileZoom({
             ax > ASSET_SWIPE_AXIS_LOCK_PX ||
             ay > ASSET_SWIPE_AXIS_LOCK_PX
           ) {
-            if (ax > ay * 1.1) tr.axis = "h";
-            else if (ay > ax * 1.1) tr.axis = "v";
+            if (ax > ay * ASSET_SWIPE_AXIS_CHOOSE_RATIO) tr.axis = "h";
+            else if (ay > ax * ASSET_SWIPE_AXIS_CHOOSE_RATIO) tr.axis = "v";
           }
         }
         if (tr.axis === "h") {

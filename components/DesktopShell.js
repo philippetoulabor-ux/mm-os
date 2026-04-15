@@ -8,6 +8,7 @@ import {
   useDesktop,
 } from "@/context/DesktopContext";
 import { DesktopIcons } from "@/components/DesktopIcons";
+import { MobileEdgeBackGesture } from "@/components/MobileEdgeBackGesture";
 import { OSWindow } from "@/components/OSWindow";
 import { SiteHeader } from "@/components/SiteHeader";
 
@@ -102,6 +103,7 @@ function DesktopShellInner() {
         className="relative z-10 min-h-0 flex-1 overflow-visible"
       >
         <DesktopLayers />
+        <MobileEdgeBackGesture />
       </div>
     </div>
   );
