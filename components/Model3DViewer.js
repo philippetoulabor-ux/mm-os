@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef } from "react";
 import * as THREE from "three";
 import { TrackballControls } from "three/examples/jsm/controls/TrackballControls.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
 import { useDesktop } from "@/context/DesktopContext";
 
@@ -248,9 +249,20 @@ export function Model3DViewer({
           mesh.scale.setScalar(scale);
           scene.add(mesh);
         } else if (isGltf) {
-          const gltf = await new Promise((resolve, reject) => {
-            new GLTFLoader().load(modelUrl, resolve, undefined, reject);
-          });
+          const loader = new GLTFLoader();
+          const draco = new DRACOLoader();
+          draco.setDecoderPath(
+            "https://www.gstatic.com/draco/versioned/decoders/1.5.7/"
+          );
+          loader.setDRACOLoader(draco);
+          let gltf;
+          try {
+            gltf = await new Promise((resolve, reject) => {
+              loader.load(modelUrl, resolve, undefined, reject);
+            });
+          } finally {
+            draco.dispose();
+          }
           if (disposed) return;
           const root = gltf.scene;
           centerAndScaleObject(root);

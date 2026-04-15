@@ -741,19 +741,53 @@ export function DesktopProvider({ children }) {
     const key = assetFileDedupeKey({ dir, file, basePath });
 
     setWindows((prev) => {
+      // #region agent log
+      const __u0 =
+        typeof performance !== "undefined" ? performance.now() : 0;
+      const __prevLen = prev.length;
+      // #endregion
       const existing = findAssetFileWindow(prev, key);
       if (existing) {
         zCounter.current += 1;
-        return prev.map((w) =>
+        const __out = prev.map((w) =>
           w.id === existing.id
             ? { ...w, minimized: false, z: zCounter.current }
             : w
         );
+        // #region agent log
+        const __u1 =
+          typeof performance !== "undefined" ? performance.now() : 0;
+        fetch("http://127.0.0.1:7505/ingest/8557e868-c048-42c2-9c50-6865df1f9091", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Debug-Session-Id": "f48f9a",
+          },
+          body: JSON.stringify({
+            sessionId: "f48f9a",
+            runId: "pre-fix",
+            hypothesisId: "A",
+            location: "DesktopContext.js:openAssetFileWindow:setWindows:existing",
+            message: "asset window focus existing",
+            data: {
+              updaterMs: __u1 - __u0,
+              prevLen: __prevLen,
+              branch: "existing",
+            },
+            timestamp: Date.now(),
+          }),
+        }).catch(() => {});
+        // #endregion
+        return __out;
       }
 
       zCounter.current += 1;
       const id = `assetFile-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
       if (isMobileViewport()) {
+        // #region agent log
+        const __m0 =
+          typeof performance !== "undefined" ? performance.now() : 0;
+        // #endregion
         const pos = centerWindow(def.defaultSize);
         const pb = {
           x: pos.x,
@@ -762,6 +796,29 @@ export function DesktopProvider({ children }) {
           h: def.defaultSize.h,
         };
         const fs = getDesktopLayerFullscreenRect();
+        // #region agent log
+        const __m1 =
+          typeof performance !== "undefined" ? performance.now() : 0;
+        fetch("http://127.0.0.1:7505/ingest/8557e868-c048-42c2-9c50-6865df1f9091", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Debug-Session-Id": "f48f9a",
+          },
+          body: JSON.stringify({
+            sessionId: "f48f9a",
+            runId: "pre-fix",
+            hypothesisId: "B",
+            location: "DesktopContext.js:openAssetFileWindow:mobileLayout",
+            message: "centerWindow+fullscreen rect",
+            data: {
+              layoutHelpersMs: __m1 - __m0,
+              prevLen: __prevLen,
+            },
+            timestamp: Date.now(),
+          }),
+        }).catch(() => {});
+        // #endregion
         return [
           ...prev,
           {
@@ -778,8 +835,35 @@ export function DesktopProvider({ children }) {
           },
         ];
       }
+      // #region agent log
+      const __d0 = typeof performance !== "undefined" ? performance.now() : 0;
+      // #endregion
       const pos = centerWindow(def.defaultSize);
-      return [
+      // #region agent log
+      const __d1 = typeof performance !== "undefined" ? performance.now() : 0;
+      fetch("http://127.0.0.1:7505/ingest/8557e868-c048-42c2-9c50-6865df1f9091", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Debug-Session-Id": "f48f9a",
+        },
+        body: JSON.stringify({
+          sessionId: "f48f9a",
+          runId: "pre-fix",
+          hypothesisId: "B",
+          location: "DesktopContext.js:openAssetFileWindow:desktopCenter",
+          message: "centerWindow desktop branch",
+          data: {
+            centerWindowMs: __d1 - __d0,
+            prevLen: __prevLen,
+          },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      const __u2 =
+        typeof performance !== "undefined" ? performance.now() : 0;
+      // #endregion
+      const __newWin = [
         ...prev,
         {
           id,
@@ -797,6 +881,30 @@ export function DesktopProvider({ children }) {
           assetFile: { dir, file, basePath },
         },
       ];
+      // #region agent log
+      const __u3 =
+        typeof performance !== "undefined" ? performance.now() : 0;
+      fetch("http://127.0.0.1:7505/ingest/8557e868-c048-42c2-9c50-6865df1f9091", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Debug-Session-Id": "f48f9a",
+        },
+        body: JSON.stringify({
+          sessionId: "f48f9a",
+          runId: "pre-fix",
+          hypothesisId: "C",
+          location: "DesktopContext.js:openAssetFileWindow:newWindowArray",
+          message: "spread new window row",
+          data: {
+            buildArrayMs: __u3 - __u2,
+            prevLen: __prevLen,
+          },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
+      return __newWin;
     });
   }, []);
 

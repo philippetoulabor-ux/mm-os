@@ -1620,12 +1620,59 @@ function AssetSubfolderView({ dir, basePath = "/web", unifiedParentScroll = fals
                   style={padStyle}
                   onKeyDownCapture={(e) => blockArrowScrollOnRow(e, isDesktopKb)}
                   onClick={() => {
+                    // #region agent log
+                    const __t0 = typeof performance !== "undefined" ? performance.now() : 0;
+                    // #endregion
                     setSelectedIndex(index);
                     openAssetFileWindow({
                       dir: row.dir,
                       file: row.fullPath,
                       basePath: row.basePath,
                     });
+                    // #region agent log
+                    const __t1 = typeof performance !== "undefined" ? performance.now() : 0;
+                    fetch("http://127.0.0.1:7505/ingest/8557e868-c048-42c2-9c50-6865df1f9091", {
+                      method: "POST",
+                      headers: {
+                        "Content-Type": "application/json",
+                        "X-Debug-Session-Id": "f48f9a",
+                      },
+                      body: JSON.stringify({
+                        sessionId: "f48f9a",
+                        runId: "pre-fix",
+                        hypothesisId: "D",
+                        location: "AppContent.js:AssetSubfolderView:fileRowClick",
+                        message: "file row click after sync work",
+                        data: {
+                          handlerMs: __t1 - __t0,
+                          index,
+                          flatRowsLen: flatRows.length,
+                        },
+                        timestamp: Date.now(),
+                      }),
+                    }).catch(() => {});
+                    if (typeof requestAnimationFrame !== "undefined") {
+                      requestAnimationFrame(() => {
+                        const __t2 = performance.now();
+                        fetch("http://127.0.0.1:7505/ingest/8557e868-c048-42c2-9c50-6865df1f9091", {
+                          method: "POST",
+                          headers: {
+                            "Content-Type": "application/json",
+                            "X-Debug-Session-Id": "f48f9a",
+                          },
+                          body: JSON.stringify({
+                            sessionId: "f48f9a",
+                            runId: "pre-fix",
+                            hypothesisId: "E",
+                            location: "AppContent.js:AssetSubfolderView:fileRowClick:raf",
+                            message: "time to first rAF after click",
+                            data: { msSinceClickStart: __t2 - __t0, index },
+                            timestamp: Date.now(),
+                          }),
+                        }).catch(() => {});
+                      });
+                    }
+                    // #endregion
                   }}
                   className={`flex w-full min-w-0 items-center gap-2 rounded px-1 py-1 text-left text-zinc-900 underline decoration-zinc-400 md:hover:bg-zinc-100 md:hover:decoration-zinc-900 ${
                     isDesktopKb && index === selectedIndex ? "bg-zinc-100" : ""

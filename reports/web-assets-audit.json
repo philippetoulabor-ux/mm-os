@@ -1,0 +1,408 @@
+{
+  "generatedAt": "2026-04-15T07:17:15.769Z",
+  "webRoot": "public/web",
+  "totalFiles": 92,
+  "totalBytes": 105801984,
+  "topLargest": [
+    {
+      "path": "LuckyStar_candle/ls-candle-zeitraffer.mp4",
+      "bytes": 17190822,
+      "kind": "video"
+    },
+    {
+      "path": "x-bock/x-bock-sit-table.webp",
+      "bytes": 7628316,
+      "kind": "image"
+    },
+    {
+      "path": "LuckyStar_candle/Luckystar_Candles_zeitraffer.mp4",
+      "bytes": 6308050,
+      "kind": "video"
+    },
+    {
+      "path": "threads/smiley-threads/smiley-lamp-2.webp",
+      "bytes": 4247528,
+      "kind": "image"
+    },
+    {
+      "path": "x-bock/x-bock-2.webp",
+      "bytes": 4060534,
+      "kind": "image"
+    },
+    {
+      "path": "x-bock/x-bock-stand-desk.webp",
+      "bytes": 3990326,
+      "kind": "image"
+    },
+    {
+      "path": "Crashbox/Crashbox.pdf",
+      "bytes": 3600384,
+      "kind": "other"
+    },
+    {
+      "path": "LuckyStar_candle/candle.glb",
+      "bytes": 3220724,
+      "kind": "gltf"
+    },
+    {
+      "path": "x-bock/sheet-metal-x-bock.webp",
+      "bytes": 2802532,
+      "kind": "image"
+    },
+    {
+      "path": "x-bock/x-bock-stand.webp",
+      "bytes": 2782142,
+      "kind": "image"
+    },
+    {
+      "path": "x-bock/x-bock-3.webp",
+      "bytes": 2612936,
+      "kind": "image"
+    },
+    {
+      "path": "x-bock/sheet-metal-x-bock-2.webp",
+      "bytes": 2550080,
+      "kind": "image"
+    },
+    {
+      "path": "x-bock/x-bock-sit.webp",
+      "bytes": 2545956,
+      "kind": "image"
+    },
+    {
+      "path": "x-bock/x-bock.webp",
+      "bytes": 2443294,
+      "kind": "image"
+    },
+    {
+      "path": "threads/woven-threads/weaving-lamp.webp",
+      "bytes": 2369390,
+      "kind": "image"
+    },
+    {
+      "path": "grillz/wax-on-teeth-model.webp",
+      "bytes": 2023928,
+      "kind": "image"
+    },
+    {
+      "path": "grillz/3+1_textured-t.webp",
+      "bytes": 1956566,
+      "kind": "image"
+    },
+    {
+      "path": "threads/smiley-threads/thread-lamp-2.webp",
+      "bytes": 1864040,
+      "kind": "image"
+    },
+    {
+      "path": "grillz/star+1-t.webp",
+      "bytes": 1686504,
+      "kind": "image"
+    },
+    {
+      "path": "grillz/4-b.webp",
+      "bytes": 1639600,
+      "kind": "image"
+    },
+    {
+      "path": "grillz/weedleaf+4-framed.webp",
+      "bytes": 1550626,
+      "kind": "image"
+    },
+    {
+      "path": "threads/hanging-threads/hanging-threads-1.webp",
+      "bytes": 1431900,
+      "kind": "image"
+    },
+    {
+      "path": "threads/coloring-threads/threads-carpet-back.webp",
+      "bytes": 1406192,
+      "kind": "image"
+    },
+    {
+      "path": "threads/coloring-threads/threads-carpet-front.webp",
+      "bytes": 1256054,
+      "kind": "image"
+    },
+    {
+      "path": "step/IMG_9055.webp",
+      "bytes": 1220916,
+      "kind": "image"
+    },
+    {
+      "path": "threads/smiley-threads/smiley-lamp-3.webp",
+      "bytes": 1016396,
+      "kind": "image"
+    },
+    {
+      "path": "threads/smiley-threads/smiley-lamp-1.webp",
+      "bytes": 986726,
+      "kind": "image"
+    },
+    {
+      "path": "threads/smiley-threads/thread-lamp-process.webp",
+      "bytes": 978596,
+      "kind": "image"
+    },
+    {
+      "path": "threads/smiley-threads/thread-lamp-1.webp",
+      "bytes": 937652,
+      "kind": "image"
+    },
+    {
+      "path": "grillz/6-textured-b.webp",
+      "bytes": 921416,
+      "kind": "image"
+    },
+    {
+      "path": "threads/coloring-threads/coloring-threads-1.webp",
+      "bytes": 798504,
+      "kind": "image"
+    },
+    {
+      "path": "mm-series/DSCF6622.webp",
+      "bytes": 741988,
+      "kind": "image"
+    },
+    {
+      "path": "Sound-System/DSCF9166.webp",
+      "bytes": 722380,
+      "kind": "image"
+    },
+    {
+      "path": "threads/woven-threads/woven-lamp-1.webp",
+      "bytes": 689602,
+      "kind": "image"
+    },
+    {
+      "path": "threads/hanging-threads/hanging-threads-2.webp",
+      "bytes": 661682,
+      "kind": "image"
+    },
+    {
+      "path": "grillz/wax-model-4-b.webp",
+      "bytes": 633444,
+      "kind": "image"
+    },
+    {
+      "path": "mm-series/DSCF6553.webp",
+      "bytes": 610832,
+      "kind": "image"
+    },
+    {
+      "path": "Sound-System/IMG_7178 Kopie.webp",
+      "bytes": 596678,
+      "kind": "image"
+    },
+    {
+      "path": "mm-series/DSCF6556.webp",
+      "bytes": 561900,
+      "kind": "image"
+    },
+    {
+      "path": "threads/woven-threads/weaving-frame.webp",
+      "bytes": 560478,
+      "kind": "image"
+    },
+    {
+      "path": "mm-series/DSCF6560.webp",
+      "bytes": 553996,
+      "kind": "image"
+    },
+    {
+      "path": "clay/IMG_7627.webp",
+      "bytes": 519702,
+      "kind": "image"
+    },
+    {
+      "path": "threads/smiley-threads/smiley-lamp-1.1.webp",
+      "bytes": 501098,
+      "kind": "image"
+    },
+    {
+      "path": "step/IMG_9075.webp",
+      "bytes": 485860,
+      "kind": "image"
+    },
+    {
+      "path": "threads/smiley-threads/ smiley-process.webp",
+      "bytes": 470306,
+      "kind": "image"
+    },
+    {
+      "path": "mm-series/DSCF6551.webp",
+      "bytes": 453574,
+      "kind": "image"
+    },
+    {
+      "path": "threads/smiley-threads/thread-lamps.webp",
+      "bytes": 448736,
+      "kind": "image"
+    },
+    {
+      "path": "threads/smiley-threads/smiley-lamp-4.webp",
+      "bytes": 423254,
+      "kind": "image"
+    },
+    {
+      "path": "mm-series/DSCF6557.webp",
+      "bytes": 407864,
+      "kind": "image"
+    },
+    {
+      "path": "LuckyStar_candle/DSCF5505-2.jpg",
+      "bytes": 407479,
+      "kind": "image"
+    },
+    {
+      "path": "threads/coloring-threads/coloring-threads-3.webp",
+      "bytes": 390332,
+      "kind": "image"
+    },
+    {
+      "path": "mm-series/WhatsApp Image 2025-02-17 at 19.34.23 Kopie.jpeg",
+      "bytes": 373395,
+      "kind": "image"
+    },
+    {
+      "path": "mm-series/WhatsApp Image 2025-02-17 at 19.34.22 Kopie.webp",
+      "bytes": 373124,
+      "kind": "image"
+    },
+    {
+      "path": "mm-series/WhatsApp Image 2025-02-17 at 19.34.19.webp",
+      "bytes": 341658,
+      "kind": "image"
+    },
+    {
+      "path": "threads/smiley-threads/thread-lamps-2.webp",
+      "bytes": 313110,
+      "kind": "image"
+    },
+    {
+      "path": "mm-series/IMG_2225.webp",
+      "bytes": 294006,
+      "kind": "image"
+    },
+    {
+      "path": "buttons/pauseButton.jpg",
+      "bytes": 290271,
+      "kind": "image"
+    },
+    {
+      "path": "buttons/playButton.jpg",
+      "bytes": 259117,
+      "kind": "image"
+    },
+    {
+      "path": "threads/hanging-threads/hanging-threads-1.1.webp",
+      "bytes": 234262,
+      "kind": "image"
+    },
+    {
+      "path": "threads/coloring-threads/coloring-threads-2.webp",
+      "bytes": 224932,
+      "kind": "image"
+    },
+    {
+      "path": "step/fräsform fusion render.pdf",
+      "bytes": 171515,
+      "kind": "other"
+    },
+    {
+      "path": "step/fräsform fusion render.webp",
+      "bytes": 141200,
+      "kind": "image"
+    },
+    {
+      "path": "step/IMG_9586.webp",
+      "bytes": 126618,
+      "kind": "image"
+    },
+    {
+      "path": "threads/woven-threads/weaving-1.jpg",
+      "bytes": 118491,
+      "kind": "image"
+    },
+    {
+      "path": "logo/logo_web.stl",
+      "bytes": 93684,
+      "kind": "other"
+    },
+    {
+      "path": "step/IMG_9578.webp",
+      "bytes": 90070,
+      "kind": "image"
+    },
+    {
+      "path": "step/IMG_2372.webp",
+      "bytes": 87414,
+      "kind": "image"
+    },
+    {
+      "path": "threads/woven-threads/weaving-3.jpg",
+      "bytes": 85327,
+      "kind": "image"
+    },
+    {
+      "path": "step/IMG_2369.webp",
+      "bytes": 83722,
+      "kind": "image"
+    },
+    {
+      "path": "clay/DSCF5194.webp",
+      "bytes": 82950,
+      "kind": "image"
+    },
+    {
+      "path": "step/IMG_2371.webp",
+      "bytes": 81514,
+      "kind": "image"
+    },
+    {
+      "path": "threads/woven-threads/weaving-4.jpg",
+      "bytes": 80939,
+      "kind": "image"
+    },
+    {
+      "path": "step/IMG_2373.webp",
+      "bytes": 76692,
+      "kind": "image"
+    },
+    {
+      "path": "step/IMG_2368.webp",
+      "bytes": 73776,
+      "kind": "image"
+    },
+    {
+      "path": "step/IMG_2370.webp",
+      "bytes": 67012,
+      "kind": "image"
+    },
+    {
+      "path": "clay/DSCF5180.webp",
+      "bytes": 65672,
+      "kind": "image"
+    },
+    {
+      "path": "clay/DSCF5182.webp",
+      "bytes": 64074,
+      "kind": "image"
+    },
+    {
+      "path": "clay/DSCF5191.webp",
+      "bytes": 63886,
+      "kind": "image"
+    },
+    {
+      "path": "clay/DSCF5192.webp",
+      "bytes": 63408,
+      "kind": "image"
+    },
+    {
+      "path": "threads/woven-threads/weaving-2.jpg",
+      "bytes": 57372,
+      "kind": "image"
+    }
+  ]
+}

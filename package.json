@@ -4,11 +4,16 @@
   "private": true,
   "scripts": {
     "sync:web": "node scripts/sync-web-assets.mjs",
+    "audit:web": "node scripts/audit-web-assets.mjs",
+    "manifest:web": "node scripts/write-web-manifest.mjs",
+    "optimize:web": "node scripts/optimize-web-assets.mjs",
     "clean": "rm -rf .next",
     "dev": "WATCHPACK_POLLING=1 next dev",
     "dev:clean": "npm run clean && WATCHPACK_POLLING=1 next dev",
     "build": "next build",
+    "build:analyze": "ANALYZE=true next build",
     "start": "next start",
+    "lighthouse": "node scripts/run-lighthouse.mjs",
     "lint": "next lint"
   },
   "dependencies": {
@@ -18,9 +23,14 @@
     "three": "^0.160.1"
   },
   "devDependencies": {
+    "@gltf-transform/cli": "^4.3.0",
+    "@next/bundle-analyzer": "^14.2.0",
     "eslint": "^8",
     "eslint-config-next": "14.2.0",
+    "ffmpeg-static": "^5.3.0",
+    "lighthouse": "^13.1.0",
     "postcss": "^8",
+    "sharp": "^0.34.5",
     "tailwindcss": "^3.4.1"
   }
 }

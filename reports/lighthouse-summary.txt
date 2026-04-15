@@ -1,0 +1,8 @@
+URL: http://127.0.0.1:3010
+Date: 2026-04-15T07:20:36.396Z
+Lighthouse: --preset=desktop --only-categories=performance
+Performance score: 66
+First Contentful Paint: 210 ms
+Total Blocking Time: 87 ms
+Speed Index: 1828 ms
+Largest Contentful Paint: 6514 ms
