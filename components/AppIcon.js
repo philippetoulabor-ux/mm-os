@@ -64,39 +64,50 @@ export function NotesAppIcon({ className = "" }) {
 }
 
 /**
- * @param {{ app: { id: string; icon: string; iconSrc?: string }; variant?: "default" | "compact" | "desktop" | "desktopGrid" }} props
+ * @param {{ app: { id: string; icon: string; iconSrc?: string }; variant?: "default" | "compact" | "desktop" | "desktopGrid" | "finderList" }} props
  */
 export function AppIcon({ app, variant = "default" }) {
   if (app.id === "notes") {
     const sz =
       variant === "compact"
         ? "h-6 w-6"
-        : variant === "desktopGrid"
-          ? "h-14 w-14"
-          : variant === "desktop"
-            ? "h-10 w-10"
-            : "h-9 w-9";
+        : variant === "finderList"
+          ? "h-[37.5px] w-[37.5px]"
+          : variant === "desktopGrid"
+            ? "h-14 w-14"
+            : variant === "desktop"
+              ? "h-10 w-10"
+              : "h-9 w-9";
     return <NotesAppIcon className={sz} />;
   }
   if (app.iconSrc) {
     const sz =
       variant === "compact"
         ? "h-6 w-6"
-        : variant === "desktopGrid"
-          ? "h-14 w-14"
-          : variant === "desktop"
-            ? "h-10 w-10"
-            : "h-9 w-9";
+        : variant === "finderList"
+          ? "h-[37.5px] w-[37.5px]"
+          : variant === "desktopGrid"
+            ? "h-14 w-14"
+            : variant === "desktop"
+              ? "h-10 w-10"
+              : "h-9 w-9";
+    const isSvg = app.iconSrc.endsWith(".svg");
     return (
       <span
-        className={`inline-flex overflow-hidden rounded-full ${sz} shrink-0`}
+        className={`inline-flex overflow-hidden ${
+          isSvg ? "rounded-md" : "rounded-full"
+        } ${sz} shrink-0`}
         aria-hidden
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={app.iconSrc}
           alt=""
-          className="h-full w-full scale-[1.26] object-cover object-center"
+          className={
+            isSvg
+              ? "h-full w-full object-contain object-center p-0.5"
+              : "h-full w-full scale-[1.26] object-cover object-center"
+          }
           draggable={false}
         />
       </span>
@@ -105,11 +116,13 @@ export function AppIcon({ app, variant = "default" }) {
   const text =
     variant === "compact"
       ? "text-lg leading-none"
-      : variant === "desktopGrid"
-        ? "text-[3.5rem] leading-none"
-        : variant === "desktop"
-          ? "text-[2.5rem] leading-none"
-          : "text-4xl leading-none";
+      : variant === "finderList"
+        ? "text-4xl leading-none"
+        : variant === "desktopGrid"
+          ? "text-[3.5rem] leading-none"
+          : variant === "desktop"
+            ? "text-[2.5rem] leading-none"
+            : "text-4xl leading-none";
   return (
     <span className={`inline-flex items-center justify-center ${text}`}>
       {app.icon}

@@ -1,23 +1,82 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { STEP_SLIDESHOW_DEFAULT_FILES } from "@/lib/desktopWidgets";
-import { fileHref, listSlideImageFiles } from "@/lib/webAssetUrls";
+import { getSlideshowRestrictList } from "@/lib/desktopWidgets";
+import {
+  fileHref,
+  isSlideVideoFile,
+  listSlideshowMediaFiles,
+} from "@/lib/webAssetUrls";
 
-function ArrowButton({ dir, label, onClick }) {
+const IMAGE_SLIDE_MS = 5000;
+const SLIDE_TRANSITION_MS = 480;
+const SLIDE_EASE = "cubic-bezier(0.4, 0, 0.2, 1)";
+
+/**
+ * @param {{
+ *   href: string,
+ *   isVideo: boolean,
+ *   videoActive: boolean,
+ *   onNext: () => void,
+ *   onTimeUpdate: (e: React.SyntheticEvent<HTMLVideoElement>) => void,
+ * }} props
+ */
+function SlideshowSlideMedia({
+  href,
+  isVideo,
+  videoActive,
+  onNext,
+  onTimeUpdate,
+}) {
+  if (isVideo) {
+    return (
+      // eslint-disable-next-line jsx-a11y/media-has-caption
+      <video
+        key={href}
+        src={href}
+        className="absolute inset-0 h-full w-full object-contain"
+        muted
+        playsInline
+        autoPlay
+        onEnded={videoActive ? onNext : () => {}}
+        onError={videoActive ? onNext : () => {}}
+        onTimeUpdate={videoActive ? onTimeUpdate : undefined}
+        aria-label="Slideshow-Video"
+      />
+    );
+  }
+  return (
+    /* eslint-disable-next-line @next/next/no-img-element */
+    <img
+      key={href}
+      src={href}
+      alt=""
+      className="absolute inset-0 h-full w-full object-contain"
+      draggable={false}
+    />
+  );
+}
+
+/** Gleiche Pfeil-Buttons wie in der Slideshow — auch für Asset-Fenster im Widget-Look. */
+export function WidgetChromeArrowButton({ dir, label, onClick, disabled }) {
   return (
     <button
       type="button"
       data-mm-widget-no-drag
       aria-label={label}
+      disabled={!!disabled}
       onClick={(e) => {
         e.stopPropagation();
         onClick();
       }}
-      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-black text-white shadow-md transition-transform active:scale-95 md:h-11 md:w-11"
+      className={`flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full border-0 bg-[var(--mm-desktop-bg)] text-[var(--mm-shell-text)] transition duration-200 ease-out ${
+        disabled
+          ? "cursor-not-allowed opacity-25"
+          : "opacity-50 hover:opacity-100 focus-visible:opacity-100 active:scale-95 active:opacity-100"
+      }`}
     >
       <svg
-        className="h-5 w-5"
+        className="h-4 w-4 shrink-0"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
@@ -41,34 +100,40 @@ function ArrowButton({ dir, label, onClick }) {
  *   widget: import('@/lib/desktopWidgets').DesktopSlideshowWidget,
  *   layout: 'desktop' | 'mobile',
  *   dragHandleProps?: React.HTMLAttributes<HTMLDivElement>,
+ *   stackNavigation?: { onNext: () => void, onPrev: () => void } | null,
  * }} props
  */
-function slideshowRestrictTo(widget) {
-  if (widget.slideShowAll) return undefined;
-  if (Array.isArray(widget.slideFiles)) return widget.slideFiles;
-  if (widget.assetDir === "step") return STEP_SLIDESHOW_DEFAULT_FILES;
-  return undefined;
-}
-
-export function SlideshowWidget({ widget, layout, dragHandleProps }) {
+export function SlideshowWidget({
+  widget,
+  layout,
+  dragHandleProps,
+  stackNavigation = null,
+}) {
   const basePath = widget.basePath ?? "/web";
   const files = useMemo(
     () =>
-      listSlideImageFiles(widget.assetDir, basePath, {
-        restrictTo: slideshowRestrictTo(widget),
+      listSlideshowMediaFiles(widget.assetDir, basePath, {
+        restrictTo: getSlideshowRestrictList(widget),
       }),
     [widget, basePath]
   );
   const [index, setIndex] = useState(0);
+  const [prevIndex, setPrevIndex] = useState(null);
+  const [direction, setDirection] = useState(1);
+  const [slideReady, setSlideReady] = useState(false);
 
   useEffect(() => {
     setIndex(0);
+    setPrevIndex(null);
+    setSlideReady(false);
   }, [widget.assetDir, widget.id]);
 
   const n = files.length;
 
   useEffect(() => {
     setIndex((i) => (n === 0 ? 0 : Math.min(i, n - 1)));
+    setPrevIndex(null);
+    setSlideReady(false);
   }, [n]);
 
   const safeIndex = n === 0 ? 0 : Math.min(index, n - 1);
@@ -78,23 +143,98 @@ export function SlideshowWidget({ widget, layout, dragHandleProps }) {
     : null;
 
   const goPrev = useCallback(() => {
-    if (n <= 1) return;
+    if (n <= 1 || prevIndex !== null) return;
+    setDirection(-1);
+    setPrevIndex(safeIndex);
     setIndex((i) => (i - 1 + n) % n);
-  }, [n]);
+  }, [n, prevIndex, safeIndex]);
 
   const goNext = useCallback(() => {
-    if (n <= 1) return;
+    if (n <= 1 || prevIndex !== null) return;
+    setDirection(1);
+    setPrevIndex(safeIndex);
     setIndex((i) => (i + 1) % n);
-  }, [n]);
+  }, [n, prevIndex, safeIndex]);
+
+  const isVideoSlide =
+    currentFile != null && isSlideVideoFile(currentFile);
+
+  const [videoProgress, setVideoProgress] = useState(0);
+
+  useEffect(() => {
+    setVideoProgress(0);
+  }, [safeIndex, src, isVideoSlide]);
+
+  const handleVideoTimeUpdate = useCallback((e) => {
+    const v = e.currentTarget;
+    if (!v.duration || !Number.isFinite(v.duration) || v.duration <= 0) return;
+    setVideoProgress(Math.min(1, v.currentTime / v.duration));
+  }, []);
+
+  /** Auto-Advance nur wenn der 5s-Balken fertig ist — gleiche Zeitbasis wie die CSS-Animation (kein setInterval-Drift). */
+  const handleSegmentFillEnd = useCallback(
+    (e) => {
+      const names = String(e.animationName || "")
+        .split(",")
+        .map((s) => s.trim());
+      if (!names.includes("mm-slideshow-segment-fill")) return;
+      e.stopPropagation();
+      if (n <= 1 || prevIndex !== null || isVideoSlide) return;
+      setDirection(1);
+      setPrevIndex(safeIndex);
+      setIndex((i) => (i + 1) % n);
+    },
+    [n, prevIndex, isVideoSlide, safeIndex]
+  );
+
+  useEffect(() => {
+    if (prevIndex === null) {
+      setSlideReady(false);
+      return;
+    }
+    setSlideReady(false);
+    const id = requestAnimationFrame(() => {
+      requestAnimationFrame(() => setSlideReady(true));
+    });
+    return () => cancelAnimationFrame(id);
+  }, [prevIndex, index]);
+
+  useEffect(() => {
+    if (prevIndex === null) return;
+    const id = window.setTimeout(() => {
+      setPrevIndex(null);
+      setSlideReady(false);
+    }, SLIDE_TRANSITION_MS);
+    return () => window.clearTimeout(id);
+  }, [prevIndex, index]);
 
   const isMobile = layout === "mobile";
 
   const rootDrag =
     layout === "desktop" && dragHandleProps ? dragHandleProps : {};
 
+  const transitionCss = slideReady
+    ? `transform ${SLIDE_TRANSITION_MS}ms ${SLIDE_EASE}`
+    : "none";
+
+  const slideMedia = (slideIdx, videoActive) => {
+    const file = files[slideIdx];
+    if (!file) return null;
+    const href = fileHref(basePath, widget.assetDir, file);
+    return (
+      <SlideshowSlideMedia
+        href={href}
+        isVideo={isSlideVideoFile(file)}
+        videoActive={videoActive}
+        onNext={goNext}
+        onTimeUpdate={handleVideoTimeUpdate}
+      />
+    );
+  };
+
   return (
     <div
-      className={`relative flex flex-col overflow-hidden rounded-lg border border-black/10 bg-white/55 shadow-lg shadow-black/10 backdrop-blur-xl dark:border-white/10 dark:bg-zinc-800/75 dark:shadow-black/40 ${
+      className={`relative flex flex-col overflow-hidden rounded-lg border-[2.25px] border-black bg-white shadow-none ${
         isMobile
           ? /* Mobile Home: 3×2 Rasterzellen, rechts */
             "ml-auto aspect-[3/2] w-[75%] max-w-full shrink-0"
@@ -105,42 +245,100 @@ export function SlideshowWidget({ widget, layout, dragHandleProps }) {
       <div className="absolute left-0 right-0 top-0 z-20 w-full px-1.5 pt-1">
         <div className="flex w-full min-w-0 items-center gap-1 py-0.5">
           {n > 0 &&
-            files.map((_, i) => (
-              <span
-                key={i}
-                className={`h-1 min-w-0 flex-1 rounded-full transition-colors ${
-                  i === safeIndex
-                    ? "bg-zinc-900 dark:bg-white"
-                    : "bg-zinc-900/35 dark:bg-white/40"
-                }`}
-              />
-            ))}
+            files.map((_, i) => {
+              const active = i === safeIndex;
+              if (!active) {
+                return (
+                  <span
+                    key={i}
+                    className="h-1 min-w-0 flex-1 rounded-full bg-zinc-200 opacity-25"
+                    aria-hidden
+                  />
+                );
+              }
+              return (
+                <span
+                  key={i}
+                  className="relative h-1 min-w-0 flex-1 overflow-hidden rounded-full bg-zinc-200/50"
+                  aria-hidden
+                >
+                  {isVideoSlide ? (
+                    <span
+                      className="absolute left-0 top-0 bottom-0 rounded-full bg-black/50"
+                      style={{ width: `${videoProgress * 100}%` }}
+                    />
+                  ) : (
+                    <span
+                      key={`fill-${safeIndex}-${currentFile}`}
+                      className="mm-slideshow-segment-fill block h-full w-full bg-black/50"
+                      style={{
+                        animationDuration: `${IMAGE_SLIDE_MS}ms`,
+                      }}
+                      onAnimationEnd={handleSegmentFillEnd}
+                    />
+                  )}
+                </span>
+              );
+            })}
         </div>
       </div>
 
-      <div className="relative min-h-0 flex-1">
+      <div className="relative min-h-0 flex-1 overflow-hidden">
         {src ? (
-          <>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={src}
-              alt=""
-              className="absolute inset-0 h-full w-full object-contain"
-              draggable={false}
-            />
-          </>
+          prevIndex != null ? (
+            <>
+              <div
+                className="absolute inset-0 z-10 will-change-transform"
+                style={{
+                  transform: slideReady
+                    ? `translateX(${-direction * 100}%)`
+                    : "translateX(0)",
+                  transition: transitionCss,
+                }}
+              >
+                {slideMedia(prevIndex, false)}
+              </div>
+              <div
+                className="absolute inset-0 z-[11] will-change-transform"
+                style={{
+                  transform: slideReady
+                    ? "translateX(0)"
+                    : `translateX(${direction * 100}%)`,
+                  transition: transitionCss,
+                }}
+              >
+                {slideMedia(safeIndex, true)}
+              </div>
+            </>
+          ) : (
+            slideMedia(safeIndex, true)
+          )
         ) : (
-          <div className="absolute inset-0 flex items-center justify-center p-4 text-center text-sm text-zinc-600 dark:text-white/80">
-            Keine Bilder in diesem Ordner (Manifest).
+          <div className="absolute inset-0 flex items-center justify-center p-4 text-center text-sm text-zinc-600">
+            Keine Bilder oder Videos in diesem Ordner (Manifest).
           </div>
         )}
 
         <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex items-end justify-between p-2 md:p-3">
           <div className="pointer-events-auto">
-            <ArrowButton dir="left" label="Vorheriges Bild" onClick={goPrev} />
+            <WidgetChromeArrowButton
+              dir="left"
+              label={
+                stackNavigation ? "Vorheriges Widget" : "Vorheriges Bild"
+              }
+              onClick={
+                stackNavigation ? stackNavigation.onPrev : goPrev
+              }
+              disabled={!stackNavigation && prevIndex != null}
+            />
           </div>
           <div className="pointer-events-auto">
-            <ArrowButton dir="right" label="Nächstes Bild" onClick={goNext} />
+            <WidgetChromeArrowButton
+              dir="right"
+              label={stackNavigation ? "Nächstes Widget" : "Nächstes Bild"}
+              onClick={stackNavigation ? stackNavigation.onNext : goNext}
+              disabled={!stackNavigation && prevIndex != null}
+            />
           </div>
         </div>
       </div>

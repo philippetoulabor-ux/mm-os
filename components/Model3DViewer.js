@@ -100,6 +100,8 @@ export function Model3DViewer({
   background,
   windowId,
   unifiedParentScroll = false,
+  /** z. B. Finder-Widget-Fenster: feste Größe (`DESKTOP_WIDGET_FRAME_PX`), kein `fitWindowToContentSize`. */
+  lockWindowSize = false,
 }) {
   const wrapRef = useRef(null);
   const canvasHostRef = useRef(null);
@@ -108,9 +110,10 @@ export function Model3DViewer({
 
   const fitFromDimensions = useCallback(
     (w, h) => {
+      if (lockWindowSize) return;
       if (windowId) fitWindowToContentSize(windowId, w, h);
     },
-    [windowId, fitWindowToContentSize]
+    [windowId, fitWindowToContentSize, lockWindowSize]
   );
 
   const onBgImgLoad = useCallback(
@@ -136,10 +139,10 @@ export function Model3DViewer({
       fittedNoBg.current = false;
       return;
     }
-    if (!windowId || fittedNoBg.current) return;
+    if (lockWindowSize || !windowId || fittedNoBg.current) return;
     fittedNoBg.current = true;
     fitFromDimensions(1, 1);
-  }, [background, windowId, fitFromDimensions]);
+  }, [background, windowId, fitFromDimensions, lockWindowSize]);
 
   useEffect(() => {
     const host = canvasHostRef.current;
@@ -373,7 +376,9 @@ export function Model3DViewer({
       )}
       <div
         ref={canvasHostRef}
-        className="relative z-10 h-full min-h-[400px] w-full min-w-0"
+        className={`relative z-10 h-full w-full min-w-0 ${
+          lockWindowSize ? "min-h-0" : "min-h-[400px]"
+        }`}
       />
     </div>
   );

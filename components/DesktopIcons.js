@@ -4,7 +4,6 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
-  useMemo,
   useRef,
   useState,
 } from "react";
@@ -12,11 +11,7 @@ import { AppIcon } from "@/components/AppIcon";
 import { DesktopWidgetsMobile } from "@/components/DesktopWidgets";
 import { APPS, DESKTOP_ICONS } from "@/lib/apps";
 import { getWebAssetFolderPreviewHref } from "@/lib/webAssetFolderPreview";
-import {
-  getDesktopContentRect,
-  useDesktop,
-  windowShouldDimDock,
-} from "@/context/DesktopContext";
+import { useDesktop } from "@/context/DesktopContext";
 
 /** Bounds fürs Drag-Clamping — an max. Kachelbreite/-höhe mit mehrzeiligem Label angepasst */
 const ICON_W = 200;
@@ -30,10 +25,7 @@ const ROW_H = 128;
 /** Notes + Media: gleicher Zeilenabstand wie links, aber etwas höher am Rand */
 const RIGHT_START_Y = START_Y - 60;
 
-/** Apps in der Mini-Dock-Leiste unten links (früheres Dock-Verhalten). */
-const DOCK_LAUNCHER_APP_IDS = new Set(["finder", "settings"]);
-
-/** Mobile: festes iOS-ähnliches Raster (4 Spalten × min. 4 Zeilen); Finder/Settings nur im Dock wie auf Desktop. */
+/** Mobile: festes iOS-ähnliches Raster (4 Spalten × min. 4 Zeilen). */
 const MOBILE_HOME_GRID_COLS = 4;
 const MOBILE_HOME_GRID_ROWS = 4;
 
@@ -68,215 +60,7 @@ function toPixelPosition(pos, containerWidth, containerHeight) {
   return { x: pos?.x ?? MARGIN_X, y: pos?.y ?? START_Y };
 }
 
-function LauncherDockButtons({ dockItems, windows, openOrFocus, focusWindow }) {
-  return (
-    <>
-      {dockItems.map((item) => {
-        const app = APPS[item.appId];
-        if (!app) return null;
-        return (
-          <button
-            key={item.appId}
-            type="button"
-            className="group relative flex min-h-11 min-w-[2.25rem] items-center justify-center bg-transparent px-1.5 py-1.5 transition-transform active:scale-95"
-            onClick={() => {
-              const openWin = windows.find((x) => x.appId === item.appId);
-              if (openWin && !openWin.minimized) focusWindow(openWin.id);
-              else openOrFocus(item.appId);
-            }}
-          >
-            <span
-              className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-md border border-black/10 bg-white/95 px-2 py-0.5 text-xs font-medium text-zinc-800 opacity-0 shadow-md backdrop-blur-sm transition-opacity duration-150 group-hover:opacity-100 dark:border-white/15 dark:bg-zinc-900/95 dark:text-zinc-100"
-              aria-hidden
-            >
-              {app.title}
-            </span>
-            <span className="relative inline-flex flex-col items-center">
-              <span
-                className="inline-flex transition-transform duration-200 ease-out [transform-origin:center] group-hover:scale-[1.15]"
-                aria-hidden
-              >
-                <AppIcon app={app} />
-              </span>
-            </span>
-            <span className="sr-only">{app.title}</span>
-          </button>
-        );
-      })}
-    </>
-  );
-}
-
-function MobileNavDockButtons({ onBack }) {
-  return (
-    <button
-      type="button"
-      className="flex min-h-11 min-w-[2.25rem] items-center justify-center bg-transparent px-1.5 py-1.5 transition-transform active:scale-95"
-      onClick={onBack}
-      aria-label="Zurück"
-    >
-      <span
-        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-black/15 bg-zinc-200/95 shadow-md dark:border-white/20 dark:bg-zinc-600/95"
-        aria-hidden
-      >
-        <svg
-          className="h-5 w-5 text-zinc-800 dark:text-zinc-100"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2.2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M15 18l-6-6 6-6" />
-        </svg>
-      </span>
-    </button>
-  );
-}
-
-/** Tailwind `md` — Dock bleibt auf Desktop das Launcher-Dock; Zurück nur auf schmalen Viewports. */
-const DESKTOP_MIN_WIDTH_PX = 768;
-
-function CornerDock() {
-  const { windows, openOrFocus, focusWindow, closeTopVisibleWindow } =
-    useDesktop();
-  const [coveredByWindow, setCoveredByWindow] = useState(false);
-  const [hovered, setHovered] = useState(false);
-  const [isDesktop, setIsDesktop] = useState(false);
-
-  useLayoutEffect(() => {
-    const mq = window.matchMedia(`(min-width: ${DESKTOP_MIN_WIDTH_PX}px)`);
-    const update = () => setIsDesktop(mq.matches);
-    update();
-    mq.addEventListener("change", update);
-    return () => mq.removeEventListener("change", update);
-  }, []);
-
-  const visibleCount = useMemo(
-    () => windows.filter((w) => !w.minimized).length,
-    [windows]
-  );
-  /** Mobile: sobald ein Fenster offen ist, nur Zurück. Desktop: Dock bleibt Finder/Settings. */
-  const wantNavDock = visibleCount > 0 && !isDesktop;
-
-  const [displayVariant, setDisplayVariant] = useState(
-    /** @type {"launcher" | "nav"} */ ("launcher")
-  );
-  const [dockAnimScale, setDockAnimScale] = useState(1);
-
-  useEffect(() => {
-    const target = wantNavDock ? "nav" : "launcher";
-    if (target === displayVariant) {
-      setDockAnimScale(1);
-      return;
-    }
-
-    setDockAnimScale(0);
-    const id = window.setTimeout(() => {
-      setDisplayVariant(target);
-      setDockAnimScale(1);
-    }, 220);
-    return () => window.clearTimeout(id);
-  }, [wantNavDock, displayVariant]);
-
-  const closeTopWindow = closeTopVisibleWindow;
-
-  const topVisibleWindow = useMemo(() => {
-    const visible = windows.filter((w) => !w.minimized);
-    if (visible.length === 0) return null;
-    return visible.reduce((a, b) => (a.z >= b.z ? a : b));
-  }, [windows]);
-
-  useLayoutEffect(() => {
-    const layer = document.querySelector("[data-mm-desktop-layer]");
-    const tick = () => {
-      const { w, h } = getDesktopContentRect();
-      setCoveredByWindow(
-        windows.some((win) => windowShouldDimDock(win, w, h))
-      );
-    };
-    tick();
-    window.addEventListener("resize", tick);
-    const ro = layer ? new ResizeObserver(tick) : null;
-    if (layer) ro.observe(layer);
-    return () => {
-      window.removeEventListener("resize", tick);
-      ro?.disconnect();
-    };
-  }, [windows]);
-
-  /** Desktop: leicht transparent wenn vom Fenster verdeckt, bis Hover. Mobile: immer voll sichtbar. */
-  const opacity =
-    isDesktop && coveredByWindow && !hovered ? 0.5 : 1;
-  const dockBase = DESKTOP_ICONS.filter((i) =>
-    DOCK_LAUNCHER_APP_IDS.has(i.appId)
-  );
-  const mediaDockItem = DESKTOP_ICONS.find((i) => i.appId === "media");
-  const mediaIsOpen = windows.some((w) => w.appId === "media");
-  const dockItems =
-    mediaIsOpen && mediaDockItem
-      ? [...dockBase, mediaDockItem]
-      : dockBase;
-
-  const showNav = displayVariant === "nav";
-
-  return (
-    <div className="pointer-events-none absolute left-1/2 z-[10000] max-w-[calc(100vw-1rem)] -translate-x-1/2 max-md:bottom-[max(0.75rem,calc(0.75rem+env(safe-area-inset-bottom,0px)+var(--mm-vv-bottom-inset,0px)))] md:bottom-3 md:left-3 md:right-auto md:translate-x-0 md:max-w-none">
-      <nav
-        className="group/dock pointer-events-auto relative mx-auto flex w-max max-w-full items-end justify-center rounded-lg transition-opacity duration-200 ease-out"
-        style={{ opacity }}
-        aria-label={showNav ? "Navigation" : "Application dock"}
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => setHovered(false)}
-        onFocusCapture={() => setHovered(true)}
-        onBlurCapture={(e) => {
-          if (!e.currentTarget.contains(e.relatedTarget)) {
-            setHovered(false);
-          }
-        }}
-      >
-        <div className="relative origin-bottom scale-100 transition-transform duration-300 ease-[cubic-bezier(0.25,0.8,0.25,1)] md:scale-[0.62] md:group-hover/dock:scale-100">
-          <div
-            className="origin-bottom transition-transform duration-[220ms] ease-[cubic-bezier(0.25,0.8,0.25,1)]"
-            style={{
-              transform: `scale(${dockAnimScale})`,
-            }}
-          >
-            {!showNav && (
-              <div
-                className="pointer-events-none absolute inset-0 rounded-lg border border-black/10 bg-white/55 shadow-lg shadow-black/10 backdrop-blur-xl [transform-origin:bottom] dark:border-white/10 dark:bg-zinc-800/75 dark:shadow-black/40"
-                aria-hidden
-              />
-            )}
-            <div
-              className={
-                showNav && topVisibleWindow?.appId === "media"
-                  ? "hidden"
-                  : "relative z-[1] flex items-center gap-0.5 px-2 py-1.5"
-              }
-            >
-              {showNav ? (
-                topVisibleWindow?.appId === "media" ? null : (
-                  <MobileNavDockButtons onBack={closeTopWindow} />
-                )
-              ) : (
-                <LauncherDockButtons
-                  dockItems={dockItems}
-                  windows={windows}
-                  openOrFocus={openOrFocus}
-                  focusWindow={focusWindow}
-                />
-              )}
-            </div>
-          </div>
-        </div>
-      </nav>
-    </div>
-  );
-}
-
-function DesktopFolderIcon({ app, folderPreview, iconVariant = "default" }) {
+export function DesktopFolderIcon({ app, folderPreview, iconVariant = "default" }) {
   const href =
     folderPreview && app.assetDir
       ? getWebAssetFolderPreviewHref(app.assetDir)
@@ -292,7 +76,9 @@ function DesktopFolderIcon({ app, folderPreview, iconVariant = "default" }) {
       ? "h-14 w-14 shrink-0 rounded object-cover"
       : iconVariant === "desktop"
         ? "h-10 w-10 shrink-0 rounded object-cover"
-        : "h-9 w-9 shrink-0 rounded object-cover";
+        : iconVariant === "compact"
+          ? "h-6 w-6 shrink-0 rounded object-cover"
+          : "h-9 w-9 shrink-0 rounded object-cover";
 
   if (href && !imgFailed) {
     return (
@@ -482,9 +268,7 @@ export function DesktopIcons() {
     e.preventDefault();
   };
 
-  const floatingIcons = DESKTOP_ICONS.filter(
-    (item) => !DOCK_LAUNCHER_APP_IDS.has(item.appId)
-  );
+  const floatingIcons = DESKTOP_ICONS;
 
   const mobileGridRows = Math.max(
     MOBILE_HOME_GRID_ROWS,
@@ -495,12 +279,12 @@ export function DesktopIcons() {
 
   return (
     <>
-      {/* Mobile: festes 4×4-Raster; Dock unten separat — kein Drag */}
+      {/* Mobile: festes 4×4-Raster — kein Drag */}
       <div
         className="pointer-events-none absolute inset-0 flex flex-col md:hidden"
         style={{
           paddingBottom:
-            "max(5.25rem, calc(4.25rem + env(safe-area-inset-bottom, 0px) + var(--mm-vv-bottom-inset, 0px)))",
+            "max(0.75rem, calc(env(safe-area-inset-bottom, 0px) + var(--mm-vv-bottom-inset, 0px)))",
           paddingLeft: "max(0.5rem, env(safe-area-inset-left, 0px))",
           paddingRight: "max(0.5rem, env(safe-area-inset-right, 0px))",
         }}
@@ -562,9 +346,6 @@ export function DesktopIcons() {
           );
         })}
       </div>
-
-      {/* Eigenes Layer: muss nicht unter `hidden md:block` liegen — sonst fehlen Dock + Zurück auf Mobile. */}
-      <CornerDock />
     </>
   );
 }

@@ -330,6 +330,23 @@ body {
   }
 }
 
+/* SlideshowWidget: aktiver Segment-Balken füllt sich von links (Dauer per inline style) */
+@keyframes mm-slideshow-segment-fill {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.mm-slideshow-segment-fill {
+  animation-name: mm-slideshow-segment-fill;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+  transform-origin: left center;
+}
+
 .mm-wmp-library-rail[data-closing="true"] .mm-wmp-library {
   transform: translateX(-100%);
 }

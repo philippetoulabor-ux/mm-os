@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import * as THREE from "three";
+import { useDesktop } from "@/context/DesktopContext";
 
 const geometryCache = new Map();
 
@@ -116,8 +117,11 @@ export default function LogoViewer({
   className,
 }) {
   const router = useRouter();
+  const { desktopWidgetStacksCollapsed } = useDesktop();
   const containerRef = useRef(null);
   const mobileLayoutRef = useRef(false);
+  const widgetCollapseRef = useRef(desktopWidgetStacksCollapsed);
+  widgetCollapseRef.current = desktopWidgetStacksCollapsed;
 
   const opts = useMemo(() => {
     const {
@@ -141,6 +145,15 @@ export default function LogoViewer({
     mq.addEventListener("change", sync);
     return () => mq.removeEventListener("change", sync);
   }, []);
+
+  /** Wie Slideshow-Widgets: gleiche Transition bei Widget-Chrome-Asset-Fenster (DesktopContext). */
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const hit = container.firstElementChild;
+    if (!(hit instanceof HTMLElement)) return;
+    hit.style.pointerEvents = desktopWidgetStacksCollapsed ? "none" : "";
+  }, [desktopWidgetStacksCollapsed]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -183,6 +196,7 @@ export default function LogoViewer({
     hitLayer.addEventListener("mouseleave", onLeave);
     if (onClick) hitLayer.addEventListener("click", onClick);
     container.appendChild(hitLayer);
+    hitLayer.style.pointerEvents = widgetCollapseRef.current ? "none" : "";
 
     let renderer = null;
     let scene = null;
@@ -334,5 +348,20 @@ export default function LogoViewer({
   }, [opts, router, skipRouterClick]);
 
   const rootId = domId === false ? undefined : domId ?? "logo-container";
-  return <div id={rootId} ref={containerRef} className={className} />;
+  const stackCollapseCls = desktopWidgetStacksCollapsed
+    ? "scale-0 opacity-0"
+    : "scale-100 opacity-100";
+  const transitionCls =
+    "origin-center transition-[transform,opacity] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]";
+
+  return (
+    <div
+      id={rootId}
+      ref={containerRef}
+      className={`${transitionCls} ${stackCollapseCls} ${className ?? ""}`.trim()}
+      style={{
+        pointerEvents: desktopWidgetStacksCollapsed ? "none" : undefined,
+      }}
+    />
+  );
 }

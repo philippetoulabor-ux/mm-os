@@ -5,12 +5,14 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
-import { APPS, getDefaultDesktopIconPositions } from "@/lib/apps";
+import { APPS, getDefaultDesktopIconPositions, webAssetAppId } from "@/lib/apps";
 import {
+  clampDesktopWidgetsToLayer,
   DESKTOP_WIDGETS_STORAGE_KEY,
   getDefaultDesktopWidgets,
   loadDesktopWidgets,
@@ -21,11 +23,22 @@ import {
   migrateWindowState,
 } from "@/lib/webAssetIds";
 import { getMentionToken } from "@/lib/noteRefs";
+import {
+  DESKTOP_WIDGET_FRAME_PX,
+  FINDER_WIDGET_ASSET_GAP_PX,
+  getFinderDesktopMaxSidePx,
+} from "@/lib/desktopWidgetFrame";
+import { clampAspectWindowBounds } from "@/lib/osWindowBounds";
 
 /** Höhe des Site-Headers (kompaktes Logo + Padding); Näherung für Fenster-Layout */
 const SITE_HEADER_H = 270;
 /** OSWindow Titelleiste (entspricht Tailwind h-10; gleicher Inset zum Schließen-Button h-8) */
 const OS_TITLEBAR_H = 60;
+/**
+ * Zusatz zur Finder-Fensterhöhe (px), wenn die Titelleisten-Suche offen ist.
+ * Fenster wird nur höher und nach oben verschoben (y↓), kein scale — Rand bleibt am Inhalt.
+ */
+const FINDER_TITLEBAR_EXPAND_PX = 6;
 const MIN_WIN_W = 360;
 const MIN_WIN_H = 240;
 /** Inhaltshöhe (ohne OS-Titelleiste), wenn der Media-Player nur Titelzeile + Transport hat (Video ausgeblendet). */
@@ -47,22 +60,6 @@ const MOBILE_LAYOUT_MAX_WIDTH_PX = 767;
 export function isMobileViewport() {
   if (typeof window === "undefined") return false;
   return window.innerWidth <= MOBILE_LAYOUT_MAX_WIDTH_PX;
-}
-
-/**
- * Mini-Dock unten links visuell abblenden, wenn ein Fenster die untere Dock-Zone überlappt
- * (gleiche Logik wie früheres zentriertes Dock: Streifen an der Layer-Unterkante).
- */
-export function windowShouldDimDock(win, desktopW, desktopH) {
-  if (win.minimized) return false;
-  const DOCK_DIM_ZONE_PX = 102;
-  const dockTop = desktopH - DOCK_DIM_ZONE_PX;
-  const bottom = win.y + win.h;
-  if (bottom <= dockTop) return false;
-  if (win.y >= desktopH) return false;
-  const hx1 = Math.max(0, win.x);
-  const hx2 = Math.min(desktopW, win.x + win.w);
-  return hx2 > hx1;
 }
 
 /**
@@ -199,7 +196,7 @@ const DARK_MODE_STORAGE_KEY = "mm-os-dark";
 const FOLDER_PREVIEW_STORAGE_KEY = "mm-os-folder-preview";
 const DESKTOP_ICONS_POS_KEY = "mm-os-desktop-icons";
 /** Einmalig: gespeicherte Schreibtisch-Positionen verwerfen, damit das Layout aus lib/apps.js greift. */
-const DESKTOP_FOLDER_GRID_VERSION = 4;
+const DESKTOP_FOLDER_GRID_VERSION = 5;
 const DESKTOP_FOLDER_GRID_KEY = "mm-os-desktop-folder-grid-v";
 const NOTES_TEXT_KEY = "mm-os-notes-text";
 const WINDOWS_STATE_KEY = "mm-os-windows-v1";
@@ -220,6 +217,49 @@ function centerWindow(size) {
   };
 }
 
+/** Erstes Laden ohne gespeicherten State: Finder fest positioniert (Desktop) bzw. Vollbild (Mobile). */
+function createInitialFinderWindow() {
+  const def = APPS.finder;
+  const id = `finder-${Date.now()}`;
+  const baseZ = 21;
+  if (isMobileViewport()) {
+    const pos = centerWindow(def.defaultSize);
+    const pb = {
+      x: pos.x,
+      y: pos.y,
+      w: def.defaultSize.w,
+      h: def.defaultSize.h,
+    };
+    const fs = getDesktopLayerFullscreenRect();
+    return {
+      id,
+      appId: "finder",
+      title: def.title,
+      ...fs,
+      z: baseZ,
+      minimized: false,
+      maximized: true,
+      prevBounds: pb,
+      mobileImmersive: true,
+    };
+  }
+  const pos = { x: 78, y: -22 };
+  return {
+    id,
+    appId: "finder",
+    title: def.title,
+    x: pos.x,
+    y: pos.y,
+    w: def.defaultSize.w,
+    h: def.defaultSize.h,
+    z: baseZ,
+    minimized: false,
+    maximized: false,
+    prevBounds: null,
+    mobileImmersive: false,
+  };
+}
+
 /** Einheitlicher Schlüssel für „eine Datei = ein Fenster“. */
 export function assetFileDedupeKey({ dir, file, basePath = "/web" }) {
   return `${basePath}::${dir}::${file}`;
@@ -232,6 +272,58 @@ function findAssetFileWindow(prev, key) {
       w.assetFile &&
       assetFileDedupeKey(w.assetFile) === key
   );
+}
+
+/** Wie `DesktopIcons`: schwebende Kacheln (Pixel-Drag). */
+const DESKTOP_FLOAT_ICON_W = 200;
+const DESKTOP_FLOAT_ICON_H = 240;
+
+/**
+ * @param {Record<string, unknown>} positions
+ * @returns {Record<string, unknown>}
+ */
+function clampFloatingDesktopIconPositions(positions, layerW, layerH, layerTop) {
+  if (layerW <= 0 || layerH <= 0 || !positions || typeof positions !== "object") {
+    return positions;
+  }
+  const maxX = Math.max(0, layerW - DESKTOP_FLOAT_ICON_W);
+  const maxY = Math.max(0, layerH - DESKTOP_FLOAT_ICON_H);
+  const minY = -layerTop;
+  const out = { ...positions };
+  for (const key of Object.keys(out)) {
+    const pos = out[key];
+    if (!pos || typeof pos !== "object") continue;
+    if ("align" in pos && pos.align === "bottom-left") continue;
+    const p = /** @type {{ xp?: number, yp?: number, x?: number, y?: number, align?: string }} */ (
+      pos
+    );
+    if (
+      typeof p.xp === "number" &&
+      Number.isFinite(p.xp) &&
+      typeof p.yp === "number" &&
+      Number.isFinite(p.yp)
+    ) {
+      out[key] = {
+        ...p,
+        xp: Math.min(1, Math.max(0, p.xp)),
+        yp: Math.min(1, Math.max(0, p.yp)),
+      };
+      continue;
+    }
+    if (
+      typeof p.x === "number" &&
+      Number.isFinite(p.x) &&
+      typeof p.y === "number" &&
+      Number.isFinite(p.y)
+    ) {
+      out[key] = {
+        ...p,
+        x: Math.max(0, Math.min(p.x, maxX)),
+        y: Math.max(minY, Math.min(p.y, maxY)),
+      };
+    }
+  }
+  return out;
 }
 
 function loadDesktopIconPositions() {
@@ -263,7 +355,9 @@ function loadDesktopIconPositions() {
         /* ignore */
       }
     }
-    return { ...defaults, ...migrated };
+    const merged = { ...defaults, ...migrated };
+    const { w, h, layerTop } = getDesktopContentRect();
+    return clampFloatingDesktopIconPositions(merged, w, h, layerTop);
   } catch {
     return defaults;
   }
@@ -297,6 +391,9 @@ function sanitizeWindow(w) {
           typeof w.assetFile.basePath === "string" && w.assetFile.basePath
             ? w.assetFile.basePath
             : "/web",
+        ...(typeof w.assetFile.widgetChrome === "boolean"
+          ? { widgetChrome: w.assetFile.widgetChrome }
+          : {}),
       };
     } else {
       return null;
@@ -432,6 +529,9 @@ function clampWindowsToViewport(windows) {
     } else {
       w = Math.max(MIN_WIN_W, Math.min(w, innerW));
       h = Math.max(MIN_WIN_H, Math.min(h, maxWinH));
+      if (win.appId === "finder") {
+        h = Math.min(h, getFinderDesktopMaxSidePx(innerW));
+      }
       x = Math.max(inset, Math.min(x, desktopW - w - inset));
       y = Math.max(minLayerY, Math.min(y, maxBottomLayer - h));
     }
@@ -492,6 +592,21 @@ export function DesktopProvider({ children }) {
   /** Bounds vor Media-„Minimieren“ (nur Video ausblenden), pro Fenster-ID */
   const mediaPreCollapseBoundsRef = useRef(new Map());
 
+  /** Finder: eingebettete Navigation (kein separates Ordner-/Datei-Fenster). */
+  const [finderProjectAppId, setFinderProjectAppId] = useState(null);
+  const [finderPreview, setFinderPreviewState] = useState(null);
+  /** Geöffnete Projekt-Tabs (Reihenfolge). */
+  const [finderTabAppIds, setFinderTabAppIds] = useState([]);
+  /** Desktop Classic-Home: Suche zunächst nur als Lupe in der Titelleiste; Klick klappt die Zeile aus. */
+  const [finderClassicSearchExpanded, setFinderClassicSearchExpanded] =
+    useState(false);
+  /** Projekt-/Tab-/Vorschau-Ansicht: Suchzeile im Inhalt; einklappbar wie im Classic-Home. */
+  const [finderProjectSearchStripExpanded, setFinderProjectSearchStripExpanded] =
+    useState(false);
+  /** DOM-Knoten in der Finder-Titelleiste — `createPortal` für die Desktop-Suche (nicht unter dem Inhalt). */
+  const [finderTitlebarSearchSlotEl, setFinderTitlebarSearchSlotEl] =
+    useState(null);
+
   useEffect(() => {
     try {
       if (localStorage.getItem(DARK_MODE_STORAGE_KEY) === "1") {
@@ -514,15 +629,30 @@ export function DesktopProvider({ children }) {
   }, []);
 
   useEffect(() => {
-    setDesktopWidgets(loadDesktopWidgets());
+    const { w, h, layerTop } = getDesktopContentRect();
+    setDesktopWidgets(
+      clampDesktopWidgetsToLayer(loadDesktopWidgets(), w, h, layerTop)
+    );
   }, []);
 
   useEffect(() => {
     const loaded = loadWindowsFromStorage();
     if (loaded.length > 0) {
       const maxZ = Math.max(20, ...loaded.map((w) => w.z ?? 0));
-      zCounter.current = maxZ;
-      setWindows(loaded);
+      const finder = loaded.find((w) => w.appId === "finder");
+      let next = loaded;
+      if (finder && finder.z < maxZ) {
+        zCounter.current = maxZ + 1;
+        next = loaded.map((w) =>
+          w.appId === "finder" ? { ...w, z: zCounter.current } : w
+        );
+      } else {
+        zCounter.current = maxZ;
+      }
+      setWindows(next);
+    } else {
+      zCounter.current = 21;
+      setWindows([createInitialFinderWindow()]);
     }
   }, []);
 
@@ -539,6 +669,85 @@ export function DesktopProvider({ children }) {
       window.visualViewport?.removeEventListener("resize", onResize);
     };
   }, []);
+
+  /** Letzter angewendeter Titelleisten-Zusatz (px), damit dh bei Toggle stabil bleibt. */
+  const finderTitlebarExpandAppliedRef = useRef(0);
+
+  /**
+   * Finder (Desktop): Breite nach Modus (Classic 1∶1 / Projekt 10∶8), plus Zusatzhöhe wenn Titelleisten-Suche offen:
+   * `h` um {@link FINDER_TITLEBAR_EXPAND_PX} vergrößern und `y` nach oben — Rahmen wächst mit, kein transform:scale.
+   */
+  useLayoutEffect(() => {
+    if (typeof window === "undefined" || isMobileViewport()) return;
+
+    const classicHome =
+      finderProjectAppId === null &&
+      finderPreview === null &&
+      finderTabAppIds.length === 0;
+    const gridSquareMode = classicHome;
+
+    const expandPx =
+      finderClassicSearchExpanded || finderProjectSearchStripExpanded
+        ? FINDER_TITLEBAR_EXPAND_PX
+        : 0;
+
+    const prevExpand = finderTitlebarExpandAppliedRef.current;
+    const dh = expandPx - prevExpand;
+
+    setWindows((prev) => {
+      const idx = prev.findIndex((w) => w.appId === "finder");
+      if (idx === -1) return prev;
+
+      const win = prev[idx];
+      if (win.maximized) {
+        finderTitlebarExpandAppliedRef.current = expandPx;
+        return prev;
+      }
+
+      const { innerW, maxBottomLayer, minLayerY, desktopW, inset } =
+        getDesktopWindowLayoutLimits();
+      const maxSide = getFinderDesktopMaxSidePx(innerW);
+
+      let nh = win.h + dh;
+      nh = Math.max(MIN_WIN_H, Math.min(nh, maxSide));
+      const actualDh = nh - win.h;
+      let ny = win.y - actualDh;
+
+      const hCore = Math.min(nh - expandPx, maxSide);
+      const hTotal = hCore + expandPx;
+
+      let targetW = gridSquareMode
+        ? Math.min(hCore, innerW)
+        : Math.min(Math.round((hCore * 10) / 8), innerW);
+      targetW = Math.max(MIN_WIN_W, targetW);
+
+      const x = Math.max(inset, Math.min(win.x, desktopW - targetW - inset));
+      ny = Math.max(minLayerY, Math.min(ny, maxBottomLayer - hTotal));
+
+      if (
+        win.w === targetW &&
+        win.h === hTotal &&
+        win.x === x &&
+        win.y === ny
+      ) {
+        finderTitlebarExpandAppliedRef.current = expandPx;
+        return prev;
+      }
+
+      finderTitlebarExpandAppliedRef.current = expandPx;
+
+      const next = [...prev];
+      next[idx] = { ...win, w: targetW, h: hTotal, x, y: ny };
+      return next;
+    });
+  }, [
+    windows,
+    finderProjectAppId,
+    finderPreview,
+    finderTabAppIds,
+    finderClassicSearchExpanded,
+    finderProjectSearchStripExpanded,
+  ]);
 
   useEffect(() => {
     if (skipWindowsPersist.current) {
@@ -652,6 +861,15 @@ export function DesktopProvider({ children }) {
     );
   }, []);
 
+  /** Gleiche Pixel-Lage für mehrere Widgets (z. B. Stapel verschieben). */
+  const setDesktopWidgetPositionsForIds = useCallback((ids, x, y) => {
+    if (!Array.isArray(ids) || ids.length === 0) return;
+    const set = new Set(ids);
+    setDesktopWidgets((prev) =>
+      prev.map((w) => (set.has(w.id) ? { ...w, desktop: { x, y } } : w))
+    );
+  }, []);
+
   const setDarkMode = useCallback((value) => {
     setDarkModeState((prev) => {
       const next = typeof value === "function" ? value(prev) : value;
@@ -676,9 +894,154 @@ export function DesktopProvider({ children }) {
     });
   }, []);
 
+  const focusFinderWindow = useCallback(() => {
+    setWindows((prev) => {
+      const fw = prev.find((w) => w.appId === "finder");
+      zCounter.current += 1;
+      if (!fw) {
+        return [...prev, { ...createInitialFinderWindow(), z: zCounter.current }];
+      }
+      return prev.map((w) =>
+        w.appId === "finder"
+          ? { ...w, minimized: false, z: zCounter.current }
+          : w
+      );
+    });
+  }, []);
+
+  /** Beim Öffnen/Vorschau: Tab nach vorne (Reihenfolge beim reinen Tab-Wechsel bleibt stabil). */
+  const promoteFinderTabToFront = useCallback((prev, appId) => {
+    const withId = prev.includes(appId) ? prev : [...prev, appId];
+    return [appId, ...withId.filter((id) => id !== appId)];
+  }, []);
+
+  const expandFinderClassicSearch = useCallback(() => {
+    setFinderClassicSearchExpanded(true);
+  }, []);
+
+  const collapseFinderClassicSearch = useCallback(() => {
+    setFinderClassicSearchExpanded(false);
+  }, []);
+
+  const expandFinderProjectSearchStrip = useCallback(() => {
+    setFinderProjectSearchStripExpanded(true);
+  }, []);
+
+  const collapseFinderProjectSearchStrip = useCallback(() => {
+    setFinderProjectSearchStripExpanded(false);
+  }, []);
+
+  const finderGoHome = useCallback(() => {
+    setFinderTabAppIds([]);
+    setFinderProjectAppId(null);
+    setFinderPreviewState(null);
+    setFinderClassicSearchExpanded(false);
+    setFinderProjectSearchStripExpanded(false);
+    focusFinderWindow();
+  }, [focusFinderWindow]);
+
+  const finderOpenProject = useCallback(
+    (appId) => {
+      const def = APPS[appId];
+      if (!def?.assetDir) return;
+      setFinderProjectAppId(appId);
+      setFinderPreviewState(null);
+      setFinderTabAppIds((prev) => promoteFinderTabToFront(prev, appId));
+      setWindows((prev) => {
+        const fw = prev.find((w) => w.appId === "finder");
+        zCounter.current += 1;
+        if (!fw) {
+          return [...prev, { ...createInitialFinderWindow(), z: zCounter.current }];
+        }
+        return prev.map((w) =>
+          w.appId === "finder"
+            ? { ...w, minimized: false, z: zCounter.current }
+            : w
+        );
+      });
+    },
+    [promoteFinderTabToFront]
+  );
+
+  const finderSetPreview = useCallback(
+    ({ dir, file, basePath = "/web" }) => {
+      if (!dir || !file) return;
+      const pid = webAssetAppId(dir);
+      if (APPS[pid]?.assetDir) {
+        setFinderProjectAppId(pid);
+        setFinderTabAppIds((prev) => promoteFinderTabToFront(prev, pid));
+      }
+      setFinderPreviewState({ dir, file, basePath });
+      focusFinderWindow();
+    },
+    [focusFinderWindow, promoteFinderTabToFront]
+  );
+
+  const finderClearPreview = useCallback(() => {
+    setFinderPreviewState(null);
+  }, []);
+
+  const finderTogglePreviewForFile = useCallback(
+    ({ dir, file, basePath = "/web" }) => {
+      if (!dir || !file) return;
+      const key = assetFileDedupeKey({ dir, file, basePath });
+      setFinderPreviewState((prev) => {
+        if (prev && assetFileDedupeKey(prev) === key) return null;
+        return { dir, file, basePath };
+      });
+      const pid = webAssetAppId(dir);
+      if (APPS[pid]?.assetDir) {
+        setFinderProjectAppId(pid);
+        setFinderTabAppIds((p) => promoteFinderTabToFront(p, pid));
+      }
+      focusFinderWindow();
+    },
+    [focusFinderWindow, promoteFinderTabToFront]
+  );
+
+  const finderSwitchTab = useCallback(
+    (appId) => {
+      if (appId === null) {
+        finderGoHome();
+        return;
+      }
+      const def = APPS[appId];
+      if (!def?.assetDir) return;
+      setFinderProjectAppId(appId);
+      setFinderPreviewState(null);
+      focusFinderWindow();
+    },
+    [finderGoHome, focusFinderWindow]
+  );
+
+  const finderCloseTab = useCallback(
+    (appId) => {
+      setFinderTabAppIds((prevTabs) => {
+        const nextTabs = prevTabs.filter((id) => id !== appId);
+        setFinderProjectAppId((pid) => {
+          if (pid !== appId) return pid;
+          setFinderPreviewState(null);
+          if (nextTabs.length === 0) {
+            setFinderClassicSearchExpanded(false);
+            return null;
+          }
+          return nextTabs[0];
+        });
+        return nextTabs;
+      });
+      focusFinderWindow();
+    },
+    [focusFinderWindow]
+  );
+
   const openOrFocus = useCallback((appId) => {
     const def = APPS[appId];
     if (!def) return;
+
+    if (def.assetDir) {
+      finderOpenProject(appId);
+      return;
+    }
 
     setWindows((prev) => {
       const existing = prev.find((w) => w.appId === appId);
@@ -781,182 +1144,122 @@ export function DesktopProvider({ children }) {
         },
       ];
     });
-  }, []);
+  }, [finderOpenProject]);
 
   /** Datei aus einem Asset-Ordner: höchstens ein Fenster pro Pfad; bestehendes nach vorne. */
-  const openAssetFileWindow = useCallback(({ dir, file, basePath = "/web" }) => {
-    const def = APPS.assetFile;
-    if (!def || !dir || !file) return;
+  const openAssetFileWindow = useCallback(
+    ({ dir, file, basePath = "/web" }, options = {}) => {
+      const def = APPS.assetFile;
+      if (!def || !dir || !file) return;
+      const fromFinder = options.fromFinder === true;
 
-    const key = assetFileDedupeKey({ dir, file, basePath });
+      const key = assetFileDedupeKey({ dir, file, basePath });
 
-    setWindows((prev) => {
-      // #region agent log
-      const __u0 =
-        typeof performance !== "undefined" ? performance.now() : 0;
-      const __prevLen = prev.length;
-      // #endregion
-      const existing = findAssetFileWindow(prev, key);
-      if (existing) {
+      setWindows((prev) => {
+        const existing = findAssetFileWindow(prev, key);
+        if (existing) {
+          zCounter.current += 1;
+          return prev.map((w) =>
+            w.id === existing.id
+              ? { ...w, minimized: false, z: zCounter.current }
+              : w
+          );
+        }
+
         zCounter.current += 1;
-        const __out = prev.map((w) =>
-          w.id === existing.id
-            ? { ...w, minimized: false, z: zCounter.current }
-            : w
-        );
-        // #region agent log
-        const __u1 =
-          typeof performance !== "undefined" ? performance.now() : 0;
-        fetch("http://127.0.0.1:7505/ingest/8557e868-c048-42c2-9c50-6865df1f9091", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Debug-Session-Id": "f48f9a",
-          },
-          body: JSON.stringify({
-            sessionId: "f48f9a",
-            runId: "pre-fix",
-            hypothesisId: "A",
-            location: "DesktopContext.js:openAssetFileWindow:setWindows:existing",
-            message: "asset window focus existing",
-            data: {
-              updaterMs: __u1 - __u0,
-              prevLen: __prevLen,
-              branch: "existing",
+        const id = `assetFile-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+        if (isMobileViewport()) {
+          const pos = centerWindow(def.defaultSize);
+          const pb = {
+            x: pos.x,
+            y: pos.y,
+            w: def.defaultSize.w,
+            h: def.defaultSize.h,
+          };
+          const fs = getDesktopLayerFullscreenRect();
+          return [
+            ...prev,
+            {
+              id,
+              appId: def.id,
+              title: file,
+              ...fs,
+              z: zCounter.current,
+              minimized: false,
+              maximized: true,
+              prevBounds: pb,
+              mobileImmersive: true,
+              assetFile: { dir, file, basePath },
             },
-            timestamp: Date.now(),
-          }),
-        }).catch(() => {});
-        // #endregion
-        return __out;
-      }
-
-      zCounter.current += 1;
-      const id = `assetFile-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-      if (isMobileViewport()) {
-        // #region agent log
-        const __m0 =
-          typeof performance !== "undefined" ? performance.now() : 0;
-        // #endregion
+          ];
+        }
+        if (fromFinder) {
+          const finderWin = prev.find(
+            (w) => w.appId === "finder" && !w.minimized
+          );
+          const W = DESKTOP_WIDGET_FRAME_PX;
+          const GAP = FINDER_WIDGET_ASSET_GAP_PX;
+          const limits = getDesktopWindowLayoutLimits();
+          let x;
+          let y;
+          if (finderWin) {
+            x = finderWin.x + finderWin.w + GAP;
+            y = finderWin.y;
+          } else {
+            const c = centerWindow({ w: W, h: W });
+            x = c.x;
+            y = c.y;
+          }
+          x = Math.max(
+            limits.inset,
+            Math.min(x, limits.desktopW - W - limits.inset)
+          );
+          y = Math.max(
+            limits.minLayerY,
+            Math.min(y, limits.maxBottomLayer - W)
+          );
+          return [
+            ...prev,
+            {
+              id,
+              appId: def.id,
+              title: file,
+              x,
+              y,
+              w: W,
+              h: W,
+              z: zCounter.current,
+              minimized: false,
+              maximized: false,
+              prevBounds: null,
+              mobileImmersive: false,
+              assetFile: { dir, file, basePath, widgetChrome: true },
+            },
+          ];
+        }
         const pos = centerWindow(def.defaultSize);
-        const pb = {
-          x: pos.x,
-          y: pos.y,
-          w: def.defaultSize.w,
-          h: def.defaultSize.h,
-        };
-        const fs = getDesktopLayerFullscreenRect();
-        // #region agent log
-        const __m1 =
-          typeof performance !== "undefined" ? performance.now() : 0;
-        fetch("http://127.0.0.1:7505/ingest/8557e868-c048-42c2-9c50-6865df1f9091", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Debug-Session-Id": "f48f9a",
-          },
-          body: JSON.stringify({
-            sessionId: "f48f9a",
-            runId: "pre-fix",
-            hypothesisId: "B",
-            location: "DesktopContext.js:openAssetFileWindow:mobileLayout",
-            message: "centerWindow+fullscreen rect",
-            data: {
-              layoutHelpersMs: __m1 - __m0,
-              prevLen: __prevLen,
-            },
-            timestamp: Date.now(),
-          }),
-        }).catch(() => {});
-        // #endregion
         return [
           ...prev,
           {
             id,
             appId: def.id,
             title: file,
-            ...fs,
+            x: pos.x,
+            y: pos.y,
+            w: def.defaultSize.w,
+            h: def.defaultSize.h,
             z: zCounter.current,
             minimized: false,
-            maximized: true,
-            prevBounds: pb,
-            mobileImmersive: true,
+            maximized: false,
+            prevBounds: null,
+            mobileImmersive: false,
             assetFile: { dir, file, basePath },
           },
         ];
-      }
-      // #region agent log
-      const __d0 = typeof performance !== "undefined" ? performance.now() : 0;
-      // #endregion
-      const pos = centerWindow(def.defaultSize);
-      // #region agent log
-      const __d1 = typeof performance !== "undefined" ? performance.now() : 0;
-      fetch("http://127.0.0.1:7505/ingest/8557e868-c048-42c2-9c50-6865df1f9091", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Debug-Session-Id": "f48f9a",
-        },
-        body: JSON.stringify({
-          sessionId: "f48f9a",
-          runId: "pre-fix",
-          hypothesisId: "B",
-          location: "DesktopContext.js:openAssetFileWindow:desktopCenter",
-          message: "centerWindow desktop branch",
-          data: {
-            centerWindowMs: __d1 - __d0,
-            prevLen: __prevLen,
-          },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      const __u2 =
-        typeof performance !== "undefined" ? performance.now() : 0;
-      // #endregion
-      const __newWin = [
-        ...prev,
-        {
-          id,
-          appId: def.id,
-          title: file,
-          x: pos.x,
-          y: pos.y,
-          w: def.defaultSize.w,
-          h: def.defaultSize.h,
-          z: zCounter.current,
-          minimized: false,
-          maximized: false,
-          prevBounds: null,
-          mobileImmersive: false,
-          assetFile: { dir, file, basePath },
-        },
-      ];
-      // #region agent log
-      const __u3 =
-        typeof performance !== "undefined" ? performance.now() : 0;
-      fetch("http://127.0.0.1:7505/ingest/8557e868-c048-42c2-9c50-6865df1f9091", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Debug-Session-Id": "f48f9a",
-        },
-        body: JSON.stringify({
-          sessionId: "f48f9a",
-          runId: "pre-fix",
-          hypothesisId: "C",
-          location: "DesktopContext.js:openAssetFileWindow:newWindowArray",
-          message: "spread new window row",
-          data: {
-            buildArrayMs: __u3 - __u2,
-            prevLen: __prevLen,
-          },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
-      return __newWin;
-    });
-  }, []);
+      });
+    },
+    []
+  );
 
   /** Leertaste im Finder/Baum: Fenster zur Datei öffnen oder schließen. */
   const toggleAssetFileWindow = useCallback(
@@ -1029,7 +1332,16 @@ export function DesktopProvider({ children }) {
     setWindows((prev) =>
       prev.map((w) =>
         w.id === windowId && w.appId === "assetFile"
-          ? { ...w, title: file, assetFile: { dir, file, basePath } }
+          ? {
+              ...w,
+              title: file,
+              assetFile: {
+                ...w.assetFile,
+                dir,
+                file,
+                basePath,
+              },
+            }
           : w
       )
     );
@@ -1199,18 +1511,28 @@ export function DesktopProvider({ children }) {
           x = Math.max(ins, Math.min(x, dW - w - px));
           y = Math.max(minLayerY, Math.min(y, dH - h - ins));
         } else {
-          const {
-            desktopW,
-            inset,
-            innerW,
-            maxWinH,
-            maxBottomLayer,
-            minLayerY,
-          } = getDesktopWindowLayoutLimits();
-          w = Math.max(MIN_WIN_W, Math.min(w, innerW));
-          h = Math.max(MIN_WIN_H, Math.min(h, maxWinH));
-          x = Math.max(inset, Math.min(x, desktopW - w - inset));
-          y = Math.max(minLayerY, Math.min(y, maxBottomLayer - h));
+          const limits = getDesktopWindowLayoutLimits();
+          const ca = win.contentAspect;
+          const rw =
+            ca && ca.rw > 0 && ca.rh > 0 ? ca.rw : w;
+          const rh =
+            ca && ca.rw > 0 && ca.rh > 0 ? ca.rh : Math.max(1, h - OS_TITLEBAR_H);
+          const o = clampAspectWindowBounds(
+            x,
+            y,
+            w,
+            h,
+            rw,
+            rh,
+            OS_TITLEBAR_H,
+            MIN_WIN_W,
+            MIN_WIN_H,
+            limits
+          );
+          x = o.x;
+          y = o.y;
+          w = o.w;
+          h = o.h;
         }
         return { ...win, x, y, w, h, maximized: false };
       })
@@ -1309,6 +1631,17 @@ export function DesktopProvider({ children }) {
   []
 );
 
+  const desktopWidgetStacksCollapsed = useMemo(
+    () =>
+      windows.some(
+        (w) =>
+          w.appId === "assetFile" &&
+          w.assetFile?.widgetChrome &&
+          !w.minimized
+      ),
+    [windows]
+  );
+
   const value = useMemo(
     () => ({
       windows,
@@ -1331,6 +1664,7 @@ export function DesktopProvider({ children }) {
       resetDesktopIconPositions,
       desktopWidgets,
       setDesktopWidgetPosition,
+      setDesktopWidgetPositionsForIds,
       darkMode,
       setDarkMode,
       folderPreview,
@@ -1341,6 +1675,27 @@ export function DesktopProvider({ children }) {
       presetNotesComposer,
       consumeNotesComposerPreset,
       notesComposerPreset,
+      finderProjectAppId,
+      finderPreview,
+      finderTabAppIds,
+      finderGoHome,
+      finderOpenProject,
+      finderSetPreview,
+      finderClearPreview,
+      finderTogglePreviewForFile,
+      finderSwitchTab,
+      finderCloseTab,
+      focusFinderWindow,
+      finderClassicSearchExpanded,
+      expandFinderClassicSearch,
+      collapseFinderClassicSearch,
+      finderProjectSearchStripExpanded,
+      expandFinderProjectSearchStrip,
+      collapseFinderProjectSearchStrip,
+      finderTitlebarSearchSlotEl,
+      setFinderTitlebarSearchSlotEl,
+      /** Ein Widget-Look-Asset-Fenster (vom Finder) ist offen → Stapel animieren. */
+      desktopWidgetStacksCollapsed,
       /** Fenster-Koordinaten beziehen sich auf den Desktop unter dem Header; min y ≈ 0 */
       menuBarHeight: 0,
       siteHeaderHeight: SITE_HEADER_H,
@@ -1370,6 +1725,7 @@ export function DesktopProvider({ children }) {
       resetDesktopIconPositions,
       desktopWidgets,
       setDesktopWidgetPosition,
+      setDesktopWidgetPositionsForIds,
       darkMode,
       setDarkMode,
       folderPreview,
@@ -1380,6 +1736,26 @@ export function DesktopProvider({ children }) {
       presetNotesComposer,
       consumeNotesComposerPreset,
       notesComposerPreset,
+      finderProjectAppId,
+      finderPreview,
+      finderTabAppIds,
+      finderGoHome,
+      finderOpenProject,
+      finderSetPreview,
+      finderClearPreview,
+      finderTogglePreviewForFile,
+      finderSwitchTab,
+      finderCloseTab,
+      focusFinderWindow,
+      finderClassicSearchExpanded,
+      expandFinderClassicSearch,
+      collapseFinderClassicSearch,
+      finderProjectSearchStripExpanded,
+      expandFinderProjectSearchStrip,
+      collapseFinderProjectSearchStrip,
+      finderTitlebarSearchSlotEl,
+      setFinderTitlebarSearchSlotEl,
+      desktopWidgetStacksCollapsed,
     ]
   );
 

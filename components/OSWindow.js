@@ -10,10 +10,22 @@ import {
 import { AppContent } from "@/components/AppContent";
 import { AppIcon } from "@/components/AppIcon";
 import { APPS } from "@/lib/apps";
+import { clampAspectWindowBounds } from "@/lib/osWindowBounds";
+
+/** Über Schreibtisch-Icons/Widgets (`z` 1–2); `win.z` bleibt die relative Reihenfolge. */
+const OS_WINDOW_Z_BASE = 100;
 /**
  * @param {object} rs resizeState mit startWinX, startWinY, startW, startH, edge
  * @param {{ rw: number, rh: number }} aspect Inhalts-Seitenverhältnis (Breite/Höhe ohne Titelleiste)
  */
+/** Inhalts-Seitenverhältnis: Medien-Intrinsic oder aktuelle Fensterfläche unter der Titelleiste. */
+function getEffectiveContentAspect(win, titlebarH) {
+  const ca = win.contentAspect;
+  if (ca && ca.rw > 0 && ca.rh > 0) return { rw: ca.rw, rh: ca.rh };
+  const rh = Math.max(1, win.h - titlebarH);
+  return { rw: Math.max(1, win.w), rh };
+}
+
 function computeAspectResizeBounds(rs, dx, dy, aspect, titlebar) {
   const { rw, rh } = aspect;
   const sx = rs.startWinX;
@@ -97,56 +109,6 @@ function computeAspectResizeBounds(rs, dx, dy, aspect, titlebar) {
   return { x: nx, y: ny, w: nw, h: nh };
 }
 
-function clampAspectWindowBounds(
-  nx,
-  ny,
-  nw,
-  nh,
-  rw,
-  rh,
-  titlebar,
-  minW,
-  minH,
-  limits
-) {
-  const { innerW, maxWinH, maxBottomLayer, inset, minLayerY, desktopW } =
-    limits;
-
-  let w = Math.max(minW, nw);
-  let h = w * (rh / rw) + titlebar;
-
-  if (h < minH) {
-    h = minH;
-    w = Math.max(minW, (h - titlebar) * (rw / rh));
-    h = w * (rh / rw) + titlebar;
-  }
-
-  let s = Math.min(1, innerW / w, maxWinH / h);
-  w = Math.max(minW, Math.floor(w * s));
-  h = w * (rh / rw) + titlebar;
-
-  if (h > maxWinH) {
-    h = maxWinH;
-    w = Math.max(minW, (h - titlebar) * (rw / rh));
-    h = w * (rh / rw) + titlebar;
-  }
-  if (w > innerW) {
-    w = innerW;
-    h = w * (rh / rw) + titlebar;
-  }
-  if (h < minH) {
-    h = minH;
-    w = Math.max(minW, (h - titlebar) * (rw / rh));
-    h = w * (rh / rw) + titlebar;
-  }
-
-  let x = nx;
-  let y = ny;
-  x = Math.max(inset, Math.min(x, desktopW - w - inset));
-  y = Math.max(minLayerY, Math.min(y, maxBottomLayer - h));
-  return { x, y, w, h };
-}
-
 function useIsMobileLayout() {
   const [isMobile, setIsMobile] = useState(false);
   useLayoutEffect(() => {
@@ -171,9 +133,31 @@ export function OSWindow({ win }) {
     minWindowW,
     minWindowH,
     osTitlebarH,
+    finderProjectAppId,
+    finderPreview,
+    finderTabAppIds,
+    finderClassicSearchExpanded,
+    expandFinderClassicSearch,
+    finderProjectSearchStripExpanded,
+    expandFinderProjectSearchStrip,
+    finderGoHome,
+    setFinderTitlebarSearchSlotEl,
+    collapseFinderClassicSearch,
+    collapseFinderProjectSearchStrip,
   } = useDesktop();
 
   const isMobile = useIsMobileLayout();
+
+  const isFinderClassicHome =
+    win.appId === "finder" &&
+    finderProjectAppId === null &&
+    finderPreview === null &&
+    finderTabAppIds.length === 0;
+  const finderShowTitlebarLupe =
+    win.appId === "finder" &&
+    !isMobile &&
+    ((isFinderClassicHome && !finderClassicSearchExpanded) ||
+      (!isFinderClassicHome && !finderProjectSearchStripExpanded));
 
   const showNotesLauncher =
     win.appId !== "notes" &&
@@ -218,9 +202,28 @@ export function OSWindow({ win }) {
     [win.id, win.x, win.y, win.maximized, focusWindow]
   );
 
-  const onResizeStart = useCallback(
+  const onFinderHeaderMouseDown = useCallback(
+    (e) => {
+      const el = e.target;
+      if (
+        el instanceof Element &&
+        (el.closest("button") ||
+          el.closest("input") ||
+          el.closest("textarea") ||
+          el.closest("select") ||
+          el.closest("label"))
+      ) {
+        return;
+      }
+      onBarMouseDown(e);
+    },
+    [onBarMouseDown]
+  );
+
+  const onResizePointerDown = useCallback(
     (e, edge) => {
       if (win.maximized) return;
+      if (e.pointerType === "mouse" && e.button !== 0) return;
       e.preventDefault();
       e.stopPropagation();
       setBoundsInteraction(true);
@@ -233,19 +236,118 @@ export function OSWindow({ win }) {
         startH: win.h,
         startWinX: win.x,
         startWinY: win.y,
-        contentAspect: win.contentAspect ?? null,
+        contentAspect: getEffectiveContentAspect(win, osTitlebarH),
       };
+
+      const target = e.currentTarget;
+      const pointerId = e.pointerId;
+
+      const onMove = (moveEvent) => {
+        const rs = resizeState.current;
+        if (!rs) return;
+        const dx = moveEvent.clientX - rs.startX;
+        const dy = moveEvent.clientY - rs.startY;
+
+        const aspect = rs.contentAspect;
+        if (
+          aspect?.rw > 0 &&
+          aspect?.rh > 0 &&
+          typeof minWindowW === "number" &&
+          typeof minWindowH === "number"
+        ) {
+          const raw = computeAspectResizeBounds(
+            rs,
+            dx,
+            dy,
+            aspect,
+            osTitlebarH
+          );
+          if (!raw) return;
+          const limits = getDesktopWindowLayoutLimits();
+          const clamped = clampAspectWindowBounds(
+            raw.x,
+            raw.y,
+            raw.w,
+            raw.h,
+            aspect.rw,
+            aspect.rh,
+            osTitlebarH,
+            minWindowW,
+            minWindowH,
+            limits
+          );
+          setWindowBounds(win.id, clamped);
+          return;
+        }
+
+        let nx = rs.startWinX;
+        let ny = rs.startWinY;
+        let nw = rs.startW;
+        let nh = rs.startH;
+        switch (rs.edge) {
+          case "e":
+            nw = rs.startW + dx;
+            break;
+          case "w":
+            nx = rs.startWinX + dx;
+            nw = rs.startW - dx;
+            break;
+          case "s":
+            nh = rs.startH + dy;
+            break;
+          case "n":
+            ny = rs.startWinY + dy;
+            nh = rs.startH - dy;
+            break;
+          case "se":
+            nw = rs.startW + dx;
+            nh = rs.startH + dy;
+            break;
+          case "sw":
+            nx = rs.startWinX + dx;
+            nw = rs.startW - dx;
+            nh = rs.startH + dy;
+            break;
+          case "ne":
+            nw = rs.startW + dx;
+            ny = rs.startWinY + dy;
+            nh = rs.startH - dy;
+            break;
+          case "nw":
+            nx = rs.startWinX + dx;
+            nw = rs.startW - dx;
+            ny = rs.startWinY + dy;
+            nh = rs.startH - dy;
+            break;
+          default:
+            return;
+        }
+        setWindowBounds(win.id, { x: nx, y: ny, w: nw, h: nh });
+      };
+
+      const onUp = () => {
+        resizeState.current = null;
+        setBoundsInteraction(false);
+        document.removeEventListener("pointermove", onMove);
+        document.removeEventListener("pointerup", onUp);
+        document.removeEventListener("pointercancel", onUp);
+        try {
+          target.releasePointerCapture(pointerId);
+        } catch {
+          /* ignore */
+        }
+      };
+
+      document.addEventListener("pointermove", onMove, { passive: false });
+      document.addEventListener("pointerup", onUp);
+      document.addEventListener("pointercancel", onUp);
+      try {
+        target.setPointerCapture(pointerId);
+      } catch {
+        /* ignore */
+      }
     },
-    [
-      win.id,
-      win.w,
-      win.h,
-      win.x,
-      win.y,
-      win.maximized,
-      win.contentAspect,
-      focusWindow,
-    ]
+    [win, osTitlebarH, focusWindow, setWindowBounds, minWindowW, minWindowH]
   );
 
   useEffect(() => {
@@ -295,101 +397,6 @@ export function OSWindow({ win }) {
     moveWindow,
   ]);
 
-  useEffect(() => {
-    const onMove = (e) => {
-      const rs = resizeState.current;
-      if (!rs || win.maximized) return;
-      const dx = e.clientX - rs.startX;
-      const dy = e.clientY - rs.startY;
-
-      const aspect = rs.contentAspect;
-      if (
-        aspect?.rw > 0 &&
-        aspect?.rh > 0 &&
-        typeof minWindowW === "number" &&
-        typeof minWindowH === "number"
-      ) {
-        const raw = computeAspectResizeBounds(rs, dx, dy, aspect, osTitlebarH);
-        if (!raw) return;
-        const limits = getDesktopWindowLayoutLimits();
-        const clamped = clampAspectWindowBounds(
-          raw.x,
-          raw.y,
-          raw.w,
-          raw.h,
-          aspect.rw,
-          aspect.rh,
-          osTitlebarH,
-          minWindowW,
-          minWindowH,
-          limits
-        );
-        setWindowBounds(win.id, clamped);
-        return;
-      }
-
-      let nx = rs.startWinX;
-      let ny = rs.startWinY;
-      let nw = rs.startW;
-      let nh = rs.startH;
-      switch (rs.edge) {
-        case "e":
-          nw = rs.startW + dx;
-          break;
-        case "w":
-          nx = rs.startWinX + dx;
-          nw = rs.startW - dx;
-          break;
-        case "s":
-          nh = rs.startH + dy;
-          break;
-        case "n":
-          ny = rs.startWinY + dy;
-          nh = rs.startH - dy;
-          break;
-        case "se":
-          nw = rs.startW + dx;
-          nh = rs.startH + dy;
-          break;
-        case "sw":
-          nx = rs.startWinX + dx;
-          nw = rs.startW - dx;
-          nh = rs.startH + dy;
-          break;
-        case "ne":
-          nw = rs.startW + dx;
-          ny = rs.startWinY + dy;
-          nh = rs.startH - dy;
-          break;
-        case "nw":
-          nx = rs.startWinX + dx;
-          nw = rs.startW - dx;
-          ny = rs.startWinY + dy;
-          nh = rs.startH - dy;
-          break;
-        default:
-          return;
-      }
-      setWindowBounds(win.id, { x: nx, y: ny, w: nw, h: nh });
-    };
-    const onUp = () => {
-      resizeState.current = null;
-    };
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-    return () => {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-    };
-  }, [
-    win.id,
-    win.maximized,
-    setWindowBounds,
-    minWindowW,
-    minWindowH,
-    osTitlebarH,
-  ]);
-
   if (!mounted || win.minimized) return null;
 
   const style = {
@@ -397,7 +404,7 @@ export function OSWindow({ win }) {
     top: win.y,
     width: win.w,
     height: win.h,
-    zIndex: win.z,
+    zIndex: OS_WINDOW_Z_BASE + win.z,
     ...(mounted && !boundsInteraction
       ? {
           transitionProperty: "width, height, left, top",
@@ -408,12 +415,17 @@ export function OSWindow({ win }) {
   };
 
   const appAllowsResize = APPS[win.appId]?.resizable !== false;
+  const isWidgetChromeAsset =
+    win.appId === "assetFile" &&
+    win.assetFile?.widgetChrome &&
+    !isMobile;
   const showResize =
     appAllowsResize &&
     !win.maximized &&
-    !(win.appId === "media" && win.mediaVideoCollapsed);
-  const edge = "absolute z-10";
-  const corner = "absolute z-20 h-4 w-4";
+    !(win.appId === "media" && win.mediaVideoCollapsed) &&
+    !isWidgetChromeAsset;
+  const edge = "absolute z-[60] touch-none";
+  const corner = "absolute z-[70] h-4 w-4 touch-none";
 
   return (
     <div
@@ -423,83 +435,189 @@ export function OSWindow({ win }) {
       style={style}
       onMouseDown={() => focusWindow(win.id)}
     >
-      {!isMobile ? (
-        <header
-          className="flex h-10 shrink-0 cursor-default items-center gap-2 border-b-[2.25px] border-black bg-[var(--mm-desktop-bg)] pl-0 pr-3 font-sans"
-          onMouseDown={onBarMouseDown}
+      {isWidgetChromeAsset ? (
+        <button
+          type="button"
+          aria-label="Schließen"
+          className="absolute left-2 top-2 z-30 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-transparent hover:opacity-90"
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            closeWindow(win.id);
+          }}
         >
-          <div
-            className={
-              win.appId === "media"
-                ? "flex w-[4.125rem] shrink-0 items-center justify-start gap-0.5 pl-2"
-                : "flex w-14 shrink-0 items-center justify-start pl-1"
-            }
-          >
-            <button
-              type="button"
-              aria-label="Schließen"
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-transparent hover:opacity-90"
-              onClick={(e) => {
-                e.stopPropagation();
-                closeWindow(win.id);
-              }}
+          <span
+            className="block h-3 w-3 shrink-0 rounded-full bg-[rgb(255,0,0)]"
+            aria-hidden
+          />
+        </button>
+      ) : null}
+      {!isMobile ? (
+        win.appId === "finder" ? (
+          <div className="relative z-20 shrink-0 overflow-hidden transition-[height,min-height] duration-[var(--mm-library-motion-duration)] ease-[var(--mm-library-motion-easing)] h-10 has-[#finder-search]:h-[2.875rem] has-[#finder-search]:min-h-[2.875rem]">
+            <header
+              className="box-border flex h-full min-h-0 w-full cursor-default items-center overflow-hidden border-b-[2.25px] border-black bg-[var(--mm-desktop-bg)] pl-3 pr-2 has-[#finder-search]:[&_img]:scale-[1.15] has-[#finder-search]:[&_img]:origin-center"
+              onMouseDown={onFinderHeaderMouseDown}
             >
-              <span
-                className="block h-3 w-3 shrink-0 rounded-full bg-[rgb(255,0,0)]"
-                aria-hidden
+              <div className="flex h-full w-10 shrink-0 items-center justify-center pl-2">
+                {finderShowTitlebarLupe ? (
+                  <button
+                    type="button"
+                    className="group flex h-full w-4 shrink-0 cursor-pointer items-center justify-center rounded"
+                    aria-label="Suche öffnen"
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (isFinderClassicHome) {
+                        expandFinderClassicSearch();
+                      } else {
+                        expandFinderProjectSearchStrip();
+                      }
+                    }}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src="/web/buttons/lupe.svg"
+                      alt=""
+                      aria-hidden
+                      className="h-4 w-4 shrink-0 opacity-50 transition-[opacity,transform] duration-200 ease-out group-hover:scale-[1.15] group-hover:opacity-100"
+                      draggable={false}
+                    />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="group flex h-full w-4 shrink-0 cursor-pointer items-center justify-center rounded"
+                    aria-label="Suche schließen"
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (isFinderClassicHome) {
+                        collapseFinderClassicSearch();
+                      } else {
+                        collapseFinderProjectSearchStrip();
+                      }
+                    }}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src="/web/buttons/lupe.svg"
+                      alt=""
+                      aria-hidden
+                      className="h-4 w-4 shrink-0 opacity-50 transition-[opacity,transform] duration-[var(--mm-library-motion-duration)] ease-[var(--mm-library-motion-easing)] group-hover:opacity-100"
+                      draggable={false}
+                    />
+                  </button>
+                )}
+              </div>
+              <div
+                ref={setFinderTitlebarSearchSlotEl}
+                data-mm-finder-titlebar-search
+                className="flex h-full min-h-0 min-w-0 flex-1 items-center px-1"
               />
-            </button>
-            {win.appId === "media" ? (
+              {!isFinderClassicHome ? (
+                <div className="flex h-full w-10 shrink-0 items-center justify-end pr-0">
+                  <button
+                    type="button"
+                    className="group flex h-full w-4 shrink-0 cursor-pointer items-center justify-center rounded"
+                    aria-label="Zur Kachelansicht"
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      finderGoHome();
+                    }}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src="/web/buttons/kacheln.svg"
+                      alt=""
+                      aria-hidden
+                      className="h-4 w-4 shrink-0 opacity-50 transition-[opacity,transform] duration-[var(--mm-library-motion-duration)] ease-[var(--mm-library-motion-easing)] group-hover:opacity-100"
+                      draggable={false}
+                    />
+                  </button>
+                </div>
+              ) : null}
+            </header>
+          </div>
+        ) : isWidgetChromeAsset ? null : (
+          <header
+            className="flex h-10 shrink-0 cursor-default items-center gap-2 border-b-[2.25px] border-black bg-[var(--mm-desktop-bg)] pl-0 pr-3 font-sans"
+            onMouseDown={onBarMouseDown}
+          >
+            <div
+              className={
+                win.appId === "media"
+                  ? "flex w-[4.125rem] shrink-0 items-center justify-start gap-0.5 pl-2"
+                  : "flex w-14 shrink-0 items-center justify-start pl-1"
+              }
+            >
               <button
                 type="button"
-                aria-label={
-                  win.mediaVideoCollapsed
-                    ? "Player wiederherstellen"
-                    : "Player minimieren"
-                }
-                aria-pressed={!!win.mediaVideoCollapsed}
+                aria-label="Schließen"
                 className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-transparent hover:opacity-90"
                 onClick={(e) => {
                   e.stopPropagation();
-                  toggleMediaPlayerVideoPanel(win.id);
+                  closeWindow(win.id);
                 }}
               >
                 <span
-                  className={`block h-3 w-3 shrink-0 rounded-full ${
-                    win.mediaVideoCollapsed
-                      ? "bg-[rgb(0,255,0)]"
-                      : "bg-[rgb(255,204,0)]"
-                  }`}
+                  className="block h-3 w-3 shrink-0 rounded-full bg-[rgb(255,0,0)]"
                   aria-hidden
                 />
               </button>
-            ) : null}
-          </div>
-          <span className="flex-1 select-none text-center text-xs font-medium text-black dark:text-zinc-100">
-            {win.title}
-          </span>
-          {showNotesLauncher ? (
-            <div className="flex w-14 shrink-0 items-center justify-end">
-              <button
-                type="button"
-                aria-label="Notes öffnen"
-                title="Notes"
-                className="flex min-h-7 min-w-7 items-center justify-center rounded-full bg-transparent px-2.5 py-1 text-black hover:opacity-90 dark:text-zinc-100"
-                onMouseDown={(e) => e.stopPropagation()}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  openOrFocus("notes");
-                }}
-              >
-                <span aria-hidden>
-                  <AppIcon app={APPS.notes} variant="compact" />
-                </span>
-              </button>
+              {win.appId === "media" ? (
+                <button
+                  type="button"
+                  aria-label={
+                    win.mediaVideoCollapsed
+                      ? "Player wiederherstellen"
+                      : "Player minimieren"
+                  }
+                  aria-pressed={!!win.mediaVideoCollapsed}
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-transparent hover:opacity-90"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleMediaPlayerVideoPanel(win.id);
+                  }}
+                >
+                  <span
+                    className={`block h-3 w-3 shrink-0 rounded-full ${
+                      win.mediaVideoCollapsed
+                        ? "bg-[rgb(0,255,0)]"
+                        : "bg-[rgb(255,204,0)]"
+                    }`}
+                    aria-hidden
+                  />
+                </button>
+              ) : null}
             </div>
-          ) : (
-            <span className="w-14 shrink-0" aria-hidden />
-          )}
-        </header>
+            <span className="flex-1 select-none text-center text-xs font-medium text-black dark:text-zinc-100">
+              {win.title}
+            </span>
+            {showNotesLauncher ? (
+              <div className="flex w-14 shrink-0 items-center justify-end">
+                <button
+                  type="button"
+                  aria-label="Notes öffnen"
+                  title="Notes"
+                  className="flex min-h-7 min-w-7 items-center justify-center rounded-full bg-transparent px-2.5 py-1 text-black hover:opacity-90 dark:text-zinc-100"
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openOrFocus("notes");
+                  }}
+                >
+                  <span aria-hidden>
+                    <AppIcon app={APPS.notes} variant="compact" />
+                  </span>
+                </button>
+              </div>
+            ) : (
+              <span className="w-14 shrink-0" aria-hidden />
+            )}
+          </header>
+        )
       ) : null}
       <div
         className={
@@ -588,6 +706,11 @@ export function OSWindow({ win }) {
             appId={win.appId}
             assetFile={win.assetFile}
             windowId={win.id}
+            windowDragProps={
+              isWidgetChromeAsset
+                ? { onMouseDown: onBarMouseDown }
+                : undefined
+            }
           />
         )}
       </div>
@@ -597,45 +720,45 @@ export function OSWindow({ win }) {
             role="separator"
             aria-orientation="horizontal"
             className={`${edge} left-3 right-3 top-0 h-3 cursor-n-resize`}
-            onMouseDown={(e) => onResizeStart(e, "n")}
+            onPointerDown={(e) => onResizePointerDown(e, "n")}
           />
           <div
             role="separator"
             aria-orientation="horizontal"
             className={`${edge} bottom-0 left-3 right-3 h-3 cursor-ns-resize`}
-            onMouseDown={(e) => onResizeStart(e, "s")}
+            onPointerDown={(e) => onResizePointerDown(e, "s")}
           />
           <div
             role="separator"
             aria-orientation="vertical"
             className={`${edge} bottom-3 left-0 top-3 w-3 cursor-ew-resize`}
-            onMouseDown={(e) => onResizeStart(e, "w")}
+            onPointerDown={(e) => onResizePointerDown(e, "w")}
           />
           <div
             role="separator"
             aria-orientation="vertical"
             className={`${edge} bottom-3 right-0 top-3 w-3 cursor-ew-resize`}
-            onMouseDown={(e) => onResizeStart(e, "e")}
+            onPointerDown={(e) => onResizePointerDown(e, "e")}
           />
           <div
             className={`${corner} left-0 top-0 cursor-nw-resize`}
             aria-hidden
-            onMouseDown={(e) => onResizeStart(e, "nw")}
+            onPointerDown={(e) => onResizePointerDown(e, "nw")}
           />
           <div
             className={`${corner} right-0 top-0 cursor-ne-resize`}
             aria-hidden
-            onMouseDown={(e) => onResizeStart(e, "ne")}
+            onPointerDown={(e) => onResizePointerDown(e, "ne")}
           />
           <div
             className={`${corner} bottom-0 left-0 cursor-nesw-resize`}
             aria-hidden
-            onMouseDown={(e) => onResizeStart(e, "sw")}
+            onPointerDown={(e) => onResizePointerDown(e, "sw")}
           />
           <div
             className={`${corner} bottom-0 right-0 cursor-nwse-resize`}
             aria-hidden
-            onMouseDown={(e) => onResizeStart(e, "se")}
+            onPointerDown={(e) => onResizePointerDown(e, "se")}
           />
         </>
       )}
