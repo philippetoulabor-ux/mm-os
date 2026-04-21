@@ -134,7 +134,6 @@ export function OSWindow({ win }) {
     minWindowH,
     osTitlebarH,
     finderProjectAppId,
-    finderPreview,
     finderTabAppIds,
     finderClassicSearchExpanded,
     expandFinderClassicSearch,
@@ -151,7 +150,6 @@ export function OSWindow({ win }) {
   const isFinderClassicHome =
     win.appId === "finder" &&
     finderProjectAppId === null &&
-    finderPreview === null &&
     finderTabAppIds.length === 0;
   const finderShowTitlebarLupe =
     win.appId === "finder" &&

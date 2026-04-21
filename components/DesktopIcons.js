@@ -269,6 +269,10 @@ export function DesktopIcons() {
   };
 
   const floatingIcons = DESKTOP_ICONS;
+  /** Finder: immer sichtbares Fenster auf Desktop — Icon nur mobil im Raster. */
+  const desktopFloatingIcons = floatingIcons.filter(
+    (item) => item.appId !== "finder"
+  );
 
   const mobileGridRows = Math.max(
     MOBILE_HOME_GRID_ROWS,
@@ -324,7 +328,7 @@ export function DesktopIcons() {
           height: layerTopPx ? `calc(100% + ${layerTopPx}px)` : "100%",
         }}
       >
-        {floatingIcons.map((item) => {
+        {desktopFloatingIcons.map((item) => {
           const app = APPS[item.appId];
           if (!app) return null;
           const raw = desktopIconPositions[item.appId] ?? {

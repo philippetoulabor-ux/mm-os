@@ -274,6 +274,12 @@ function findAssetFileWindow(prev, key) {
   );
 }
 
+function findAnyAssetFileWindow(prev) {
+  const assetWins = prev.filter((w) => w.appId === "assetFile" && w.assetFile);
+  if (assetWins.length === 0) return undefined;
+  return assetWins.reduce((a, b) => (a.z >= b.z ? a : b));
+}
+
 /** Wie `DesktopIcons`: schwebende Kacheln (Pixel-Drag). */
 const DESKTOP_FLOAT_ICON_W = 200;
 const DESKTOP_FLOAT_ICON_H = 240;
@@ -592,9 +598,8 @@ export function DesktopProvider({ children }) {
   /** Bounds vor Media-„Minimieren“ (nur Video ausblenden), pro Fenster-ID */
   const mediaPreCollapseBoundsRef = useRef(new Map());
 
-  /** Finder: eingebettete Navigation (kein separates Ordner-/Datei-Fenster). */
+  /** Finder: Projekt-Kontext + Tabs; Dateien öffnen in eigenem assetFile-Fenster. */
   const [finderProjectAppId, setFinderProjectAppId] = useState(null);
-  const [finderPreview, setFinderPreviewState] = useState(null);
   /** Geöffnete Projekt-Tabs (Reihenfolge). */
   const [finderTabAppIds, setFinderTabAppIds] = useState([]);
   /** Desktop Classic-Home: Suche zunächst nur als Lupe in der Titelleiste; Klick klappt die Zeile aus. */
@@ -639,17 +644,8 @@ export function DesktopProvider({ children }) {
     const loaded = loadWindowsFromStorage();
     if (loaded.length > 0) {
       const maxZ = Math.max(20, ...loaded.map((w) => w.z ?? 0));
-      const finder = loaded.find((w) => w.appId === "finder");
-      let next = loaded;
-      if (finder && finder.z < maxZ) {
-        zCounter.current = maxZ + 1;
-        next = loaded.map((w) =>
-          w.appId === "finder" ? { ...w, z: zCounter.current } : w
-        );
-      } else {
-        zCounter.current = maxZ;
-      }
-      setWindows(next);
+      zCounter.current = maxZ;
+      setWindows(loaded);
     } else {
       zCounter.current = 21;
       setWindows([createInitialFinderWindow()]);
@@ -681,9 +677,7 @@ export function DesktopProvider({ children }) {
     if (typeof window === "undefined" || isMobileViewport()) return;
 
     const classicHome =
-      finderProjectAppId === null &&
-      finderPreview === null &&
-      finderTabAppIds.length === 0;
+      finderProjectAppId === null && finderTabAppIds.length === 0;
     const gridSquareMode = classicHome;
 
     const expandPx =
@@ -743,7 +737,6 @@ export function DesktopProvider({ children }) {
   }, [
     windows,
     finderProjectAppId,
-    finderPreview,
     finderTabAppIds,
     finderClassicSearchExpanded,
     finderProjectSearchStripExpanded,
@@ -894,17 +887,16 @@ export function DesktopProvider({ children }) {
     });
   }, []);
 
+  /** Finder einblenden / anlegen — ohne Z nach vorne (Stapel wie bei anderen Fenstern). */
   const focusFinderWindow = useCallback(() => {
     setWindows((prev) => {
       const fw = prev.find((w) => w.appId === "finder");
-      zCounter.current += 1;
       if (!fw) {
+        zCounter.current += 1;
         return [...prev, { ...createInitialFinderWindow(), z: zCounter.current }];
       }
       return prev.map((w) =>
-        w.appId === "finder"
-          ? { ...w, minimized: false, z: zCounter.current }
-          : w
+        w.appId === "finder" ? { ...w, minimized: false } : w
       );
     });
   }, []);
@@ -934,7 +926,6 @@ export function DesktopProvider({ children }) {
   const finderGoHome = useCallback(() => {
     setFinderTabAppIds([]);
     setFinderProjectAppId(null);
-    setFinderPreviewState(null);
     setFinderClassicSearchExpanded(false);
     setFinderProjectSearchStripExpanded(false);
     focusFinderWindow();
@@ -945,58 +936,19 @@ export function DesktopProvider({ children }) {
       const def = APPS[appId];
       if (!def?.assetDir) return;
       setFinderProjectAppId(appId);
-      setFinderPreviewState(null);
       setFinderTabAppIds((prev) => promoteFinderTabToFront(prev, appId));
       setWindows((prev) => {
         const fw = prev.find((w) => w.appId === "finder");
-        zCounter.current += 1;
         if (!fw) {
+          zCounter.current += 1;
           return [...prev, { ...createInitialFinderWindow(), z: zCounter.current }];
         }
         return prev.map((w) =>
-          w.appId === "finder"
-            ? { ...w, minimized: false, z: zCounter.current }
-            : w
+          w.appId === "finder" ? { ...w, minimized: false } : w
         );
       });
     },
     [promoteFinderTabToFront]
-  );
-
-  const finderSetPreview = useCallback(
-    ({ dir, file, basePath = "/web" }) => {
-      if (!dir || !file) return;
-      const pid = webAssetAppId(dir);
-      if (APPS[pid]?.assetDir) {
-        setFinderProjectAppId(pid);
-        setFinderTabAppIds((prev) => promoteFinderTabToFront(prev, pid));
-      }
-      setFinderPreviewState({ dir, file, basePath });
-      focusFinderWindow();
-    },
-    [focusFinderWindow, promoteFinderTabToFront]
-  );
-
-  const finderClearPreview = useCallback(() => {
-    setFinderPreviewState(null);
-  }, []);
-
-  const finderTogglePreviewForFile = useCallback(
-    ({ dir, file, basePath = "/web" }) => {
-      if (!dir || !file) return;
-      const key = assetFileDedupeKey({ dir, file, basePath });
-      setFinderPreviewState((prev) => {
-        if (prev && assetFileDedupeKey(prev) === key) return null;
-        return { dir, file, basePath };
-      });
-      const pid = webAssetAppId(dir);
-      if (APPS[pid]?.assetDir) {
-        setFinderProjectAppId(pid);
-        setFinderTabAppIds((p) => promoteFinderTabToFront(p, pid));
-      }
-      focusFinderWindow();
-    },
-    [focusFinderWindow, promoteFinderTabToFront]
   );
 
   const finderSwitchTab = useCallback(
@@ -1008,7 +960,6 @@ export function DesktopProvider({ children }) {
       const def = APPS[appId];
       if (!def?.assetDir) return;
       setFinderProjectAppId(appId);
-      setFinderPreviewState(null);
       focusFinderWindow();
     },
     [finderGoHome, focusFinderWindow]
@@ -1020,7 +971,6 @@ export function DesktopProvider({ children }) {
         const nextTabs = prevTabs.filter((id) => id !== appId);
         setFinderProjectAppId((pid) => {
           if (pid !== appId) return pid;
-          setFinderPreviewState(null);
           if (nextTabs.length === 0) {
             setFinderClassicSearchExpanded(false);
             return null;
@@ -1146,7 +1096,7 @@ export function DesktopProvider({ children }) {
     });
   }, [finderOpenProject]);
 
-  /** Datei aus einem Asset-Ordner: höchstens ein Fenster pro Pfad; bestehendes nach vorne. */
+  /** Datei aus einem Asset-Ordner: höchstens ein Fenster; gleiche Datei nur nach vorne; sonst Inhalt ersetzen. */
   const openAssetFileWindow = useCallback(
     ({ dir, file, basePath = "/web" }, options = {}) => {
       const def = APPS.assetFile;
@@ -1164,6 +1114,34 @@ export function DesktopProvider({ children }) {
               ? { ...w, minimized: false, z: zCounter.current }
               : w
           );
+        }
+
+        const reuse = findAnyAssetFileWindow(prev);
+        if (reuse) {
+          zCounter.current += 1;
+          const nextAssetFile = fromFinder
+            ? { dir, file, basePath, widgetChrome: true }
+            : {
+                dir,
+                file,
+                basePath,
+                ...(reuse.assetFile?.widgetChrome === true
+                  ? { widgetChrome: true }
+                  : {}),
+              };
+          return prev
+            .filter((w) => w.appId !== "assetFile" || w.id === reuse.id)
+            .map((w) =>
+              w.id === reuse.id
+                ? {
+                    ...w,
+                    title: file,
+                    assetFile: nextAssetFile,
+                    minimized: false,
+                    z: zCounter.current,
+                  }
+                : w
+            );
         }
 
         zCounter.current += 1;
@@ -1263,9 +1241,10 @@ export function DesktopProvider({ children }) {
 
   /** Leertaste im Finder/Baum: Fenster zur Datei öffnen oder schließen. */
   const toggleAssetFileWindow = useCallback(
-    ({ dir, file, basePath = "/web" }) => {
+    ({ dir, file, basePath = "/web" }, options = {}) => {
       const def = APPS.assetFile;
       if (!def || !dir || !file) return;
+      const fromFinder = options.fromFinder === true;
 
       const key = assetFileDedupeKey({ dir, file, basePath });
 
@@ -1273,6 +1252,34 @@ export function DesktopProvider({ children }) {
         const existing = findAssetFileWindow(prev, key);
         if (existing) {
           return prev.filter((w) => w.id !== existing.id);
+        }
+
+        const reuse = findAnyAssetFileWindow(prev);
+        if (reuse) {
+          zCounter.current += 1;
+          const nextAssetFile = fromFinder
+            ? { dir, file, basePath, widgetChrome: true }
+            : {
+                dir,
+                file,
+                basePath,
+                ...(reuse.assetFile?.widgetChrome === true
+                  ? { widgetChrome: true }
+                  : {}),
+              };
+          return prev
+            .filter((w) => w.appId !== "assetFile" || w.id === reuse.id)
+            .map((w) =>
+              w.id === reuse.id
+                ? {
+                    ...w,
+                    title: file,
+                    assetFile: nextAssetFile,
+                    minimized: false,
+                    z: zCounter.current,
+                  }
+                : w
+            );
         }
 
         zCounter.current += 1;
@@ -1302,6 +1309,50 @@ export function DesktopProvider({ children }) {
             },
           ];
         }
+        if (fromFinder) {
+          const finderWin = prev.find(
+            (w) => w.appId === "finder" && !w.minimized
+          );
+          const W = DESKTOP_WIDGET_FRAME_PX;
+          const GAP = FINDER_WIDGET_ASSET_GAP_PX;
+          const limits = getDesktopWindowLayoutLimits();
+          let x;
+          let y;
+          if (finderWin) {
+            x = finderWin.x + finderWin.w + GAP;
+            y = finderWin.y;
+          } else {
+            const c = centerWindow({ w: W, h: W });
+            x = c.x;
+            y = c.y;
+          }
+          x = Math.max(
+            limits.inset,
+            Math.min(x, limits.desktopW - W - limits.inset)
+          );
+          y = Math.max(
+            limits.minLayerY,
+            Math.min(y, limits.maxBottomLayer - W)
+          );
+          return [
+            ...prev,
+            {
+              id,
+              appId: def.id,
+              title: file,
+              x,
+              y,
+              w: W,
+              h: W,
+              z: zCounter.current,
+              minimized: false,
+              maximized: false,
+              prevBounds: null,
+              mobileImmersive: false,
+              assetFile: { dir, file, basePath, widgetChrome: true },
+            },
+          ];
+        }
         const pos = centerWindow(def.defaultSize);
         return [
           ...prev,
@@ -1324,6 +1375,33 @@ export function DesktopProvider({ children }) {
       });
     },
     []
+  );
+
+  /** Finder: kleines Widget-Fenster neben dem Finder ({@link openAssetFileWindow} `fromFinder`). */
+  const finderOpenProjectFile = useCallback(
+    ({ dir, file, basePath = "/web" }) => {
+      if (!dir || !file) return;
+      const pid = webAssetAppId(dir);
+      if (APPS[pid]?.assetDir) {
+        setFinderProjectAppId(pid);
+        setFinderTabAppIds((prev) => promoteFinderTabToFront(prev, pid));
+      }
+      openAssetFileWindow({ dir, file, basePath }, { fromFinder: true });
+    },
+    [openAssetFileWindow, promoteFinderTabToFront]
+  );
+
+  const finderToggleProjectFile = useCallback(
+    ({ dir, file, basePath = "/web" }) => {
+      if (!dir || !file) return;
+      const pid = webAssetAppId(dir);
+      if (APPS[pid]?.assetDir) {
+        setFinderProjectAppId(pid);
+        setFinderTabAppIds((p) => promoteFinderTabToFront(p, pid));
+      }
+      toggleAssetFileWindow({ dir, file, basePath }, { fromFinder: true });
+    },
+    [toggleAssetFileWindow, promoteFinderTabToFront]
   );
 
   /** Gleiches Asset-Fenster: andere Datei im selben Ordner (Pfeiltasten-Navigation). */
@@ -1351,12 +1429,13 @@ export function DesktopProvider({ children }) {
     setWindows((prev) => prev.filter((w) => w.id !== id));
   }, []);
 
-  /** Oberstes nicht minimiertes Fenster schließen (Desktop-Tastatur / Dock). */
+  /** Oberstes nicht minimiertes Fenster schließen (Desktop-Tastatur / Dock). Finder bleibt erhalten. */
   const closeTopVisibleWindow = useCallback(() => {
     setWindows((prev) => {
       const visible = prev.filter((w) => !w.minimized);
       if (visible.length === 0) return prev;
       const top = visible.reduce((a, b) => (a.z >= b.z ? a : b));
+      if (top.appId === "finder") return prev;
       return prev.filter((w) => w.id !== top.id);
     });
   }, []);
@@ -1365,13 +1444,20 @@ export function DesktopProvider({ children }) {
     setWindows([]);
   }, []);
 
+  /** Klick/Titelzeile/Resize: Fenster nach vorne. Kein State-Update, wenn es bereits oben liegt (minimiert → immer heben). */
   const focusWindow = useCallback((id) => {
-    zCounter.current += 1;
-    setWindows((prev) =>
-      prev.map((w) =>
+    setWindows((prev) => {
+      const target = prev.find((w) => w.id === id);
+      if (!target) return prev;
+      const visible = prev.filter((w) => !w.minimized);
+      const topZ =
+        visible.length === 0 ? 0 : Math.max(...visible.map((w) => w.z));
+      if (!target.minimized && target.z >= topZ) return prev;
+      zCounter.current += 1;
+      return prev.map((w) =>
         w.id === id ? { ...w, z: zCounter.current, minimized: false } : w
-      )
-    );
+      );
+    });
   }, []);
 
   const minimizeWindow = useCallback((id) => {
@@ -1676,13 +1762,11 @@ export function DesktopProvider({ children }) {
       consumeNotesComposerPreset,
       notesComposerPreset,
       finderProjectAppId,
-      finderPreview,
       finderTabAppIds,
       finderGoHome,
       finderOpenProject,
-      finderSetPreview,
-      finderClearPreview,
-      finderTogglePreviewForFile,
+      finderOpenProjectFile,
+      finderToggleProjectFile,
       finderSwitchTab,
       finderCloseTab,
       focusFinderWindow,
@@ -1737,13 +1821,11 @@ export function DesktopProvider({ children }) {
       consumeNotesComposerPreset,
       notesComposerPreset,
       finderProjectAppId,
-      finderPreview,
       finderTabAppIds,
       finderGoHome,
       finderOpenProject,
-      finderSetPreview,
-      finderClearPreview,
-      finderTogglePreviewForFile,
+      finderOpenProjectFile,
+      finderToggleProjectFile,
       finderSwitchTab,
       finderCloseTab,
       focusFinderWindow,

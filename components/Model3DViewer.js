@@ -222,19 +222,15 @@ export function Model3DViewer({
       controls.dynamicDampingFactor = 0.12;
       controls.handleResize();
 
-      /**
-       * Startansicht zurück: nur per nativen `click` (nicht pointerup + manuelle Distanz).
-       * Mit Pointer Capture auf dem Canvas sind pointermove/up für unsere Drag-Erkennung unzuverlässig;
-       * der Browser unterdrückt `click` dagegen, wenn zwischen down/up deutlich bewegt wurde — dann kein Reset nach dem Drehen.
-       */
-      const onCanvasClick = (e) => {
+      /** Doppelklick: Ansicht zurücksetzen (einzelner Klick bleibt für Trackball-Interaktion). */
+      const onCanvasDblClick = (e) => {
         if (disposed) return;
         if (e.button != null && e.button !== 0) return;
         controls.reset();
       };
-      canvas.addEventListener("click", onCanvasClick);
+      canvas.addEventListener("dblclick", onCanvasDblClick);
       disposeList.push(() =>
-        canvas.removeEventListener("click", onCanvasClick)
+        canvas.removeEventListener("dblclick", onCanvasDblClick)
       );
 
       try {
@@ -379,6 +375,8 @@ export function Model3DViewer({
         className={`relative z-10 h-full w-full min-w-0 ${
           lockWindowSize ? "min-h-0" : "min-h-[400px]"
         }`}
+        onMouseDown={(e) => e.stopPropagation()}
+        onPointerDown={(e) => e.stopPropagation()}
       />
     </div>
   );
