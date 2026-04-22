@@ -68,6 +68,15 @@ const Model3DViewer = dynamic(
     ),
   }
 );
+
+const PdfJsViewer = dynamic(() => import("@/components/PdfJsViewer"), {
+  ssr: false,
+  loading: () => (
+    <div className="flex min-h-0 flex-1 items-center justify-center bg-white text-sm text-zinc-500">
+      …
+    </div>
+  ),
+});
 import { getWebAssetFolderPreviewHref } from "@/lib/webAssetFolderPreview";
 
 function fileIcon(name) {
@@ -105,11 +114,11 @@ function AssetFileListThumb({ href, file, fillContainer = false }) {
   const videoRef = useRef(null);
 
   const mediaBox = fillContainer
-    ? "h-full w-full min-h-0 min-w-0 shrink-0 rounded-sm border border-zinc-200 object-cover dark:border-zinc-600"
-    : "h-11 w-11 shrink-0 rounded-sm border border-zinc-200 object-cover dark:border-zinc-600";
+    ? "h-full w-full min-h-0 min-w-0 shrink-0 rounded border border-zinc-200 object-cover dark:border-zinc-600"
+    : "h-11 w-11 shrink-0 rounded border border-zinc-200 object-cover dark:border-zinc-600";
   const extBox = fillContainer
-    ? "flex h-full w-full min-h-0 min-w-0 shrink-0 items-center justify-center overflow-hidden rounded-sm border border-zinc-200 bg-zinc-100 px-1 dark:border-zinc-600 dark:bg-zinc-800"
-    : "flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-sm border border-zinc-200 bg-zinc-100 px-1 dark:border-zinc-600 dark:bg-zinc-800";
+    ? "flex h-full w-full min-h-0 min-w-0 shrink-0 items-center justify-center overflow-hidden rounded border border-zinc-200 bg-zinc-100 px-1 dark:border-zinc-600 dark:bg-zinc-800"
+    : "flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded border border-zinc-200 bg-zinc-100 px-1 dark:border-zinc-600 dark:bg-zinc-800";
 
   useEffect(() => {
     const v = videoRef.current;
@@ -158,7 +167,11 @@ function AssetFileListThumb({ href, file, fillContainer = false }) {
   return (
     <span className={extBox} aria-hidden>
       {ext ? (
-        <span className="max-w-full truncate text-center font-mono text-[15px] font-semibold leading-tight text-zinc-600 dark:text-zinc-300">
+        <span
+          className={`max-w-full truncate text-center font-mono font-semibold leading-tight text-zinc-600 dark:text-zinc-300 ${
+            fillContainer ? "text-xs" : "text-[15px]"
+          }`}
+        >
           {ext}
         </span>
       ) : (
@@ -681,6 +694,7 @@ function AssetFileViewer({
     setAssetFileForWindow,
     windows,
     closeWindow,
+    toggleAssetWidgetChromeFullscreen,
   } = useDesktop();
   const videoRef = useRef(null);
   // #region agent log
@@ -730,9 +744,17 @@ function AssetFileViewer({
     }
   }, []);
 
+  const onPdfFirstPageGeometry = useCallback(
+    ({ width, height }) => {
+      fitFromDimensions(width, height);
+    },
+    [fitFromDimensions]
+  );
+
   const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(file);
   const isVideo = /\.(mov|mp4|webm)$/i.test(file);
   const is3d = /\.(stl|glb|gltf|obj)$/i.test(file);
+  const isPdf = /\.pdf$/i.test(file);
 
   const manifestFiles = useMemo(
     () => manifestEntry?.files ?? [],
@@ -790,12 +812,26 @@ function AssetFileViewer({
       if (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement) {
         return;
       }
+      const me = windows.find((w) => w.id === windowId);
+      if (me?.assetFile?.widgetChromeFullscreen) {
+        e.preventDefault();
+        e.stopPropagation();
+        toggleAssetWidgetChromeFullscreen(windowId);
+        return;
+      }
       e.preventDefault();
+      e.stopPropagation();
       closeWindow(windowId);
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [useWidgetChrome, windowId, closeWindow]);
+  }, [
+    useWidgetChrome,
+    windowId,
+    windows,
+    closeWindow,
+    toggleAssetWidgetChromeFullscreen,
+  ]);
 
   const swipeToPrevImage =
     unifiedParentScroll &&
@@ -836,7 +872,6 @@ function AssetFileViewer({
   useEffect(() => {
     if (widgetChrome || !windowId || isImage || isVideo || is3d) return;
     const { w, h } = iframeAspectHint(file);
-    const isPdf = /\.pdf$/i.test(file);
     fitWindowToContentSize(windowId, w, h, {
       lockAspectForResize: !isPdf,
     });
@@ -848,6 +883,7 @@ function AssetFileViewer({
     isImage,
     isVideo,
     is3d,
+    isPdf,
     fitWindowToContentSize,
   ]);
 
@@ -1040,31 +1076,33 @@ function AssetFileViewer({
         className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-white md:cursor-grab md:active:cursor-grabbing"
         onMouseDown={windowDragProps?.onMouseDown}
       >
-        <div className="relative min-h-0 flex-1 overflow-hidden">{body}</div>
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex items-end justify-between p-2 md:p-3">
-          <div
-            className="pointer-events-auto"
-            onMouseDown={(e) => e.stopPropagation()}
-          >
-            <WidgetChromeArrowButton
-              dir="left"
-              label="Vorherige Datei"
-              disabled={!canCycle}
-              onClick={goPrevAsset}
-            />
-          </div>
-          <div
-            className="pointer-events-auto"
-            onMouseDown={(e) => e.stopPropagation()}
-          >
-            <WidgetChromeArrowButton
-              dir="right"
-              label="Nächste Datei"
-              disabled={!canCycle}
-              onClick={goNextAsset}
-            />
-          </div>
+        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          {body}
         </div>
+        {canCycle && (
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex items-end justify-between p-2 md:p-3">
+            <div
+              className="pointer-events-auto"
+              onMouseDown={(e) => e.stopPropagation()}
+            >
+              <WidgetChromeArrowButton
+                dir="left"
+                label="Vorherige Datei"
+                onClick={goPrevAsset}
+              />
+            </div>
+            <div
+              className="pointer-events-auto"
+              onMouseDown={(e) => e.stopPropagation()}
+            >
+              <WidgetChromeArrowButton
+                dir="right"
+                label="Nächste Datei"
+                onClick={goNextAsset}
+              />
+            </div>
+          </div>
+        )}
       </div>
     );
 
@@ -1114,13 +1152,27 @@ function AssetFileViewer({
       );
     }
 
+    const iframeSrc = assetIframeSrc(file, url);
     return shell(
-      <iframe
-        ref={pdfViewerIframeRef}
-        title={file}
-        src={assetIframeSrc(file, url)}
-        className="min-h-0 w-full flex-1 border-0 bg-white dark:bg-zinc-950"
-      />
+      <div className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-col bg-white">
+        {isPdf ? (
+          <PdfJsViewer
+            key={url}
+            ref={pdfViewerIframeRef}
+            src={url}
+            fileLabel={file}
+            onFirstPageGeometry={onPdfFirstPageGeometry}
+            className="min-h-0 min-w-0 flex-1"
+          />
+        ) : (
+          <iframe
+            ref={pdfViewerIframeRef}
+            title={file}
+            src={iframeSrc}
+            className="min-h-0 min-w-0 flex-1 border-0 bg-white"
+          />
+        )}
+      </div>
     );
   }
 
@@ -1191,24 +1243,39 @@ function AssetFileViewer({
       </div>
     );
   }
+  const iframeSrc = assetIframeSrc(file, url);
+  const iframeClass = unifiedParentScroll
+    ? "min-h-[70vh] w-full flex-none border-0 bg-white"
+    : "min-h-0 min-w-0 w-full flex-1 basis-0 border-0 bg-white";
+  const pdfViewerClass = unifiedParentScroll
+    ? "min-h-[70vh] w-full flex-none bg-white"
+    : "min-h-0 min-w-0 w-full flex-1 basis-0 bg-white";
+
   return (
     <div
       className={
         unifiedParentScroll
-          ? "flex w-full min-h-[70vh] flex-none flex-col"
-          : "flex min-h-0 w-full min-w-0 flex-1 flex-col"
+          ? "flex w-full min-h-[70vh] flex-none flex-col bg-white"
+          : "flex min-h-0 h-full w-full min-w-0 flex-1 flex-col bg-white"
       }
     >
-      <iframe
-        ref={pdfViewerIframeRef}
-        title={file}
-        src={assetIframeSrc(file, url)}
-        className={
-          unifiedParentScroll
-            ? "min-h-[70vh] w-full flex-none border-0 bg-white dark:bg-zinc-950"
-            : "min-h-0 w-full flex-1 basis-0 border-0 bg-white dark:bg-zinc-950"
-        }
-      />
+      {isPdf ? (
+        <PdfJsViewer
+          key={url}
+          ref={pdfViewerIframeRef}
+          src={url}
+          fileLabel={file}
+          onFirstPageGeometry={onPdfFirstPageGeometry}
+          className={pdfViewerClass}
+        />
+      ) : (
+        <iframe
+          ref={pdfViewerIframeRef}
+          title={file}
+          src={iframeSrc}
+          className={iframeClass}
+        />
+      )}
     </div>
   );
 }
@@ -1224,7 +1291,7 @@ function FinderFileVideoThumb({ href, file, tileSize = "list" }) {
   const box =
     tileSize === "grid"
       ? "h-14 w-14 shrink-0 rounded-lg object-cover"
-      : "h-[37.5px] w-[37.5px] shrink-0 rounded-lg object-cover";
+      : "h-14 w-14 shrink-0 rounded object-cover";
 
   useEffect(() => {
     const v = videoRef.current;
@@ -1259,7 +1326,7 @@ function FinderFileFormatThumb({ file, tileSize = "list" }) {
   const grid = tileSize === "grid";
   const box = grid
     ? "flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded border border-zinc-200 bg-zinc-100 px-0.5 dark:border-zinc-600 dark:bg-zinc-800"
-    : "flex h-[37.5px] w-[37.5px] shrink-0 items-center justify-center overflow-hidden rounded border border-zinc-200 bg-zinc-100 px-0.5 dark:border-zinc-600 dark:bg-zinc-800";
+    : "flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded border border-zinc-200 bg-zinc-100 px-0.5 dark:border-zinc-600 dark:bg-zinc-800";
   const extClass = grid
     ? "max-w-full truncate text-center font-mono text-[13.5px] font-semibold leading-tight text-zinc-600 dark:text-zinc-300"
     : "max-w-full truncate text-center font-mono text-[13px] font-semibold leading-tight text-zinc-600 dark:text-zinc-300";
@@ -1284,13 +1351,13 @@ function FinderListIcon({ row, folderPreview, tileSize = "list" }) {
   const grid = tileSize === "grid";
   const imgBox = grid
     ? "h-14 w-14 shrink-0 rounded-lg object-cover"
-    : "h-[37.5px] w-[37.5px] shrink-0 rounded-lg object-cover";
+    : "h-14 w-14 shrink-0 rounded object-cover";
   const appBox = grid
     ? "inline-flex h-14 w-14 shrink-0 items-center justify-center"
-    : "inline-flex h-[37.5px] w-[37.5px] shrink-0 items-center justify-center";
+    : "inline-flex h-14 w-14 shrink-0 items-center justify-center";
   const emojiBox = grid
     ? "inline-flex h-14 w-14 shrink-0 items-center justify-center text-2xl leading-none"
-    : "inline-flex h-[37.5px] w-[37.5px] shrink-0 items-center justify-center text-2xl leading-none";
+    : "inline-flex h-14 w-14 shrink-0 items-center justify-center text-2xl leading-none";
   const appIconVariant = grid ? "default" : "finderList";
 
   const folderPreviewHref =
@@ -1392,8 +1459,18 @@ function blockArrowScrollOnRow(e, isDesktopKb) {
   }
 }
 
+/** Wie OSWindow: Hover-Rahmen 10 %, Auswahl 50 %; inaktiv kein sichtbarer Rand. Text & Previews bleiben voll. */
+const FINDER_LIST_ROW_FRAME =
+  "rounded border-[2.25px] border-transparent bg-white shadow-none transition-[border-color] duration-200 ease-out hover:border-black/10 aria-selected:border-black/50 hover:aria-selected:border-black/50 dark:bg-zinc-900/30 dark:aria-selected:border-black/50 dark:hover:aria-selected:border-black/50";
+
 /** Stream: große, durchlaufende Zeilen (Platzhalter — weiter ausbaubar). */
-function FinderAssetStream({ dir, basePath, onOpenFile, unifiedParentScroll }) {
+function FinderAssetStream({
+  dir,
+  basePath,
+  onOpenFile,
+  unifiedParentScroll,
+  activeFile,
+}) {
   const collapsedKeys = useMemo(() => new Set(), []);
   const entry = webAssetManifest.find((x) => x.dir === dir);
   const tree = useMemo(
@@ -1409,14 +1486,15 @@ function FinderAssetStream({ dir, basePath, onOpenFile, unifiedParentScroll }) {
     <ul
       className={
         unifiedParentScroll
-          ? "space-y-4 p-2"
-          : "min-h-0 flex-1 space-y-4 overflow-auto overscroll-contain p-2"
+          ? "space-y-1 p-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          : "min-h-0 flex-1 space-y-1 overflow-auto overscroll-contain p-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       }
     >
       {files.map((row) => (
-        <li key={row.fullPath} className="list-none">
+        <li key={row.fullPath} className="list-none flex justify-start">
           <button
             type="button"
+            aria-selected={activeFile === row.fullPath}
             onClick={() =>
               onOpenFile({
                 dir: row.dir,
@@ -1424,16 +1502,16 @@ function FinderAssetStream({ dir, basePath, onOpenFile, unifiedParentScroll }) {
                 basePath: row.basePath,
               })
             }
-            className="flex w-full min-w-0 items-center gap-3 rounded-sm border-0 bg-white p-3 text-left transition-colors hover:bg-zinc-50"
+            className={`flex w-full min-w-0 items-center gap-2 px-2 py-1.5 text-left ${FINDER_LIST_ROW_FRAME}`}
           >
-            <div className="flex h-8 w-8 shrink-0 overflow-hidden rounded-lg bg-zinc-100">
+            <div className="flex h-14 w-14 shrink-0 overflow-hidden rounded bg-zinc-100">
               <AssetFileListThumb
                 fillContainer
                 href={fileHref(basePath, dir, row.fullPath)}
                 file={row.fullPath}
               />
             </div>
-            <span className="min-w-0 flex-1 truncate text-base font-medium text-zinc-900">
+            <span className="min-w-0 flex-1 truncate text-sm font-medium text-zinc-900">
               {row.segment}
             </span>
           </button>
@@ -1458,13 +1536,13 @@ function FinderProjectsColumn({
       <ul
         role="listbox"
         aria-label="Projekte"
-        className="min-h-0 flex-1 space-y-0.5 overflow-y-auto overscroll-contain py-1 pl-1 pr-0.5"
+        className="min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain py-1 pl-1 pr-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         {FINDER_BROWSE_HOME_ROWS.map((row) => {
           const active =
             row.kind === "folder" && finderProjectAppId === row.appId;
           return (
-            <li key={row.id}>
+            <li key={row.id} className="flex justify-start">
               <button
                 type="button"
                 role="option"
@@ -1474,10 +1552,10 @@ function FinderProjectsColumn({
                     ? openOrFocus(row.appId)
                     : finderOpenProject(row.appId)
                 }
-                className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm transition-colors ${
+                className={`flex w-full min-w-0 items-center gap-2 px-2 py-1.5 text-left text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-1 dark:focus-visible:ring-zinc-500 ${FINDER_LIST_ROW_FRAME} ${
                   active
-                    ? "bg-zinc-200 font-semibold text-zinc-900 dark:bg-zinc-700 dark:text-zinc-100"
-                    : "text-zinc-800 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                    ? "font-semibold text-zinc-900 dark:text-zinc-100"
+                    : "text-zinc-800 dark:text-zinc-200"
                 }`}
               >
                 <FinderListIcon
@@ -1491,6 +1569,57 @@ function FinderProjectsColumn({
           );
         })}
       </ul>
+    </div>
+  );
+}
+
+/** Mobile (unifiedParentScroll): Projektwechsler als Kacheln statt schmaler Liste. */
+function FinderProjectsMobileTilePicker({
+  folderPreview,
+  finderProjectAppId,
+  finderOpenProject,
+  openOrFocus,
+}) {
+  return (
+    <div className="flex max-h-[min(44vh,320px)] min-h-0 w-full shrink-0 flex-col border-b border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900/40">
+      <div
+        role="grid"
+        aria-label="Projekte"
+        aria-colcount={3}
+        className="min-h-0 flex-1 grid grid-cols-3 gap-2 overflow-y-auto overscroll-contain p-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
+          {FINDER_BROWSE_HOME_ROWS.map((row) => {
+            const active =
+              row.kind === "folder" && finderProjectAppId === row.appId;
+            return (
+              <button
+                key={row.id}
+                type="button"
+                role="gridcell"
+                aria-selected={active}
+                onClick={() =>
+                  row.kind === "app"
+                    ? openOrFocus(row.appId)
+                    : finderOpenProject(row.appId)
+                }
+                className={`flex min-h-[6.25rem] flex-col items-center justify-start gap-1.5 rounded-lg border-2 border-transparent px-1 py-2 text-center transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800/60 ${
+                  active
+                    ? "border-black/25 bg-zinc-100 dark:border-white/20 dark:bg-zinc-800/80"
+                    : ""
+                }`}
+              >
+                <FinderListIcon
+                  row={row}
+                  folderPreview={folderPreview}
+                  tileSize="grid"
+                />
+                <span className="line-clamp-2 w-full max-w-[9rem] text-center text-[11px] font-medium leading-tight text-zinc-900 dark:text-zinc-100">
+                  {row.primary}
+                </span>
+              </button>
+            );
+          })}
+      </div>
     </div>
   );
 }
@@ -1759,6 +1888,22 @@ function FinderView({ unifiedParentScroll = false }) {
   const projectAppMeta = finderProjectAppId ? APPS[finderProjectAppId] : null;
   const projectAssetDir = projectAppMeta?.assetDir ?? null;
 
+  /** Oberstes sichtbares Asset-Fenster für dieses Projekt → Rahmen 100 % in der Dateiliste. */
+  const finderProjectOpenAssetFile = useMemo(() => {
+    if (!projectAssetDir) return null;
+    const visible = windows.filter(
+      (w) =>
+        w.appId === "assetFile" &&
+        !w.minimized &&
+        w.assetFile?.dir === projectAssetDir
+    );
+    if (visible.length === 0) return null;
+    const top = visible.reduce((a, b) =>
+      (a.z ?? 0) >= (b.z ?? 0) ? a : b
+    );
+    return top.assetFile?.file ?? null;
+  }, [windows, projectAssetDir]);
+
   /** Wie früher: nur Suche + Raster/Liste, volle Breite — ohne Tabs/Vorschau-Spalte. */
   const isClassicFinderHome =
     finderProjectAppId === null && finderTabAppIds.length === 0;
@@ -1831,6 +1976,17 @@ function FinderView({ unifiedParentScroll = false }) {
           ? "min-h-0 flex-1 overflow-auto overscroll-contain p-3"
           : "min-h-0 flex-1 overflow-auto overscroll-contain p-2";
 
+  /** Schmale Telefone: 3 Spalten; Desktop-Finder: 4 (Tastatur-Navigation nutzt weiter 4). */
+  const browseGridClass = unifiedParentScroll
+    ? "grid grid-cols-3 gap-2"
+    : "grid grid-cols-4 gap-3";
+  const browseGridColCount = unifiedParentScroll ? 3 : FINDER_BROWSE_GRID_COLS;
+  const browseTileMinH = unifiedParentScroll ? "min-h-[6.25rem]" : "min-h-[7.5rem]";
+  const browseTileGap = unifiedParentScroll ? "gap-1.5" : "gap-2";
+  const browseLabelCls = unifiedParentScroll
+    ? "line-clamp-2 w-full max-w-[9rem] text-center text-[11px] font-medium leading-tight text-zinc-900 dark:text-zinc-100"
+    : "line-clamp-2 w-full max-w-[10rem] text-center text-xs font-medium leading-tight text-zinc-900";
+
   const leftPaneScroll =
     unifiedParentScroll && !showSearch
       ? "min-h-0 overflow-visible p-2"
@@ -1893,8 +2049,8 @@ function FinderView({ unifiedParentScroll = false }) {
       <div
         role="grid"
         aria-label="Projekte"
-        aria-colcount={FINDER_BROWSE_GRID_COLS}
-        className="grid grid-cols-4 gap-3"
+        aria-colcount={browseGridColCount}
+        className={browseGridClass}
         onKeyDownCapture={(e) => {
           if (!browseGridMode || !isDesktopKb) return;
           if (
@@ -1921,16 +2077,14 @@ function FinderView({ unifiedParentScroll = false }) {
               setSelectedIndex(index);
               openHit(row);
             }}
-            className="flex min-h-[7.5rem] flex-col items-center justify-start gap-2 rounded-lg border-0 px-1.5 py-2 text-center transition-colors hover:bg-zinc-100"
+            className={`flex ${browseTileMinH} flex-col items-center justify-start ${browseTileGap} rounded-lg border-0 px-1.5 py-2 text-center transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800/60`}
           >
             <FinderListIcon
               row={row}
               folderPreview={folderPreview}
               tileSize="grid"
             />
-            <span className="line-clamp-2 w-full max-w-[10rem] text-center text-xs font-medium leading-tight text-zinc-900">
-              {row.primary}
-            </span>
+            <span className={browseLabelCls}>{row.primary}</span>
           </button>
         ))}
       </div>
@@ -1942,6 +2096,7 @@ function FinderView({ unifiedParentScroll = false }) {
         dir={projectAssetDir}
         basePath="/web"
         unifiedParentScroll={unifiedParentScroll}
+        activeFile={finderProjectOpenAssetFile}
         onOpenFile={(p) => finderOpenProjectFile(p)}
       />
     ) : null;
@@ -2097,12 +2252,21 @@ function FinderView({ unifiedParentScroll = false }) {
                 unifiedParentScroll ? "min-h-[min(70vh,520px)]" : ""
               }`}
             >
-              <FinderProjectsColumn
-                folderPreview={folderPreview}
-                finderProjectAppId={finderProjectAppId}
-                finderOpenProject={finderOpenProject}
-                openOrFocus={openOrFocus}
-              />
+              {unifiedParentScroll ? (
+                <FinderProjectsMobileTilePicker
+                  folderPreview={folderPreview}
+                  finderProjectAppId={finderProjectAppId}
+                  finderOpenProject={finderOpenProject}
+                  openOrFocus={openOrFocus}
+                />
+              ) : (
+                <FinderProjectsColumn
+                  folderPreview={folderPreview}
+                  finderProjectAppId={finderProjectAppId}
+                  finderOpenProject={finderOpenProject}
+                  openOrFocus={openOrFocus}
+                />
+              )}
               <div
                 className={`relative flex min-h-0 min-w-0 flex-1 flex-col lg:min-w-0 ${leftPaneScroll}`}
               >

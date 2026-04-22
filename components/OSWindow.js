@@ -130,6 +130,7 @@ export function OSWindow({ win }) {
     setWindowBounds,
     openOrFocus,
     toggleMediaPlayerVideoPanel,
+    toggleAssetWidgetChromeFullscreen,
     minWindowW,
     minWindowH,
     osTitlebarH,
@@ -434,21 +435,52 @@ export function OSWindow({ win }) {
       onMouseDown={() => focusWindow(win.id)}
     >
       {isWidgetChromeAsset ? (
-        <button
-          type="button"
-          aria-label="Schließen"
-          className="absolute left-2 top-2 z-30 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-transparent hover:opacity-90"
-          onMouseDown={(e) => e.stopPropagation()}
-          onClick={(e) => {
-            e.stopPropagation();
-            closeWindow(win.id);
-          }}
+        <div
+          className={`absolute left-2 top-2 z-30 flex items-center gap-1 ${
+            win.assetFile?.widgetChromeFullscreen ? "flex-row" : "flex-col"
+          }`}
         >
-          <span
-            className="block h-3 w-3 shrink-0 rounded-full bg-[rgb(255,0,0)]"
-            aria-hidden
-          />
-        </button>
+          <button
+            type="button"
+            data-mm-widget-no-drag
+            aria-label="Schließen"
+            className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full bg-transparent transition duration-200 ease-out opacity-50 hover:opacity-100 focus-visible:opacity-100 active:scale-95 active:opacity-100"
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              closeWindow(win.id);
+            }}
+          >
+            <span
+              className="block h-3 w-3 shrink-0 rounded-full bg-[rgb(255,0,0)]"
+              aria-hidden
+            />
+          </button>
+          <button
+            type="button"
+            data-mm-widget-no-drag
+            aria-label={
+              win.assetFile?.widgetChromeFullscreen
+                ? "Vollbild beenden"
+                : "Vollbild"
+            }
+            className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full bg-transparent transition duration-200 ease-out opacity-50 hover:opacity-100 focus-visible:opacity-100 active:scale-95 active:opacity-100"
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleAssetWidgetChromeFullscreen(win.id);
+            }}
+          >
+            <span
+              className={`block h-3 w-3 shrink-0 rounded-full ${
+                win.assetFile?.widgetChromeFullscreen
+                  ? "bg-[rgb(255,204,0)]"
+                  : "bg-[rgb(0,255,0)]"
+              }`}
+              aria-hidden
+            />
+          </button>
+        </div>
       ) : null}
       {!isMobile ? (
         win.appId === "finder" ? (
@@ -627,67 +659,73 @@ export function OSWindow({ win }) {
         {useMobileUnifiedChrome ? (
           <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-y-contain pb-[max(0.5rem,calc(env(safe-area-inset-bottom,0px)+var(--mm-vv-bottom-inset,0px)))] [-webkit-overflow-scrolling:touch]">
             <div className="flex min-h-full flex-col">
-              <div
-                className={`flex min-h-[4.5rem] w-full shrink-0 items-center gap-2 px-4 pt-[max(1.125rem,env(safe-area-inset-top,0px))] pb-3 ${
-                  win.appId === "media" ? "bg-[#050508]" : ""
-                }`}
-              >
-                <div className="flex shrink-0 items-center">
-                  <button
-                    type="button"
-                    aria-label="Home"
-                    title="Home"
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-transparent hover:opacity-90 active:opacity-90"
-                    onMouseDown={(e) => e.stopPropagation()}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      closeAllTabs();
-                    }}
-                  >
-                    <span
-                      className="block h-3 w-3 shrink-0 rounded-full bg-[rgb(255,0,0)]"
-                      aria-hidden
-                    />
-                    <span className="sr-only">Home</span>
-                  </button>
-                </div>
-                <div className="min-w-0 flex-1 px-1 text-center">
-                  <p
-                    className={`truncate text-sm leading-tight ${
-                      win.appId === "media"
-                        ? "font-semibold leading-[1.3] tracking-[0.01em] text-white [text-shadow:0_2px_0_rgba(0,0,0,0.5)]"
-                        : "font-medium text-zinc-900 dark:text-zinc-100"
-                    }`}
-                  >
-                    {win.title}
-                  </p>
-                  {mobileAssetFolderChromeDir ? (
+              {win.appId !== "finder" ? (
+                <div
+                  className={`flex min-h-[4.5rem] w-full shrink-0 items-center gap-2 px-4 pt-[max(1.125rem,env(safe-area-inset-top,0px))] pb-3 ${
+                    win.appId === "media" ? "bg-[#050508]" : ""
+                  }`}
+                >
+                  <div className="flex shrink-0 items-center">
+                    <button
+                      type="button"
+                      aria-label="Home"
+                      title="Home"
+                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-transparent hover:opacity-90 active:opacity-90"
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        closeAllTabs();
+                      }}
+                    >
+                      <span
+                        className="block h-3 w-3 shrink-0 rounded-full bg-[rgb(255,0,0)]"
+                        aria-hidden
+                      />
+                      <span className="sr-only">Home</span>
+                    </button>
+                  </div>
+                  <div className="min-w-0 flex-1 px-1 text-center">
                     <p
-                      className={`mt-0.5 truncate text-center text-xs ${
+                      className={`truncate text-sm leading-tight ${
                         win.appId === "media"
-                          ? "text-zinc-400"
-                          : "text-zinc-500"
+                          ? "font-semibold leading-[1.3] tracking-[0.01em] text-white [text-shadow:0_2px_0_rgba(0,0,0,0.5)]"
+                          : "font-medium text-zinc-900 dark:text-zinc-100"
                       }`}
                     >
-                      <code
-                        className={
+                      {win.title}
+                    </p>
+                    {mobileAssetFolderChromeDir ? (
+                      <p
+                        className={`mt-0.5 truncate text-center text-xs ${
                           win.appId === "media"
                             ? "text-zinc-400"
-                            : "text-zinc-600 dark:text-zinc-400"
-                        }
+                            : "text-zinc-500"
+                        }`}
                       >
-                        /web/{mobileAssetFolderChromeDir}
-                      </code>
-                    </p>
-                  ) : null}
+                        <code
+                          className={
+                            win.appId === "media"
+                              ? "text-zinc-400"
+                              : "text-zinc-600 dark:text-zinc-400"
+                          }
+                        >
+                          /web/{mobileAssetFolderChromeDir}
+                        </code>
+                      </p>
+                    ) : null}
+                  </div>
+                  <div className="h-8 w-8 shrink-0" aria-hidden />
                 </div>
-                <div className="h-8 w-8 shrink-0" aria-hidden />
-              </div>
+              ) : (
+                <span className="sr-only">{win.title}</span>
+              )}
               <div
                 className={`flex min-h-0 flex-1 flex-col ${
                   win.appId === "media"
                     ? "bg-[#050508]"
-                    : "border-t border-zinc-100/80 dark:border-zinc-700/80"
+                    : win.appId === "finder"
+                      ? "pt-[max(0.75rem,env(safe-area-inset-top,0px))]"
+                      : "border-t border-zinc-100/80 dark:border-zinc-700/80"
                 }`}
               >
                 <AppContent

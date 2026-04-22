@@ -283,9 +283,18 @@ export function DesktopIcons() {
 
   return (
     <>
-      {/* Mobile: festes 4×4-Raster — kein Drag */}
+      {/* Mobile: Widgets über dem Finder (z-30); Raster unten unter dem Finder (z-8), damit keine „Geister“-Kacheln auf der Finder-Karte liegen. */}
       <div
-        className="pointer-events-none absolute inset-0 flex flex-col md:hidden"
+        className="pointer-events-none absolute left-0 right-0 top-0 z-[30] md:hidden"
+        style={{
+          paddingLeft: "max(0.5rem, env(safe-area-inset-left, 0px))",
+          paddingRight: "max(0.5rem, env(safe-area-inset-right, 0px))",
+        }}
+      >
+        <DesktopWidgetsMobile />
+      </div>
+      <div
+        className="pointer-events-none absolute inset-0 z-[8] flex flex-col justify-end md:hidden"
         style={{
           paddingBottom:
             "max(0.75rem, calc(env(safe-area-inset-bottom, 0px) + var(--mm-vv-bottom-inset, 0px)))",
@@ -293,14 +302,15 @@ export function DesktopIcons() {
           paddingRight: "max(0.5rem, env(safe-area-inset-right, 0px))",
         }}
       >
-        <DesktopWidgetsMobile />
         <div
-          className={`grid min-h-0 w-full flex-1 gap-x-1 gap-y-0.5 px-1 pt-1 min-[400px]:gap-x-2 min-[400px]:gap-y-2 min-[400px]:px-2 ${
-            mobileGridRows > MOBILE_HOME_GRID_ROWS ? "overflow-y-auto" : ""
+          className={`grid w-full shrink-0 gap-x-1 gap-y-0.5 px-1 pb-0.5 pt-1 min-[400px]:gap-x-2 min-[400px]:gap-y-2 min-[400px]:px-2 ${
+            mobileGridRows > MOBILE_HOME_GRID_ROWS
+              ? "max-h-[min(52dvh,420px)] overflow-y-auto overscroll-contain"
+              : ""
           }`}
           style={{
             gridTemplateColumns: `repeat(${MOBILE_HOME_GRID_COLS}, minmax(0, 1fr))`,
-            gridTemplateRows: `repeat(${mobileGridRows}, minmax(0, 1fr))`,
+            gridTemplateRows: `repeat(${mobileGridRows}, auto)`,
           }}
         >
           {floatingIcons.map((item) => (

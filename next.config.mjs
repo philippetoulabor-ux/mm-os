@@ -12,6 +12,8 @@ import bundleAnalyzer from "@next/bundle-analyzer";
  */
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  /** react-pdf 9 (CJS/ESM); `pdfjs-dist` 5.4 + Webpack löst oft `defineProperty on non-object` aus → pdfjs 4.8.69 (s. package.json). */
+  transpilePackages: ["react-pdf"],
   async headers() {
     return [
       {

@@ -135,6 +135,49 @@ export function getDesktopLayerFullscreenRect() {
 }
 
 /**
+ * Mobile-Home: Finder als Karte unter dem Slideshow-/Widget-Stapel (`w-[75%] aspect-[3/2]`),
+ * mit Abstand zum unteren Icon-Raster — kein Vollbild.
+ */
+function getMobileFinderHomeCardBounds() {
+  if (typeof window === "undefined") {
+    return {
+      x: WINDOW_DESKTOP_INSET,
+      y: 220,
+      w: Math.max(MIN_WIN_W, 360 - 2 * WINDOW_DESKTOP_INSET),
+      h: 420,
+    };
+  }
+  const { w: desktopW, h: desktopH } = getDesktopContentRect();
+  const { inset, maxBottomLayer } = getDesktopWindowLayoutLimits();
+  const innerW = Math.max(MIN_WIN_W, desktopW - 2 * inset);
+  const widgetBandH = Math.min(desktopH * 0.46, desktopW * 0.5 + 40);
+  const gapBelowWidget = 12;
+  const top = Math.max(inset, widgetBandH + gapBelowWidget);
+  const bottomReserve = Math.max(120, Math.min(desktopH * 0.24, 210));
+  const h = Math.max(MIN_WIN_H, maxBottomLayer - top - bottomReserve);
+  return {
+    x: inset,
+    y: top,
+    w: innerW,
+    h,
+  };
+}
+
+/** Gleichmäßiger Rand zum Layer-Rand für Finder-Widget-Asset-Vollbild (animiert wie Fenster-Bounds). */
+export const ASSET_WIDGET_CHROME_FULLSCREEN_PAD = 20;
+
+export function getDesktopAssetWidgetChromeFullscreenBounds() {
+  const fs = getDesktopLayerFullscreenRect();
+  const p = ASSET_WIDGET_CHROME_FULLSCREEN_PAD;
+  return {
+    x: p,
+    y: fs.y + p,
+    w: Math.max(MIN_WIN_W, fs.w - 2 * p),
+    h: Math.max(MIN_WIN_H, fs.h - 2 * p),
+  };
+}
+
+/**
  * Gemessene Größe des `relative`-Desktop-Layers (Fenster-Positionierungs-Container).
  * Wird von DesktopShell per ResizeObserver gesetzt — gleiche Basis für x und y wie in CSS.
  */
@@ -217,30 +260,22 @@ function centerWindow(size) {
   };
 }
 
-/** Erstes Laden ohne gespeicherten State: Finder fest positioniert (Desktop) bzw. Vollbild (Mobile). */
+/** Erstes Laden ohne gespeicherten State: Finder fest positioniert (Desktop) bzw. Karte unter Widgets (Mobile). */
 function createInitialFinderWindow() {
   const def = APPS.finder;
   const id = `finder-${Date.now()}`;
   const baseZ = 21;
   if (isMobileViewport()) {
-    const pos = centerWindow(def.defaultSize);
-    const pb = {
-      x: pos.x,
-      y: pos.y,
-      w: def.defaultSize.w,
-      h: def.defaultSize.h,
-    };
-    const fs = getDesktopLayerFullscreenRect();
     return {
       id,
       appId: "finder",
       title: def.title,
-      ...fs,
+      ...getMobileFinderHomeCardBounds(),
       z: baseZ,
       minimized: false,
-      maximized: true,
-      prevBounds: pb,
-      mobileImmersive: true,
+      maximized: false,
+      prevBounds: null,
+      mobileImmersive: false,
     };
   }
   const pos = { x: 78, y: -22 };
@@ -482,6 +517,15 @@ function clampWindowsToViewport(windows) {
   if (isMobileViewport()) {
     return list.map((win) => {
       if (win.minimized) return win;
+      if (win.appId === "finder") {
+        return {
+          ...win,
+          ...getMobileFinderHomeCardBounds(),
+          maximized: false,
+          mobileImmersive: false,
+          prevBounds: null,
+        };
+      }
       const fs = getDesktopLayerFullscreenRect();
       if (win.appId === "media" && win.mediaVideoCollapsed) {
         const def = APPS.media;
@@ -519,11 +563,21 @@ function clampWindowsToViewport(windows) {
     });
   }
 
-  return list.map((win) => {
+  const desktopClamped = list.map((win) => {
     if (win.maximized) {
       return {
         ...win,
         ...getDesktopLayerFullscreenRect(),
+      };
+    }
+    if (
+      win.appId === "assetFile" &&
+      win.assetFile?.widgetChrome &&
+      win.assetFile?.widgetChromeFullscreen
+    ) {
+      return {
+        ...win,
+        ...getDesktopAssetWidgetChromeFullscreenBounds(),
       };
     }
     let { x, y, w, h } = win;
@@ -543,6 +597,8 @@ function clampWindowsToViewport(windows) {
     }
     return { ...win, x, y, w, h };
   });
+
+  return desktopClamped;
 }
 
 function loadWindowsFromStorage() {
@@ -704,6 +760,9 @@ export function DesktopProvider({ children }) {
 
       let nh = win.h + dh;
       nh = Math.max(MIN_WIN_H, Math.min(nh, maxSide));
+      /** Mindesthöhe wie Default-Größe (bis maxSide), damit der Finder nach kleinen persistierten Maßen wieder „normal“ wirkt. */
+      const defFinder = APPS.finder;
+      nh = Math.max(nh, Math.min(defFinder.defaultSize.h, maxSide));
       const actualDh = nh - win.h;
       let ny = win.y - actualDh;
 
@@ -1120,7 +1179,7 @@ export function DesktopProvider({ children }) {
         if (reuse) {
           zCounter.current += 1;
           const nextAssetFile = fromFinder
-            ? { dir, file, basePath, widgetChrome: true }
+            ? { dir, file, basePath, widgetChrome: true, widgetChromeFullscreen: false }
             : {
                 dir,
                 file,
@@ -1128,20 +1187,32 @@ export function DesktopProvider({ children }) {
                 ...(reuse.assetFile?.widgetChrome === true
                   ? { widgetChrome: true }
                   : {}),
+                widgetChromeFullscreen: false,
               };
           return prev
             .filter((w) => w.appId !== "assetFile" || w.id === reuse.id)
-            .map((w) =>
-              w.id === reuse.id
-                ? {
-                    ...w,
-                    title: file,
-                    assetFile: nextAssetFile,
-                    minimized: false,
-                    z: zCounter.current,
-                  }
-                : w
-            );
+            .map((w) => {
+              if (w.id !== reuse.id) return w;
+              const wasFull = w.assetFile?.widgetChromeFullscreen === true;
+              const restore =
+                wasFull && w.prevBounds ? w.prevBounds : null;
+              return {
+                ...w,
+                title: file,
+                assetFile: nextAssetFile,
+                minimized: false,
+                z: zCounter.current,
+                ...(restore
+                  ? {
+                      x: restore.x,
+                      y: restore.y,
+                      w: restore.w,
+                      h: restore.h,
+                      prevBounds: null,
+                    }
+                  : {}),
+              };
+            });
         }
 
         zCounter.current += 1;
@@ -1258,7 +1329,7 @@ export function DesktopProvider({ children }) {
         if (reuse) {
           zCounter.current += 1;
           const nextAssetFile = fromFinder
-            ? { dir, file, basePath, widgetChrome: true }
+            ? { dir, file, basePath, widgetChrome: true, widgetChromeFullscreen: false }
             : {
                 dir,
                 file,
@@ -1266,20 +1337,32 @@ export function DesktopProvider({ children }) {
                 ...(reuse.assetFile?.widgetChrome === true
                   ? { widgetChrome: true }
                   : {}),
+                widgetChromeFullscreen: false,
               };
           return prev
             .filter((w) => w.appId !== "assetFile" || w.id === reuse.id)
-            .map((w) =>
-              w.id === reuse.id
-                ? {
-                    ...w,
-                    title: file,
-                    assetFile: nextAssetFile,
-                    minimized: false,
-                    z: zCounter.current,
-                  }
-                : w
-            );
+            .map((w) => {
+              if (w.id !== reuse.id) return w;
+              const wasFull = w.assetFile?.widgetChromeFullscreen === true;
+              const restore =
+                wasFull && w.prevBounds ? w.prevBounds : null;
+              return {
+                ...w,
+                title: file,
+                assetFile: nextAssetFile,
+                minimized: false,
+                z: zCounter.current,
+                ...(restore
+                  ? {
+                      x: restore.x,
+                      y: restore.y,
+                      w: restore.w,
+                      h: restore.h,
+                      prevBounds: null,
+                    }
+                  : {}),
+              };
+            });
         }
 
         zCounter.current += 1;
@@ -1408,20 +1491,19 @@ export function DesktopProvider({ children }) {
   const setAssetFileForWindow = useCallback((windowId, { dir, file, basePath = "/web" }) => {
     if (!windowId || !dir || !file) return;
     setWindows((prev) =>
-      prev.map((w) =>
-        w.id === windowId && w.appId === "assetFile"
-          ? {
-              ...w,
-              title: file,
-              assetFile: {
-                ...w.assetFile,
-                dir,
-                file,
-                basePath,
-              },
-            }
-          : w
-      )
+      prev.map((w) => {
+        if (w.id !== windowId || w.appId !== "assetFile") return w;
+        return {
+          ...w,
+          title: file,
+          assetFile: {
+            ...w.assetFile,
+            dir,
+            file,
+            basePath,
+          },
+        };
+      })
     );
   }, []);
 
@@ -1549,6 +1631,60 @@ export function DesktopProvider({ children }) {
         };
       })
     );
+  }, []);
+
+  /** Finder-Widget-Dateifenster: Vollbild mit gleichmäßigem Rand; Finder animiert wie Desktop-Widgets. */
+  const toggleAssetWidgetChromeFullscreen = useCallback((id) => {
+    setWindows((prev) => {
+      const target = prev.find(
+        (w) =>
+          w.id === id &&
+          w.appId === "assetFile" &&
+          w.assetFile?.widgetChrome === true
+      );
+      if (!target?.assetFile) return prev;
+
+      const full = target.assetFile.widgetChromeFullscreen === true;
+      zCounter.current += 1;
+      const nextZ = zCounter.current;
+
+      return prev.map((w) => {
+        if (w.id !== id || w.appId !== "assetFile" || !w.assetFile?.widgetChrome) {
+          return w;
+        }
+        if (full) {
+          const pb = w.prevBounds;
+          return {
+            ...w,
+            z: nextZ,
+            assetFile: { ...w.assetFile, widgetChromeFullscreen: false },
+            ...(pb &&
+            typeof pb.x === "number" &&
+            typeof pb.y === "number" &&
+            typeof pb.w === "number" &&
+            typeof pb.h === "number"
+              ? {
+                  x: pb.x,
+                  y: pb.y,
+                  w: pb.w,
+                  h: pb.h,
+                  prevBounds: null,
+                }
+              : {}),
+          };
+        }
+        const pb = { x: w.x, y: w.y, w: w.w, h: w.h };
+        const b = getDesktopAssetWidgetChromeFullscreenBounds();
+        return {
+          ...w,
+          z: nextZ,
+          maximized: false,
+          prevBounds: pb,
+          ...b,
+          assetFile: { ...w.assetFile, widgetChromeFullscreen: true },
+        };
+      });
+    });
   }, []);
 
   const moveWindow = useCallback((id, x, y) => {
@@ -1742,6 +1878,7 @@ export function DesktopProvider({ children }) {
       minimizeWindow,
       toggleMediaPlayerVideoPanel,
       toggleMaximize,
+      toggleAssetWidgetChromeFullscreen,
       moveWindow,
       setWindowBounds,
       fitWindowToContentSize,
@@ -1801,6 +1938,7 @@ export function DesktopProvider({ children }) {
       minimizeWindow,
       toggleMediaPlayerVideoPanel,
       toggleMaximize,
+      toggleAssetWidgetChromeFullscreen,
       moveWindow,
       setWindowBounds,
       fitWindowToContentSize,
