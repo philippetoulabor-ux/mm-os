@@ -20,7 +20,6 @@ import {
 import {
   migrateDesktopIconPositions,
   migrateNotesText,
-  migrateWindowState,
 } from "@/lib/webAssetIds";
 import { getMentionToken } from "@/lib/noteRefs";
 import {
@@ -304,6 +303,19 @@ function centerWindow(size) {
   };
 }
 
+/**
+ * Desktop: Start-Position unten links — 4× {@link ASSET_WIDGET_CHROME_FULLSCREEN_PAD}
+ * (Split-Layout bei geöffnetem Content: je 1× Pad).
+ */
+function getInitialDesktopFinderPosition(size) {
+  const edge = ASSET_WIDGET_CHROME_FULLSCREEN_PAD * 4;
+  const { desktopH, minLayerY } = getDesktopWindowLayoutLimits();
+  return {
+    x: edge,
+    y: Math.max(minLayerY, desktopH - size.h - edge),
+  };
+}
+
 /** Erstes Laden ohne gespeicherten State: Finder fest positioniert (Desktop) bzw. Karte unter Widgets (Mobile). */
 function createInitialFinderWindow() {
   const def = APPS.finder;
@@ -322,7 +334,7 @@ function createInitialFinderWindow() {
       mobileImmersive: false,
     };
   }
-  const pos = { x: 78, y: -22 };
+  const pos = getInitialDesktopFinderPosition(def.defaultSize);
   return {
     id,
     appId: "finder",
@@ -448,87 +460,6 @@ function loadDesktopIconPositions() {
   }
 }
 
-function num(v, fallback) {
-  return typeof v === "number" && Number.isFinite(v) ? v : fallback;
-}
-
-function bool(v, fallback) {
-  return typeof v === "boolean" ? v : fallback;
-}
-
-/** Ein gespeichertes Fenster nur übernehmen, wenn App und Pflichtfelder gültig sind. */
-function sanitizeWindow(w) {
-  if (!w || typeof w !== "object") return null;
-  const appId = w.appId;
-  if (typeof appId !== "string" || !APPS[appId]) return null;
-  const id = typeof w.id === "string" && w.id.length > 0 ? w.id : null;
-  if (!id) return null;
-
-  let assetFile = null;
-  if (appId === "assetFile" && w.assetFile && typeof w.assetFile === "object") {
-    const dir = w.assetFile.dir;
-    const file = w.assetFile.file;
-    if (typeof dir === "string" && dir && typeof file === "string" && file) {
-      assetFile = {
-        dir,
-        file,
-        basePath:
-          typeof w.assetFile.basePath === "string" && w.assetFile.basePath
-            ? w.assetFile.basePath
-            : "/web",
-        ...(typeof w.assetFile.widgetChrome === "boolean"
-          ? { widgetChrome: w.assetFile.widgetChrome }
-          : {}),
-      };
-    } else {
-      return null;
-    }
-  }
-
-  let prevBounds = null;
-  if (w.prevBounds && typeof w.prevBounds === "object") {
-    const pb = w.prevBounds;
-    prevBounds = {
-      x: num(pb.x, 0),
-      y: num(pb.y, 0),
-      w: num(pb.w, 360),
-      h: num(pb.h, 240),
-    };
-  }
-
-  let contentAspect = null;
-  if (w.contentAspect && typeof w.contentAspect === "object") {
-    const ca = w.contentAspect;
-    const rw = num(ca.rw, 0);
-    const rh = num(ca.rh, 0);
-    if (rw > 0 && rh > 0) contentAspect = { rw, rh };
-  }
-
-  const base = {
-    id,
-    appId,
-    title: typeof w.title === "string" ? w.title : APPS[appId].title,
-    x: num(w.x, 0),
-    y: num(w.y, 0),
-    w: num(w.w, APPS[appId].defaultSize.w),
-    h: num(w.h, APPS[appId].defaultSize.h),
-    z: Math.max(0, Math.floor(num(w.z, 0))),
-    minimized: bool(w.minimized, false),
-    maximized: bool(w.maximized, false),
-    prevBounds,
-    mobileImmersive: bool(w.mobileImmersive, false),
-    contentAspect,
-    ...(assetFile ? { assetFile } : {}),
-  };
-  if (appId === "media") {
-    return {
-      ...base,
-      mediaVideoCollapsed: bool(w.mediaVideoCollapsed, false),
-    };
-  }
-  return base;
-}
-
 function clampWindowsToViewport(windows) {
   if (typeof window === "undefined") return windows;
   const {
@@ -645,35 +576,6 @@ function clampWindowsToViewport(windows) {
   return desktopClamped;
 }
 
-function loadWindowsFromStorage() {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = localStorage.getItem(WINDOWS_STATE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    const migrated = parsed.map(migrateWindowState);
-    const changed = migrated.some(
-      (w, i) => JSON.stringify(w) !== JSON.stringify(parsed[i])
-    );
-    if (changed) {
-      try {
-        localStorage.setItem(WINDOWS_STATE_KEY, JSON.stringify(migrated));
-      } catch {
-        /* ignore */
-      }
-    }
-    const out = [];
-    for (const item of migrated) {
-      const s = sanitizeWindow(item);
-      if (s) out.push(s);
-    }
-    return clampWindowsToViewport(out);
-  } catch {
-    return [];
-  }
-}
-
 export function DesktopProvider({ children }) {
   const [windows, setWindows] = useState([]);
   const [darkMode, setDarkModeState] = useState(false);
@@ -740,16 +642,10 @@ export function DesktopProvider({ children }) {
     );
   }, []);
 
+  /** Voller Seiten-Reload: immer Standard-Desktop (Finder-Startposition), kein Wiederherstellen aus localStorage. */
   useEffect(() => {
-    const loaded = loadWindowsFromStorage();
-    if (loaded.length > 0) {
-      const maxZ = Math.max(20, ...loaded.map((w) => w.z ?? 0));
-      zCounter.current = maxZ;
-      setWindows(loaded);
-    } else {
-      zCounter.current = 21;
-      setWindows([createInitialFinderWindow()]);
-    }
+    zCounter.current = 21;
+    setWindows([createInitialFinderWindow()]);
   }, []);
 
   /** Viewport / Layer: Fenster begrenzen; Mobile = fullscreen, Desktop inkl. minimierter Media-Position. */

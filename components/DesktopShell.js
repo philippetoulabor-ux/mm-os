@@ -59,6 +59,18 @@ function DesktopShellInner() {
   const { closeTopVisibleWindow } = useDesktop();
   useSyncVisualViewportInsets();
 
+  useLayoutEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      if ("scrollRestoration" in history) {
+        history.scrollRestoration = "manual";
+      }
+    } catch {
+      /* ignore */
+    }
+    window.scrollTo(0, 0);
+  }, []);
+
   useEffect(() => {
     const onKeyDown = (e) => {
       if (e.key !== "Escape") return;

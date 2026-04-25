@@ -460,7 +460,11 @@ export function OSWindow({ win }) {
             }}
           >
             <span
-              className="block h-3 w-3 shrink-0 rounded-full bg-[rgb(255,0,0)]"
+              className={`block h-3 w-3 shrink-0 rounded-full ${
+                win.assetFile?.widgetChromeFullscreen
+                  ? "bg-[rgb(255,204,0)]"
+                  : "bg-[rgb(255,0,0)]"
+              }`}
               aria-hidden
             />
           </button>
