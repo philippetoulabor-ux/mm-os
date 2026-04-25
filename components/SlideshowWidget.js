@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useDesktop } from "@/context/DesktopContext";
 import { getSlideshowRestrictList } from "@/lib/desktopWidgets";
 import {
   fileHref,
@@ -37,7 +38,7 @@ function SlideshowSlideMedia({
         className="absolute inset-0 h-full w-full object-contain"
         muted
         playsInline
-        autoPlay
+        autoPlay={videoActive}
         onEnded={videoActive ? onNext : () => {}}
         onError={videoActive ? onNext : () => {}}
         onTimeUpdate={videoActive ? onTimeUpdate : undefined}
@@ -100,7 +101,9 @@ export function WidgetChromeArrowButton({ dir, label, onClick, disabled }) {
  *   widget: import('@/lib/desktopWidgets').DesktopSlideshowWidget,
  *   layout: 'desktop' | 'mobile',
  *   dragHandleProps?: React.HTMLAttributes<HTMLDivElement>,
- *   stackNavigation?: { onNext: () => void, onPrev: () => void } | null,
+ *   stackNavigation?: { onNext: () => void, onPrev: () => void, locked?: boolean } | null,
+ *   stackDeckLayer?: boolean,
+ *   stackMediaReveal?: { popped: boolean, fromScale: number, durationMs: number, easing: string } | null,
  * }} props
  */
 export function SlideshowWidget({
@@ -108,7 +111,10 @@ export function SlideshowWidget({
   layout,
   dragHandleProps,
   stackNavigation = null,
+  stackDeckLayer = false,
+  stackMediaReveal = null,
 }) {
+  const { finderOpenProjectFile } = useDesktop();
   const basePath = widget.basePath ?? "/web";
   const files = useMemo(
     () =>
@@ -142,6 +148,22 @@ export function SlideshowWidget({
     ? fileHref(basePath, widget.assetDir, currentFile)
     : null;
 
+  /** Stapel: nach einem kompletten Durchlauf (letztes Medium) → nächstes Widget statt wieder von vorn. */
+  const tryStackAfterFullCycle = useCallback(() => {
+    if (!stackNavigation || stackNavigation.locked || prevIndex !== null)
+      return false;
+    if (n === 0) return false;
+    if (n === 1) {
+      stackNavigation.onNext();
+      return true;
+    }
+    if (safeIndex === n - 1) {
+      stackNavigation.onNext();
+      return true;
+    }
+    return false;
+  }, [stackNavigation, prevIndex, n, safeIndex]);
+
   const goPrev = useCallback(() => {
     if (n <= 1 || prevIndex !== null) return;
     setDirection(-1);
@@ -150,11 +172,13 @@ export function SlideshowWidget({
   }, [n, prevIndex, safeIndex]);
 
   const goNext = useCallback(() => {
-    if (n <= 1 || prevIndex !== null) return;
+    if (prevIndex !== null) return;
+    if (tryStackAfterFullCycle()) return;
+    if (n <= 1) return;
     setDirection(1);
     setPrevIndex(safeIndex);
     setIndex((i) => (i + 1) % n);
-  }, [n, prevIndex, safeIndex]);
+  }, [tryStackAfterFullCycle, n, prevIndex, safeIndex]);
 
   const isVideoSlide =
     currentFile != null && isSlideVideoFile(currentFile);
@@ -179,12 +203,22 @@ export function SlideshowWidget({
         .map((s) => s.trim());
       if (!names.includes("mm-slideshow-segment-fill")) return;
       e.stopPropagation();
-      if (n <= 1 || prevIndex !== null || isVideoSlide) return;
+      if (stackDeckLayer) return;
+      if (prevIndex !== null || isVideoSlide) return;
+      if (tryStackAfterFullCycle()) return;
+      if (n <= 1) return;
       setDirection(1);
       setPrevIndex(safeIndex);
       setIndex((i) => (i + 1) % n);
     },
-    [n, prevIndex, isVideoSlide, safeIndex]
+    [
+      n,
+      prevIndex,
+      isVideoSlide,
+      safeIndex,
+      stackDeckLayer,
+      tryStackAfterFullCycle,
+    ]
   );
 
   useEffect(() => {
@@ -210,8 +244,19 @@ export function SlideshowWidget({
 
   const isMobile = layout === "mobile";
 
+  const openCurrentInFinder = useCallback(() => {
+    if (!currentFile || !widget.assetDir) return;
+    finderOpenProjectFile({
+      dir: widget.assetDir,
+      file: currentFile,
+      basePath,
+    });
+  }, [currentFile, widget.assetDir, basePath, finderOpenProjectFile]);
+
   const rootDrag =
-    layout === "desktop" && dragHandleProps ? dragHandleProps : {};
+    stackDeckLayer || !(layout === "desktop" && dragHandleProps)
+      ? {}
+      : dragHandleProps;
 
   const transitionCss = slideReady
     ? `transform ${SLIDE_TRANSITION_MS}ms ${SLIDE_EASE}`
@@ -221,27 +266,99 @@ export function SlideshowWidget({
     const file = files[slideIdx];
     if (!file) return null;
     const href = fileHref(basePath, widget.assetDir, file);
+    const vActive = stackDeckLayer ? false : videoActive;
     return (
       <SlideshowSlideMedia
         href={href}
         isVideo={isSlideVideoFile(file)}
-        videoActive={videoActive}
+        videoActive={vActive}
         onNext={goNext}
         onTimeUpdate={handleVideoTimeUpdate}
       />
     );
   };
 
+  const deckChrome = !stackDeckLayer;
+  const stackNav =
+    stackDeckLayer ? null : stackNavigation;
+
+  const stackMediaRevealStyle = stackMediaReveal
+    ? {
+        transform: `scale(${stackMediaReveal.popped ? 1 : stackMediaReveal.fromScale})`,
+        transformOrigin: "50% 50%",
+        transition: stackMediaReveal.popped
+          ? `transform ${stackMediaReveal.durationMs}ms ${stackMediaReveal.easing}`
+          : "none",
+      }
+    : null;
+
+  const mediaAndFinder = (
+    <>
+      {src ? (
+        prevIndex != null ? (
+          <>
+            <div
+              className="absolute inset-0 z-10 will-change-transform"
+              style={{
+                transform: slideReady
+                  ? `translateX(${-direction * 100}%)`
+                  : "translateX(0)",
+                transition: transitionCss,
+              }}
+            >
+              {slideMedia(prevIndex, false)}
+            </div>
+            <div
+              className="absolute inset-0 z-[11] will-change-transform"
+              style={{
+                transform: slideReady
+                  ? "translateX(0)"
+                  : `translateX(${direction * 100}%)`,
+                transition: transitionCss,
+              }}
+            >
+              {slideMedia(safeIndex, true)}
+            </div>
+          </>
+        ) : (
+          slideMedia(safeIndex, true)
+        )
+      ) : (
+        <div className="absolute inset-0 flex items-center justify-center p-4 text-center text-sm text-zinc-600">
+          Keine Bilder oder Videos in diesem Ordner (Manifest).
+        </div>
+      )}
+
+      {src && deckChrome ? (
+        <button
+          type="button"
+          data-mm-widget-no-drag
+          aria-label="Aktuelles Medium im Finder und Inhaltfenster öffnen"
+          className="absolute inset-0 z-[12] cursor-pointer border-0 bg-transparent p-0 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-black"
+          onClick={(e) => {
+            e.stopPropagation();
+            openCurrentInFinder();
+          }}
+        />
+      ) : null}
+    </>
+  );
+
   return (
     <div
       className={`relative flex flex-col overflow-hidden rounded-lg border-[2.25px] border-black bg-white shadow-none ${
+        stackDeckLayer ? "pointer-events-none" : ""
+      } ${
         isMobile
           ? /* Mobile Home: 3×2 Rasterzellen, rechts */
             "ml-auto aspect-[3/2] w-[75%] max-w-full shrink-0"
-          : "h-full w-full md:cursor-grab md:active:cursor-grabbing"
+          : stackDeckLayer
+            ? "h-full w-full"
+            : "h-full w-full md:cursor-grab md:active:cursor-grabbing"
       }`}
       {...rootDrag}
     >
+      {deckChrome ? (
       <div className="absolute left-0 right-0 top-0 z-20 w-full px-1.5 pt-1">
         <div className="flex w-full min-w-0 items-center gap-1 py-0.5">
           {n > 0 &&
@@ -282,65 +399,48 @@ export function SlideshowWidget({
             })}
         </div>
       </div>
+      ) : null}
 
       <div className="relative min-h-0 flex-1 overflow-hidden">
-        {src ? (
-          prevIndex != null ? (
-            <>
-              <div
-                className="absolute inset-0 z-10 will-change-transform"
-                style={{
-                  transform: slideReady
-                    ? `translateX(${-direction * 100}%)`
-                    : "translateX(0)",
-                  transition: transitionCss,
-                }}
-              >
-                {slideMedia(prevIndex, false)}
-              </div>
-              <div
-                className="absolute inset-0 z-[11] will-change-transform"
-                style={{
-                  transform: slideReady
-                    ? "translateX(0)"
-                    : `translateX(${direction * 100}%)`,
-                  transition: transitionCss,
-                }}
-              >
-                {slideMedia(safeIndex, true)}
-              </div>
-            </>
-          ) : (
-            slideMedia(safeIndex, true)
-          )
-        ) : (
-          <div className="absolute inset-0 flex items-center justify-center p-4 text-center text-sm text-zinc-600">
-            Keine Bilder oder Videos in diesem Ordner (Manifest).
+        {stackMediaRevealStyle ? (
+          <div
+            className="absolute inset-0 overflow-hidden"
+            style={stackMediaRevealStyle}
+          >
+            {mediaAndFinder}
           </div>
+        ) : (
+          mediaAndFinder
         )}
 
+        {deckChrome ? (
         <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex items-end justify-between p-2 md:p-3">
           <div className="pointer-events-auto">
             <WidgetChromeArrowButton
               dir="left"
               label={
-                stackNavigation ? "Vorheriges Widget" : "Vorheriges Bild"
+                stackNav ? "Vorheriges Widget" : "Vorheriges Bild"
               }
               onClick={
-                stackNavigation ? stackNavigation.onPrev : goPrev
+                stackNav ? stackNav.onPrev : goPrev
               }
-              disabled={!stackNavigation && prevIndex != null}
+              disabled={
+                prevIndex != null || !!stackNav?.locked
+              }
             />
           </div>
           <div className="pointer-events-auto">
             <WidgetChromeArrowButton
               dir="right"
-              label={stackNavigation ? "Nächstes Widget" : "Nächstes Bild"}
-              onClick={stackNavigation ? stackNavigation.onNext : goNext}
-              disabled={!stackNavigation && prevIndex != null}
+              label={stackNav ? "Nächstes Widget" : "Nächstes Bild"}
+              onClick={stackNav ? stackNav.onNext : goNext}
+              disabled={
+                prevIndex != null || !!stackNav?.locked
+              }
             />
           </div>
         </div>
+        ) : null}
       </div>
     </div>
   );

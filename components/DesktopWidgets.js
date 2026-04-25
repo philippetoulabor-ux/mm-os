@@ -15,6 +15,18 @@ const WIDGET_W = 340;
 const WIDGET_H = WIDGET_W;
 /** Hintere Karten: Versatz nach oben/rechts (wie Referenz-UI). */
 const STACK_OFFSET_PX = 14;
+/** Stapel-Wechsel: kurzer Hub — vordere Karte weicht seitlich leicht aus. */
+const STACK_DEAL_EXIT_MS = 155;
+/** Gleichmäßige Weg-Geschwindigkeit (Bezier-Kurven wirken oft „langsam–schnell“). */
+const STACK_DEAL_EASE_TRANSFORM = "linear";
+/** Medien-Inhalt: aus der Mitte „explodieren“ (scale), kein Opacity-Fade. */
+const STACK_DEAL_REAR_REVEAL_MS = 165;
+const STACK_DEAL_FRONT_REVEAL_MS = 195;
+const STACK_DEAL_REVEAL_FROM_SCALE = 0.12;
+/** Leichter Überschwung am Ende (Out-Back-artig). */
+const STACK_DEAL_REVEAL_EASE = "cubic-bezier(0.175, 0.88, 0.32, 1.12)";
+const STACK_DEAL_FLY_X = 32;
+const STACK_DEAL_FLY_Y = -7;
 
 function stackPadForWidgetIds(widgetIds, desktopWidgets) {
   const w0 = desktopWidgets.find((x) => x.id === widgetIds[0]);
@@ -83,7 +95,7 @@ function groupDesktopWidgets(widgets) {
   return out;
 }
 
-/** Leere Kachel nur für den Stapel-Effekt (Rand oben/rechts sichtbar), ohne Inhalt. */
+/** Leere Kachel für den Stapel (Ruhezustand); Inhalt nur während des Wechsels. */
 function WidgetStackBackPlate() {
   return (
     <div
@@ -111,18 +123,68 @@ function WidgetStack({
 }) {
   const { desktopWidgetStacksCollapsed } = useDesktop();
   const [frontIndex, setFrontIndex] = useState(0);
+  const [stackDealPhase, setStackDealPhase] = useState(
+    /** @type {'idle' | 'exit'} */ ("idle")
+  );
+  const [dealDir, setDealDir] = useState(1);
+  const [reduceStackMotion, setReduceStackMotion] = useState(false);
+  const dealDirRef = useRef(1);
+  const stackPhaseRef = useRef(/** @type {'idle' | 'exit'} */ ("idle"));
+  stackPhaseRef.current = stackDealPhase;
   const n = widgets.length;
 
   useEffect(() => {
     setFrontIndex((i) => Math.min(i, Math.max(0, n - 1)));
+    setStackDealPhase("idle");
   }, [n]);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const sync = () => setReduceStackMotion(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+
+  const requestStackDeal = useCallback(
+    (dir) => {
+      if (n <= 1) return;
+      if (reduceStackMotion) {
+        setFrontIndex((j) =>
+          dir === 1 ? (j + 1) % n : (j - 1 + n) % n
+        );
+        return;
+      }
+      if (stackPhaseRef.current !== "idle") return;
+      dealDirRef.current = dir;
+      setDealDir(dir);
+      setStackDealPhase("exit");
+    },
+    [n, reduceStackMotion]
+  );
+
+  const onStackFrontTransitionEnd = useCallback(
+    (e) => {
+      if (e.propertyName !== "transform") return;
+      if (e.target !== e.currentTarget) return;
+      if (stackDealPhase === "exit") {
+        const d = dealDirRef.current;
+        setFrontIndex((j) =>
+          d === 1 ? (j + 1) % n : (j - 1 + n) % n
+        );
+        setStackDealPhase("idle");
+      }
+    },
+    [stackDealPhase, n]
+  );
 
   const stackNavigation = useMemo(
     () => ({
-      onNext: () => setFrontIndex((j) => (j + 1) % n),
-      onPrev: () => setFrontIndex((j) => (j - 1 + n) % n),
+      onNext: () => requestStackDeal(1),
+      onPrev: () => requestStackDeal(-1),
+      locked: stackDealPhase !== "idle",
     }),
-    [n]
+    [requestStackDeal, stackDealPhase]
   );
 
   const ids = useMemo(() => widgets.map((w) => w.id), [widgets]);
@@ -132,7 +194,49 @@ function WidgetStack({
   const showBack = n > 1;
   const stackPad = showBack ? STACK_OFFSET_PX : 0;
   const frontWidget = widgets[frontIndex];
-  const backWidget = showBack ? widgets[(frontIndex + 1) % n] : null;
+  /** Nur während exit: die eintreffende Karte (Ruhe: hintere Kachel bleibt leer). */
+  const rearIncomingWidget =
+    showBack && stackDealPhase === "exit"
+      ? widgets[(frontIndex + dealDir + n) % n]
+      : null;
+
+  const [rearMediaPopped, setRearMediaPopped] = useState(false);
+  const [frontMediaPopped, setFrontMediaPopped] = useState(true);
+  const stackPhaseForRevealRef = useRef(stackDealPhase);
+
+  useLayoutEffect(() => {
+    if (!rearIncomingWidget) {
+      setRearMediaPopped(false);
+      return;
+    }
+    if (reduceStackMotion) {
+      setRearMediaPopped(true);
+      return;
+    }
+    setRearMediaPopped(false);
+    const id = requestAnimationFrame(() => {
+      requestAnimationFrame(() => setRearMediaPopped(true));
+    });
+    return () => cancelAnimationFrame(id);
+  }, [rearIncomingWidget, reduceStackMotion]);
+
+  useLayoutEffect(() => {
+    const prev = stackPhaseForRevealRef.current;
+    if (reduceStackMotion) {
+      stackPhaseForRevealRef.current = stackDealPhase;
+      setFrontMediaPopped(true);
+      return;
+    }
+    if (prev === "exit" && stackDealPhase === "idle") {
+      setFrontMediaPopped(false);
+      const id = requestAnimationFrame(() => {
+        requestAnimationFrame(() => setFrontMediaPopped(true));
+      });
+      stackPhaseForRevealRef.current = stackDealPhase;
+      return () => cancelAnimationFrame(id);
+    }
+    stackPhaseForRevealRef.current = stackDealPhase;
+  }, [stackDealPhase, reduceStackMotion]);
 
   const outerStyle = isDesktop
     ? {
@@ -164,14 +268,64 @@ function WidgetStack({
       }
     : { position: "relative", width: "100%", height: "100%" };
 
-  const backTransform = `translate(${STACK_OFFSET_PX}px, ${-STACK_OFFSET_PX}px)`;
+  const stackFrontMotionStyle = useMemo(() => {
+    if (reduceStackMotion) {
+      return { transform: "none", transition: "none" };
+    }
+    const flySign = dealDir === 1 ? 1 : -1;
+    const exitTransform = `translate(${STACK_OFFSET_PX + flySign * STACK_DEAL_FLY_X}px, ${-STACK_OFFSET_PX + STACK_DEAL_FLY_Y}px)`;
+    if (stackDealPhase === "idle") {
+      return { transform: "none", transition: "none" };
+    }
+    return {
+      transform: exitTransform,
+      transition: `transform ${STACK_DEAL_EXIT_MS}ms ${STACK_DEAL_EASE_TRANSFORM}`,
+      willChange: "transform",
+    };
+  }, [stackDealPhase, dealDir, reduceStackMotion]);
+
+  const stackRearMotionStyle = useMemo(() => {
+    const tucked = `translate(${STACK_OFFSET_PX}px, ${-STACK_OFFSET_PX}px)`;
+    if (reduceStackMotion) {
+      return { transform: tucked, transition: "none" };
+    }
+    if (stackDealPhase === "idle") {
+      return { transform: tucked, transition: "none" };
+    }
+    return {
+      transform: "translate(0,0)",
+      transition: `transform ${STACK_DEAL_EXIT_MS}ms ${STACK_DEAL_EASE_TRANSFORM}`,
+      willChange: "transform",
+    };
+  }, [stackDealPhase, reduceStackMotion]);
+
+  const stackFrontPointerEvents =
+    stackDealPhase !== "idle" ? "none" : "auto";
+
+  const rearStackMediaReveal =
+    reduceStackMotion || !rearIncomingWidget
+      ? null
+      : {
+          popped: rearMediaPopped,
+          fromScale: STACK_DEAL_REVEAL_FROM_SCALE,
+          durationMs: STACK_DEAL_REAR_REVEAL_MS,
+          easing: STACK_DEAL_REVEAL_EASE,
+        };
+
+  const frontStackMediaReveal = reduceStackMotion
+    ? null
+    : {
+        popped: frontMediaPopped,
+        fromScale: STACK_DEAL_REVEAL_FROM_SCALE,
+        durationMs: STACK_DEAL_FRONT_REVEAL_MS,
+        easing: STACK_DEAL_REVEAL_EASE,
+      };
 
   return (
     <div className={outerClass} style={outerStyle}>
       <div className="overflow-visible" style={innerStyle}>
-        {showBack && backWidget ? (
+        {showBack ? (
           <div
-            key={backWidget.id}
             className={`pointer-events-none absolute left-0 box-border ${
               isDesktop ? "" : "top-0 h-full w-full"
             }`}
@@ -182,15 +336,28 @@ function WidgetStack({
                     zIndex: 99,
                     width: WIDGET_W,
                     height: WIDGET_H,
-                    transform: backTransform,
                   }
                 : {
                     zIndex: 99,
-                    transform: backTransform,
                   }
             }
           >
-            <WidgetStackBackPlate />
+            <div
+              className="relative h-full w-full"
+              style={stackRearMotionStyle}
+            >
+              {rearIncomingWidget ? (
+                <SlideshowWidget
+                  key={rearIncomingWidget.id}
+                  widget={rearIncomingWidget}
+                  layout={layout}
+                  stackDeckLayer
+                  stackMediaReveal={rearStackMediaReveal}
+                />
+              ) : (
+                <WidgetStackBackPlate />
+              )}
+            </div>
           </div>
         ) : null}
         <div
@@ -204,26 +371,35 @@ function WidgetStack({
                   zIndex: 100,
                   width: WIDGET_W,
                   height: WIDGET_H,
-                  pointerEvents: "auto",
+                  pointerEvents: stackFrontPointerEvents,
                 }
               : {
                   zIndex: 100,
-                  pointerEvents: "auto",
+                  pointerEvents: stackFrontPointerEvents,
                 }
           }
         >
-          <SlideshowWidget
-            widget={frontWidget}
-            layout={layout}
-            stackNavigation={stackNavigation}
-            dragHandleProps={
-              isDesktop && onPointerDownStack
-                ? {
-                    onPointerDown: (e) => onPointerDownStack(e, ids),
-                  }
-                : undefined
+          <div
+            className="relative h-full w-full"
+            style={stackFrontMotionStyle}
+            onTransitionEnd={
+              reduceStackMotion ? undefined : onStackFrontTransitionEnd
             }
-          />
+          >
+            <SlideshowWidget
+              widget={frontWidget}
+              layout={layout}
+              stackNavigation={stackNavigation}
+              stackMediaReveal={frontStackMediaReveal}
+              dragHandleProps={
+                isDesktop && onPointerDownStack
+                  ? {
+                      onPointerDown: (e) => onPointerDownStack(e, ids),
+                    }
+                  : undefined
+              }
+            />
+          </div>
         </div>
       </div>
     </div>
