@@ -191,7 +191,9 @@ body {
   box-shadow: inset 0 -1.5px 0 rgba(0, 0, 0, 0.35);
 }
 
-.mm-wmp-shell.mm-wmp-shell--unified .mm-wmp-video-wrap {
+.mm-wmp-shell.mm-wmp-shell--unified .mm-wmp-video-wrap,
+.mm-wmp-shell.mm-wmp-shell--os-window:not(.mm-wmp-shell--unified)
+  .mm-wmp-video-wrap {
   border-top: none;
   border-right: none;
   border-left: none;
@@ -199,13 +201,21 @@ body {
   box-shadow: inset 0 0 36px rgba(0, 0, 0, 0.85);
 }
 
-/* Nahtlos an #050508-Kopf: Verlauf startet auf gleicher Fläche, kein heller Streifen */
-.mm-wmp-shell.mm-wmp-shell--unified .mm-wmp-now-playing {
-  background: linear-gradient(
-    180deg,
-    #050508 0%,
-    rgba(0, 0, 0, 0.22) 100%
-  );
+/* OS-Fenster (Desktop, kein unified): eine Fläche mit Titelleiste — kein Aero-Rand in der Fensterfläche */
+.mm-wmp-shell.mm-wmp-shell--os-window:not(.mm-wmp-shell--unified) {
+  background: #050508;
+  border: none;
+  box-shadow: none;
+}
+
+/* Nahtlos: Titelleiste (#050508), Titelzeile und Video — kein eigener Streifen/Rahmen */
+.mm-wmp-shell.mm-wmp-shell--unified .mm-wmp-now-playing,
+.mm-wmp-shell.mm-wmp-shell--os-window .mm-wmp-now-playing {
+  background: #050508;
+  border-bottom: none;
+  box-shadow: none;
+  padding: 0.5rem 1rem 0.5rem;
+  color: #fff;
 }
 
 .mm-wmp-nav {
@@ -393,7 +403,8 @@ body {
   white-space: nowrap;
 }
 
-.mm-wmp-shell--unified .mm-wmp-now-playing__static {
+.mm-wmp-shell--unified .mm-wmp-now-playing__static,
+.mm-wmp-shell--os-window .mm-wmp-now-playing__static {
   text-align: center;
 }
 
@@ -454,6 +465,64 @@ body {
   --mm-wmp-play-size: 3.5rem;
   --mm-wmp-skip-h: calc(var(--mm-wmp-play-size) / 1.15);
   --mm-wmp-skip-w: calc(var(--mm-wmp-skip-h) * 34 / 30);
+}
+
+/* Media minimiert: kein unterer Rahmen-/Shadow-Streifen unter dem Transport */
+.mm-wmp-shell--os-window .mm-wmp-video-wrap.mm-wmp-video-wrap--video-collapsed {
+  border-bottom: none;
+  box-shadow: none;
+}
+
+/* Desktop: Shell/Main in der Höhe nicht strecken; Breite volle Fensterfläche (sonst Marquee-Breite → falsch zentrierte Transport-Zeile) */
+.mm-wmp-shell--os-window:not(.mm-wmp-shell--unified).mm-wmp-shell--video-collapsed {
+  height: auto;
+  min-height: 0;
+  width: 100%;
+}
+
+.mm-wmp-shell--os-window:not(.mm-wmp-shell--unified).mm-wmp-shell--video-collapsed
+  .mm-wmp-main {
+  flex: 0 1 auto;
+  min-height: 0;
+  width: 100%;
+}
+
+.mm-wmp-shell--os-window:not(.mm-wmp-shell--unified).mm-wmp-shell--video-collapsed
+  .mm-wmp-video-wrap.mm-wmp-video-wrap--video-collapsed {
+  /* In .mm-wmp-main (row): main axis = Breite → flex-1, Höhe bleibt Inhalt */
+  flex: 1 0 auto;
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+/*
+ * Abstand Play-Button → Fensterunterkante = Abstand Titelzeile → Play
+ * (Titel: padding-bottom 0.5rem + Transport: padding-top 0.5rem → 1rem)
+ */
+.mm-wmp-shell--os-window:not(.mm-wmp-shell--unified)
+  .mm-wmp-video-wrap.mm-wmp-video-wrap--video-collapsed
+  .mm-wmp-video-controls {
+  box-sizing: border-box;
+  min-height: unset;
+  padding: 0.5rem 1rem 1rem;
+  gap: 0.125rem;
+}
+
+.mm-wmp-shell--unified.mm-wmp-shell--os-window
+  .mm-wmp-video-wrap.mm-wmp-video-wrap--video-collapsed
+  .mm-wmp-video-controls {
+  min-height: unset;
+  padding-top: 0.5rem;
+  padding-left: 1rem;
+  padding-right: 1rem;
+  padding-bottom: max(
+    1rem,
+    calc(env(safe-area-inset-bottom, 0px) + var(--mm-vv-bottom-inset, 0px))
+  );
+  gap: 0.125rem;
 }
 
 .mm-wmp-playbtn--compact {

@@ -40,7 +40,7 @@ const FINDER_TITLEBAR_EXPAND_PX = 6;
 const MIN_WIN_W = 360;
 const MIN_WIN_H = 240;
 /** Inhaltshöhe (ohne OS-Titelleiste), wenn der Media-Player nur Titelzeile + Transport hat (Video ausgeblendet). */
-const MEDIA_COMPACT_CLIENT_H = 180;
+const MEDIA_COMPACT_CLIENT_H = 140;
 /** Feste Breite im minimierten Media-Player (kleinstes Fenster). */
 const MEDIA_COMPACT_W = MIN_WIN_W;
 const MEDIA_COMPACT_TOTAL_H = OS_TITLEBAR_H + MEDIA_COMPACT_CLIENT_H;
@@ -263,17 +263,15 @@ export function getDesktopContentRect() {
   return { w, h, layerTop: SITE_HEADER_H };
 }
 
-/** Unten rechts: Rand des gemessenen Layers; gleicher Inset X/Y. */
-function getMediaMinimizedPosition() {
-  if (typeof window === "undefined") return { x: 0, y: 0 };
-  const px = MEDIA_MINIMIZE_INSET_X;
-  const { w: dw, h: dh } = getDesktopContentRect();
-  const ins = WINDOW_DESKTOP_INSET;
-  const { minLayerY } = getDesktopWindowLayoutLimits();
-  return {
-    x: Math.max(ins, dw - MEDIA_COMPACT_W - px),
-    y: Math.max(minLayerY, dh - MEDIA_COMPACT_TOTAL_H - ins),
-  };
+/**
+ * Desktop: mm-Radiooo kompakt oben links — gleicher Außenrand wie Content-Vollbild
+ * ({@link getDesktopAssetWidgetChromeFullscreenBounds} / {@link ASSET_WIDGET_CHROME_FULLSCREEN_PAD}).
+ * Beim ersten Öffnen und wenn das Video wieder eingeklappt wird.
+ */
+function getInitialDesktopMediaWindowPosition() {
+  const fs = getDesktopLayerFullscreenRect();
+  const p = ASSET_WIDGET_CHROME_FULLSCREEN_PAD;
+  return { x: p, y: fs.y + p };
 }
 
 const DesktopContext = createContext(null);
@@ -1030,7 +1028,7 @@ export function DesktopProvider({ children }) {
             },
           ];
         }
-        const pos = getMediaMinimizedPosition();
+        const pos = getInitialDesktopMediaWindowPosition();
         return [
           ...prev,
           {
@@ -1129,36 +1127,14 @@ export function DesktopProvider({ children }) {
                   : {}),
                 widgetChromeFullscreen: false,
               };
-          const wasFull = reuse.assetFile?.widgetChromeFullscreen === true;
-          const restore =
-            fromFinder && wasFull && reuse.prevBounds ? reuse.prevBounds : null;
-          const finderWin = prev.find(
-            (w) => w.appId === "finder" && !w.minimized
-          );
-          const W = DESKTOP_WIDGET_FRAME_PX;
-          const split =
-            fromFinder && !restore
-              ? getDesktopFinderWidgetChromeSplitBounds(
-                  finderWin ? { w: finderWin.w, h: finderWin.h } : null,
-                  { w: W, h: W }
-                )
-              : null;
+          /**
+           * Wenn schon ein Content-Fenster offen ist, nur Inhalt und Z-Order ändern —
+           * kein erneutes Eck-Layout. Das passiert nur beim ersten `fromFinder`-Öffnen
+           * ohne existierendes assetFile (s. unten).
+           */
           return prev
             .filter((w) => w.appId !== "assetFile" || w.id === reuse.id)
             .map((w) => {
-              if (
-                split?.finder &&
-                finderWin &&
-                w.appId === "finder" &&
-                !w.minimized &&
-                w.id === finderWin.id
-              ) {
-                return {
-                  ...w,
-                  x: split.finder.x,
-                  y: split.finder.y,
-                };
-              }
               if (w.id !== reuse.id) return w;
               const wasFullW = w.assetFile?.widgetChromeFullscreen === true;
               const restoreW =
@@ -1177,14 +1153,7 @@ export function DesktopProvider({ children }) {
                       h: restoreW.h,
                       prevBounds: null,
                     }
-                  : split
-                    ? {
-                        x: split.asset.x,
-                        y: split.asset.y,
-                        w: W,
-                        h: W,
-                      }
-                    : {}),
+                  : {}),
               };
             });
         }
@@ -1309,36 +1278,9 @@ export function DesktopProvider({ children }) {
                   : {}),
                 widgetChromeFullscreen: false,
               };
-          const wasFull = reuse.assetFile?.widgetChromeFullscreen === true;
-          const restore =
-            fromFinder && wasFull && reuse.prevBounds ? reuse.prevBounds : null;
-          const finderWin = prev.find(
-            (w) => w.appId === "finder" && !w.minimized
-          );
-          const W = DESKTOP_WIDGET_FRAME_PX;
-          const split =
-            fromFinder && !restore
-              ? getDesktopFinderWidgetChromeSplitBounds(
-                  finderWin ? { w: finderWin.w, h: finderWin.h } : null,
-                  { w: W, h: W }
-                )
-              : null;
           return prev
             .filter((w) => w.appId !== "assetFile" || w.id === reuse.id)
             .map((w) => {
-              if (
-                split?.finder &&
-                finderWin &&
-                w.appId === "finder" &&
-                !w.minimized &&
-                w.id === finderWin.id
-              ) {
-                return {
-                  ...w,
-                  x: split.finder.x,
-                  y: split.finder.y,
-                };
-              }
               if (w.id !== reuse.id) return w;
               const wasFullW = w.assetFile?.widgetChromeFullscreen === true;
               const restoreW =
@@ -1357,14 +1299,7 @@ export function DesktopProvider({ children }) {
                       h: restoreW.h,
                       prevBounds: null,
                     }
-                  : split
-                    ? {
-                        x: split.asset.x,
-                        y: split.asset.y,
-                        w: W,
-                        h: W,
-                      }
-                    : {}),
+                  : {}),
               };
             });
         }
@@ -1561,7 +1496,7 @@ export function DesktopProvider({ children }) {
             w: w.w,
             h: w.h,
           });
-          const pos = getMediaMinimizedPosition();
+          const pos = getInitialDesktopMediaWindowPosition();
           return {
             ...w,
             mediaVideoCollapsed: true,

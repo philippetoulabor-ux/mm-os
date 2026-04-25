@@ -536,10 +536,16 @@ export function MediaAppView({ windowId, unifiedParentScroll = false }) {
     <div
       className={`mm-wmp-shell ${
         unifiedParentScroll ? "mm-wmp-shell--unified" : ""
+      }${windowId ? " mm-wmp-shell--os-window" : ""}${
+        videoCollapsed ? " mm-wmp-shell--video-collapsed" : ""
       }`}
     >
       <div className="mm-wmp-main">
-        <div className="mm-wmp-video-wrap relative flex min-h-0 min-w-0 flex-1 flex-col">
+        <div
+          className={`mm-wmp-video-wrap relative flex min-h-0 min-w-0 flex-1 flex-col${
+            videoCollapsed ? " mm-wmp-video-wrap--video-collapsed" : ""
+          }`}
+        >
           {embedUrl ? (
             <div className="mm-wmp-now-playing" title={playingTitle || undefined}>
               <div ref={nowPlayingClipRef} className="mm-wmp-now-playing__clip">

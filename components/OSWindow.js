@@ -8,7 +8,6 @@ import {
   useDesktop,
 } from "@/context/DesktopContext";
 import { AppContent } from "@/components/AppContent";
-import { AppIcon } from "@/components/AppIcon";
 import { APPS } from "@/lib/apps";
 import { clampAspectWindowBounds } from "@/lib/osWindowBounds";
 
@@ -128,7 +127,6 @@ export function OSWindow({ win }) {
     focusWindow,
     moveWindow,
     setWindowBounds,
-    openOrFocus,
     toggleMediaPlayerVideoPanel,
     toggleAssetWidgetChromeFullscreen,
     minWindowW,
@@ -157,10 +155,6 @@ export function OSWindow({ win }) {
     !isMobile &&
     ((isFinderClassicHome && !finderClassicSearchExpanded) ||
       (!isFinderClassicHome && !finderProjectSearchStripExpanded));
-
-  const showNotesLauncher =
-    win.appId !== "notes" &&
-    !(win.appId === "media" && win.mediaVideoCollapsed);
 
   /** Mobile: Titelleiste + gescrollter Inhalt — unabhängig vom Media-„Mini“-Modus (Desktop). */
   const useMobileUnifiedChrome = isMobile && win.appId !== "notes";
@@ -217,6 +211,15 @@ export function OSWindow({ win }) {
       onBarMouseDown(e);
     },
     [onBarMouseDown]
+  );
+
+  /** Fenster nach vorne: nur in der Capture-Phase von `click` — nicht bei `mousedown`, sonst Re-Render vor `mouseup`/`click` und der erste Klick auf Finder-Inhalt geht verloren. */
+  const onShellClickCapture = useCallback(
+    (e) => {
+      if (e.pointerType === "mouse" && e.button !== 0) return;
+      focusWindow(win.id);
+    },
+    [focusWindow, win.id]
   );
 
   const onResizePointerDown = useCallback(
@@ -432,7 +435,7 @@ export function OSWindow({ win }) {
         win.maximized ? "rounded-none" : "rounded-lg"
       }`}
       style={style}
-      onMouseDown={() => focusWindow(win.id)}
+      onClickCapture={onShellClickCapture}
     >
       {isWidgetChromeAsset ? (
         <div
@@ -578,7 +581,7 @@ export function OSWindow({ win }) {
           </div>
         ) : isWidgetChromeAsset ? null : (
           <header
-            className="flex h-10 shrink-0 cursor-default items-center gap-2 border-b-[2.25px] border-black bg-[var(--mm-desktop-bg)] pl-0 pr-3 font-sans"
+            className="flex h-10 shrink-0 cursor-default items-center gap-2 border-b-[2.25px] border-black bg-[#050508] pl-0 pr-3 font-sans"
             onMouseDown={onBarMouseDown}
           >
             <div
@@ -628,30 +631,10 @@ export function OSWindow({ win }) {
                 </button>
               ) : null}
             </div>
-            <span className="flex-1 select-none text-center text-xs font-medium text-black dark:text-zinc-100">
+            <span className="flex-1 select-none text-center text-xs font-medium text-white [text-shadow:0_1.5px_0_rgba(0,0,0,0.5)]">
               {win.title}
             </span>
-            {showNotesLauncher ? (
-              <div className="flex w-14 shrink-0 items-center justify-end">
-                <button
-                  type="button"
-                  aria-label="Notes öffnen"
-                  title="Notes"
-                  className="flex min-h-7 min-w-7 items-center justify-center rounded-full bg-transparent px-2.5 py-1 text-black hover:opacity-90 dark:text-zinc-100"
-                  onMouseDown={(e) => e.stopPropagation()}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    openOrFocus("notes");
-                  }}
-                >
-                  <span aria-hidden>
-                    <AppIcon app={APPS.notes} variant="compact" />
-                  </span>
-                </button>
-              </div>
-            ) : (
-              <span className="w-14 shrink-0" aria-hidden />
-            )}
+            <span className="w-14 shrink-0" aria-hidden />
           </header>
         )
       ) : null}
@@ -659,7 +642,11 @@ export function OSWindow({ win }) {
         className={
           useMobileUnifiedChrome
             ? "relative flex min-h-0 flex-1 flex-col overflow-hidden"
-            : "flex min-h-0 flex-1 flex-col overflow-hidden"
+            : `flex min-h-0 flex-1 flex-col overflow-hidden${
+                win.appId === "media" && win.mediaVideoCollapsed
+                  ? " bg-[#050508]"
+                  : ""
+              }`
         }
       >
         {useMobileUnifiedChrome ? (

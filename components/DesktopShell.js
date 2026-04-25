@@ -41,13 +41,17 @@ function useSyncVisualViewportInsets() {
 
 function DesktopLayers() {
   const { windows } = useDesktop();
-  const sorted = [...windows].sort((a, b) => a.z - b.z);
 
+  /**
+   * Nicht nach `z` sortieren: jedes `OSWindow` setzt `zIndex` selbst — die DOM-Reihenfolge
+   * darf stabil bleiben, sonst verschiebt React die Knoten bei jedem Fokus-Wechsel und
+   * Browser setzen Scroll in `overflow-auto`-Listen (Finder) oft auf 0 zurück.
+   */
   return (
     <>
       <DesktopIcons />
       <DesktopWidgets />
-      {sorted.map((w) => (
+      {windows.map((w) => (
         <OSWindow key={w.id} win={w} />
       ))}
     </>
