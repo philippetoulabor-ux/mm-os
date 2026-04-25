@@ -38,3 +38,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Web asset: ~1.1GB, über GitHub file limit — lokal vorhanden halten
+public/web/worldd2023/worldd.video.mp4

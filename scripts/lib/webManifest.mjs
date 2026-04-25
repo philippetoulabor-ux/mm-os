@@ -5,6 +5,9 @@ import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const ROOT = path.join(__dirname, "..", "..");
 
+/** `dir/file` — zu groß für GitHub (>100MB); lokal behalten, nicht im Manifest */
+const MANIFEST_SKIP = new Set(["worldd2023/worldd.video.mp4"]);
+
 /** Alle Dateien unter einem Asset-Topordner, relativ mit `/` (Unterordner bleiben erhalten). */
 export function collectFilesRecursive(dirPath, relBase = "") {
   const out = [];
@@ -26,7 +29,9 @@ export function buildManifest(webRoot) {
   for (const name of fs.readdirSync(webRoot, { withFileTypes: true })) {
     if (name.name.startsWith(".") || !name.isDirectory()) continue;
     const dirPath = path.join(webRoot, name.name);
-    const files = collectFilesRecursive(dirPath);
+    const files = collectFilesRecursive(dirPath).filter(
+      (f) => !MANIFEST_SKIP.has(`${name.name}/${f}`)
+    );
     rows.push({ dir: name.name, files });
   }
   rows.sort((a, b) => a.dir.localeCompare(b.dir));
