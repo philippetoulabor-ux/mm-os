@@ -10,7 +10,7 @@ import {
 } from "@/lib/webAssetUrls";
 
 const IMAGE_SLIDE_MS = 5000;
-const SLIDE_TRANSITION_MS = 480;
+const SLIDE_TRANSITION_MS = 650;
 const SLIDE_EASE = "cubic-bezier(0.4, 0, 0.2, 1)";
 
 /**
