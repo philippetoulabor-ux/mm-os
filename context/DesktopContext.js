@@ -25,7 +25,6 @@ import {
 import { getMentionToken } from "@/lib/noteRefs";
 import {
   DESKTOP_WIDGET_FRAME_PX,
-  FINDER_WIDGET_ASSET_GAP_PX,
   getFinderDesktopMaxSidePx,
 } from "@/lib/desktopWidgetFrame";
 import { clampAspectWindowBounds } from "@/lib/osWindowBounds";
@@ -174,6 +173,51 @@ export function getDesktopAssetWidgetChromeFullscreenBounds() {
     y: fs.y + p,
     w: Math.max(MIN_WIN_W, fs.w - 2 * p),
     h: Math.max(MIN_WIN_H, fs.h - 2 * p),
+  };
+}
+
+/**
+ * Desktop: Finder unten links, Asset-Widget oben rechts — gleicher Außenrand wie
+ * {@link getDesktopAssetWidgetChromeFullscreenBounds} ({@link ASSET_WIDGET_CHROME_FULLSCREEN_PAD}).
+ *
+ * @param {{ w: number, h: number } | null | undefined} finderSize
+ * @param {{ w: number, h: number }} assetSize
+ * @returns {{ finder: { x: number, y: number } | null, asset: { x: number, y: number } }}
+ */
+function getDesktopFinderWidgetChromeSplitBounds(finderSize, assetSize) {
+  const pad = ASSET_WIDGET_CHROME_FULLSCREEN_PAD;
+  const limits = getDesktopWindowLayoutLimits();
+  const fs = getDesktopLayerFullscreenRect();
+  const { desktopW, desktopH, minLayerY } = limits;
+
+  const assetX = Math.max(pad, desktopW - assetSize.w - pad);
+  let assetY = Math.max(
+    minLayerY,
+    Math.min(fs.y + pad, desktopH - assetSize.h - pad)
+  );
+
+  if (!finderSize?.w || !finderSize?.h) {
+    return { finder: null, asset: { x: assetX, y: assetY } };
+  }
+
+  let finderY = Math.max(minLayerY, desktopH - finderSize.h - pad);
+  const finderX = pad;
+  const gap = 8;
+  if (assetY + assetSize.h > finderY - gap) {
+    const nextAssetY = finderY - assetSize.h - gap;
+    if (nextAssetY >= minLayerY) {
+      assetY = nextAssetY;
+    } else {
+      finderY = Math.min(
+        desktopH - finderSize.h - pad,
+        Math.max(minLayerY, assetY + assetSize.h + gap)
+      );
+    }
+  }
+
+  return {
+    finder: { x: finderX, y: finderY },
+    asset: { x: assetX, y: assetY },
   };
 }
 
@@ -1189,28 +1233,62 @@ export function DesktopProvider({ children }) {
                   : {}),
                 widgetChromeFullscreen: false,
               };
+          const wasFull = reuse.assetFile?.widgetChromeFullscreen === true;
+          const restore =
+            fromFinder && wasFull && reuse.prevBounds ? reuse.prevBounds : null;
+          const finderWin = prev.find(
+            (w) => w.appId === "finder" && !w.minimized
+          );
+          const W = DESKTOP_WIDGET_FRAME_PX;
+          const split =
+            fromFinder && !restore
+              ? getDesktopFinderWidgetChromeSplitBounds(
+                  finderWin ? { w: finderWin.w, h: finderWin.h } : null,
+                  { w: W, h: W }
+                )
+              : null;
           return prev
             .filter((w) => w.appId !== "assetFile" || w.id === reuse.id)
             .map((w) => {
+              if (
+                split?.finder &&
+                finderWin &&
+                w.appId === "finder" &&
+                !w.minimized &&
+                w.id === finderWin.id
+              ) {
+                return {
+                  ...w,
+                  x: split.finder.x,
+                  y: split.finder.y,
+                };
+              }
               if (w.id !== reuse.id) return w;
-              const wasFull = w.assetFile?.widgetChromeFullscreen === true;
-              const restore =
-                wasFull && w.prevBounds ? w.prevBounds : null;
+              const wasFullW = w.assetFile?.widgetChromeFullscreen === true;
+              const restoreW =
+                wasFullW && w.prevBounds ? w.prevBounds : null;
               return {
                 ...w,
                 title: file,
                 assetFile: nextAssetFile,
                 minimized: false,
                 z: zCounter.current,
-                ...(restore
+                ...(restoreW
                   ? {
-                      x: restore.x,
-                      y: restore.y,
-                      w: restore.w,
-                      h: restore.h,
+                      x: restoreW.x,
+                      y: restoreW.y,
+                      w: restoreW.w,
+                      h: restoreW.h,
                       prevBounds: null,
                     }
-                  : {}),
+                  : split
+                    ? {
+                        x: split.asset.x,
+                        y: split.asset.y,
+                        w: W,
+                        h: W,
+                      }
+                    : {}),
               };
             });
         }
@@ -1247,34 +1325,30 @@ export function DesktopProvider({ children }) {
             (w) => w.appId === "finder" && !w.minimized
           );
           const W = DESKTOP_WIDGET_FRAME_PX;
-          const GAP = FINDER_WIDGET_ASSET_GAP_PX;
-          const limits = getDesktopWindowLayoutLimits();
-          let x;
-          let y;
-          if (finderWin) {
-            x = finderWin.x + finderWin.w + GAP;
-            y = finderWin.y;
-          } else {
-            const c = centerWindow({ w: W, h: W });
-            x = c.x;
-            y = c.y;
-          }
-          x = Math.max(
-            limits.inset,
-            Math.min(x, limits.desktopW - W - limits.inset)
+          const split = getDesktopFinderWidgetChromeSplitBounds(
+            finderWin ? { w: finderWin.w, h: finderWin.h } : null,
+            { w: W, h: W }
           );
-          y = Math.max(
-            limits.minLayerY,
-            Math.min(y, limits.maxBottomLayer - W)
-          );
+          const next = prev.map((w) => {
+            if (
+              split.finder &&
+              finderWin &&
+              w.appId === "finder" &&
+              !w.minimized &&
+              w.id === finderWin.id
+            ) {
+              return { ...w, x: split.finder.x, y: split.finder.y };
+            }
+            return w;
+          });
           return [
-            ...prev,
+            ...next,
             {
               id,
               appId: def.id,
               title: file,
-              x,
-              y,
+              x: split.asset.x,
+              y: split.asset.y,
               w: W,
               h: W,
               z: zCounter.current,
@@ -1339,28 +1413,62 @@ export function DesktopProvider({ children }) {
                   : {}),
                 widgetChromeFullscreen: false,
               };
+          const wasFull = reuse.assetFile?.widgetChromeFullscreen === true;
+          const restore =
+            fromFinder && wasFull && reuse.prevBounds ? reuse.prevBounds : null;
+          const finderWin = prev.find(
+            (w) => w.appId === "finder" && !w.minimized
+          );
+          const W = DESKTOP_WIDGET_FRAME_PX;
+          const split =
+            fromFinder && !restore
+              ? getDesktopFinderWidgetChromeSplitBounds(
+                  finderWin ? { w: finderWin.w, h: finderWin.h } : null,
+                  { w: W, h: W }
+                )
+              : null;
           return prev
             .filter((w) => w.appId !== "assetFile" || w.id === reuse.id)
             .map((w) => {
+              if (
+                split?.finder &&
+                finderWin &&
+                w.appId === "finder" &&
+                !w.minimized &&
+                w.id === finderWin.id
+              ) {
+                return {
+                  ...w,
+                  x: split.finder.x,
+                  y: split.finder.y,
+                };
+              }
               if (w.id !== reuse.id) return w;
-              const wasFull = w.assetFile?.widgetChromeFullscreen === true;
-              const restore =
-                wasFull && w.prevBounds ? w.prevBounds : null;
+              const wasFullW = w.assetFile?.widgetChromeFullscreen === true;
+              const restoreW =
+                wasFullW && w.prevBounds ? w.prevBounds : null;
               return {
                 ...w,
                 title: file,
                 assetFile: nextAssetFile,
                 minimized: false,
                 z: zCounter.current,
-                ...(restore
+                ...(restoreW
                   ? {
-                      x: restore.x,
-                      y: restore.y,
-                      w: restore.w,
-                      h: restore.h,
+                      x: restoreW.x,
+                      y: restoreW.y,
+                      w: restoreW.w,
+                      h: restoreW.h,
                       prevBounds: null,
                     }
-                  : {}),
+                  : split
+                    ? {
+                        x: split.asset.x,
+                        y: split.asset.y,
+                        w: W,
+                        h: W,
+                      }
+                    : {}),
               };
             });
         }
@@ -1397,34 +1505,30 @@ export function DesktopProvider({ children }) {
             (w) => w.appId === "finder" && !w.minimized
           );
           const W = DESKTOP_WIDGET_FRAME_PX;
-          const GAP = FINDER_WIDGET_ASSET_GAP_PX;
-          const limits = getDesktopWindowLayoutLimits();
-          let x;
-          let y;
-          if (finderWin) {
-            x = finderWin.x + finderWin.w + GAP;
-            y = finderWin.y;
-          } else {
-            const c = centerWindow({ w: W, h: W });
-            x = c.x;
-            y = c.y;
-          }
-          x = Math.max(
-            limits.inset,
-            Math.min(x, limits.desktopW - W - limits.inset)
+          const split = getDesktopFinderWidgetChromeSplitBounds(
+            finderWin ? { w: finderWin.w, h: finderWin.h } : null,
+            { w: W, h: W }
           );
-          y = Math.max(
-            limits.minLayerY,
-            Math.min(y, limits.maxBottomLayer - W)
-          );
+          const next = prev.map((w) => {
+            if (
+              split.finder &&
+              finderWin &&
+              w.appId === "finder" &&
+              !w.minimized &&
+              w.id === finderWin.id
+            ) {
+              return { ...w, x: split.finder.x, y: split.finder.y };
+            }
+            return w;
+          });
           return [
-            ...prev,
+            ...next,
             {
               id,
               appId: def.id,
               title: file,
-              x,
-              y,
+              x: split.asset.x,
+              y: split.asset.y,
               w: W,
               h: W,
               z: zCounter.current,
@@ -1460,7 +1564,7 @@ export function DesktopProvider({ children }) {
     []
   );
 
-  /** Finder: kleines Widget-Fenster neben dem Finder ({@link openAssetFileWindow} `fromFinder`). */
+  /** Finder: Asset als 680×680-Widget oben rechts; Finder wandert unten links ({@link openAssetFileWindow} `fromFinder`). */
   const finderOpenProjectFile = useCallback(
     ({ dir, file, basePath = "/web" }) => {
       if (!dir || !file) return;

@@ -443,12 +443,20 @@ export function OSWindow({ win }) {
           <button
             type="button"
             data-mm-widget-no-drag
-            aria-label="Schließen"
+            aria-label={
+              win.assetFile?.widgetChromeFullscreen
+                ? "Vollbild beenden"
+                : "Schließen"
+            }
             className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full bg-transparent transition duration-200 ease-out opacity-50 hover:opacity-100 focus-visible:opacity-100 active:scale-95 active:opacity-100"
             onMouseDown={(e) => e.stopPropagation()}
             onClick={(e) => {
               e.stopPropagation();
-              closeWindow(win.id);
+              if (win.assetFile?.widgetChromeFullscreen) {
+                toggleAssetWidgetChromeFullscreen(win.id);
+              } else {
+                closeWindow(win.id);
+              }
             }}
           >
             <span
@@ -456,30 +464,24 @@ export function OSWindow({ win }) {
               aria-hidden
             />
           </button>
-          <button
-            type="button"
-            data-mm-widget-no-drag
-            aria-label={
-              win.assetFile?.widgetChromeFullscreen
-                ? "Vollbild beenden"
-                : "Vollbild"
-            }
-            className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full bg-transparent transition duration-200 ease-out opacity-50 hover:opacity-100 focus-visible:opacity-100 active:scale-95 active:opacity-100"
-            onMouseDown={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation();
-              toggleAssetWidgetChromeFullscreen(win.id);
-            }}
-          >
-            <span
-              className={`block h-3 w-3 shrink-0 rounded-full ${
-                win.assetFile?.widgetChromeFullscreen
-                  ? "bg-[rgb(255,204,0)]"
-                  : "bg-[rgb(0,255,0)]"
-              }`}
-              aria-hidden
-            />
-          </button>
+          {!win.assetFile?.widgetChromeFullscreen ? (
+            <button
+              type="button"
+              data-mm-widget-no-drag
+              aria-label="Vollbild"
+              className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full bg-transparent transition duration-200 ease-out opacity-50 hover:opacity-100 focus-visible:opacity-100 active:scale-95 active:opacity-100"
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleAssetWidgetChromeFullscreen(win.id);
+              }}
+            >
+              <span
+                className="block h-3 w-3 shrink-0 rounded-full bg-[rgb(0,255,0)]"
+                aria-hidden
+              />
+            </button>
+          ) : null}
         </div>
       ) : null}
       {!isMobile ? (
