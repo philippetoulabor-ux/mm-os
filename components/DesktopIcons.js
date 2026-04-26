@@ -167,8 +167,12 @@ function DesktopIconTile({
   );
 }
 
-/** Mindest-Slot vor dem Finder, damit Slideshow-Stack (~222px) vertikal zentriert werden kann. */
+/** Erwartete Höhe des Slideshow-/Widget-Stacks (Kachel + Stapel-Versatz); Abgleich mit Mobile-Widgets. */
 const MOBILE_WIDGET_STACK_SLOT_MIN_PX = 228;
+/** Abstand Slideshow-Band → Finder-Oberkante (Layer-px); großzügig, damit es nicht „klebt“. */
+const MOBILE_WIDGET_BAND_PAD_FINDER_PX = 48;
+/** Kleiner Abstand unter dem Logo zum Widget-Band. */
+const MOBILE_WIDGET_BAND_PAD_LOGO_PX = 6;
 
 export function DesktopIcons() {
   const {
@@ -205,18 +209,31 @@ export function DesktopIcons() {
       if (!layer || !logo) return;
       const lr = layer.getBoundingClientRect();
       const gr = logo.getBoundingClientRect();
+      const stackSlotH = MOBILE_WIDGET_STACK_SLOT_MIN_PX;
       const fY =
         finderWin && typeof finderWin.y === "number" && Number.isFinite(finderWin.y)
           ? finderWin.y
-          : MOBILE_WIDGET_STACK_SLOT_MIN_PX;
+          : Math.max(
+              stackSlotH + MOBILE_WIDGET_BAND_PAD_FINDER_PX,
+              Math.round(lr.height * 0.42)
+            );
       const logoBottomLayer = gr.bottom - lr.top;
-      let bandTop = Math.max(0, logoBottomLayer);
-      let bandH = fY - bandTop;
-      if (bandH < MOBILE_WIDGET_STACK_SLOT_MIN_PX) {
-        bandTop = Math.max(0, fY - MOBILE_WIDGET_STACK_SLOT_MIN_PX);
-        bandH = fY - bandTop;
+      const yLo = logoBottomLayer + MOBILE_WIDGET_BAND_PAD_LOGO_PX;
+      const yHi = fY - MOBILE_WIDGET_BAND_PAD_FINDER_PX;
+      const inner = yHi - yLo;
+      let bandTop;
+      let height;
+      if (inner >= stackSlotH) {
+        bandTop = yLo + (inner - stackSlotH) / 2;
+        height = stackSlotH;
+      } else if (inner > 0) {
+        const tuckUnderFinder = yHi - stackSlotH;
+        bandTop = Math.max(0, Math.min(yLo, tuckUnderFinder));
+        height = Math.max(48, Math.min(stackSlotH, yHi - bandTop));
+      } else {
+        bandTop = Math.max(0, fY - stackSlotH);
+        height = Math.max(48, fY - bandTop);
       }
-      const height = Math.max(48, bandH);
       setMobileWidgetBand((prev) =>
         prev.top === bandTop && prev.height === height
           ? prev
@@ -314,15 +331,14 @@ export function DesktopIcons() {
     e.preventDefault();
   };
 
-  const floatingIcons = DESKTOP_ICONS;
-  /** Finder: immer sichtbares Fenster auf Desktop — Icon nur mobil im Raster. */
-  const desktopFloatingIcons = floatingIcons.filter(
+  /** Finder: Fenster sichtbar; kein Schreibtisch-Icon weder auf Desktop noch im Mobile-Raster. */
+  const desktopFloatingIcons = DESKTOP_ICONS.filter(
     (item) => item.appId !== "finder"
   );
 
   const mobileGridRows = Math.max(
     MOBILE_HOME_GRID_ROWS,
-    Math.ceil(floatingIcons.length / MOBILE_HOME_GRID_COLS)
+    Math.ceil(desktopFloatingIcons.length / MOBILE_HOME_GRID_COLS)
   );
 
   const layerTopPx = layerMetrics.top;
@@ -341,41 +357,43 @@ export function DesktopIcons() {
       >
         <DesktopWidgetsMobile />
       </div>
-      <div
-        className="pointer-events-none absolute inset-0 z-[8] flex flex-col justify-end md:hidden"
-        style={{
-          paddingBottom:
-            "max(0.75rem, calc(env(safe-area-inset-bottom, 0px) + var(--mm-vv-bottom-inset, 0px)))",
-          paddingLeft: "max(0.5rem, env(safe-area-inset-left, 0px))",
-          paddingRight: "max(0.5rem, env(safe-area-inset-right, 0px))",
-        }}
-      >
+      {desktopFloatingIcons.length > 0 ? (
         <div
-          className={`grid w-full shrink-0 gap-x-1 gap-y-0.5 px-1 pb-0.5 pt-1 min-[400px]:gap-x-2 min-[400px]:gap-y-2 min-[400px]:px-2 ${
-            mobileGridRows > MOBILE_HOME_GRID_ROWS
-              ? "max-h-[min(52dvh,420px)] overflow-y-auto overscroll-contain"
-              : ""
-          }`}
+          className="pointer-events-none absolute inset-0 z-[8] flex flex-col justify-end md:hidden"
           style={{
-            gridTemplateColumns: `repeat(${MOBILE_HOME_GRID_COLS}, minmax(0, 1fr))`,
-            gridTemplateRows: `repeat(${mobileGridRows}, auto)`,
+            paddingBottom:
+              "max(0.75rem, calc(env(safe-area-inset-bottom, 0px) + var(--mm-vv-bottom-inset, 0px)))",
+            paddingLeft: "max(0.5rem, env(safe-area-inset-left, 0px))",
+            paddingRight: "max(0.5rem, env(safe-area-inset-right, 0px))",
           }}
         >
-          {floatingIcons.map((item) => (
-            <div
-              key={`m-${item.appId}`}
-              className="flex min-h-0 min-w-0 items-start justify-center [align-self:stretch] [justify-self:stretch]"
-            >
-              <DesktopIconTile
-                item={item}
-                folderPreview={folderPreview}
-                openOrFocus={openOrFocus}
-                layout="grid"
-              />
-            </div>
-          ))}
+          <div
+            className={`grid w-full shrink-0 gap-x-1 gap-y-0.5 px-1 pb-0.5 pt-1 min-[400px]:gap-x-2 min-[400px]:gap-y-2 min-[400px]:px-2 ${
+              mobileGridRows > MOBILE_HOME_GRID_ROWS
+                ? "max-h-[min(52dvh,420px)] overflow-y-auto overscroll-contain"
+                : ""
+            }`}
+            style={{
+              gridTemplateColumns: `repeat(${MOBILE_HOME_GRID_COLS}, minmax(0, 1fr))`,
+              gridTemplateRows: `repeat(${mobileGridRows}, auto)`,
+            }}
+          >
+            {desktopFloatingIcons.map((item) => (
+              <div
+                key={`m-${item.appId}`}
+                className="flex min-h-0 min-w-0 items-start justify-center [align-self:stretch] [justify-self:stretch]"
+              >
+                <DesktopIconTile
+                  item={item}
+                  folderPreview={folderPreview}
+                  openOrFocus={openOrFocus}
+                  layout="grid"
+                />
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+      ) : null}
 
       {/* Desktop: Schreibtisch inkl. Site-Header — Container reicht bis zur Viewport-Oberkante */}
       <div

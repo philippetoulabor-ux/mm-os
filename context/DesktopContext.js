@@ -174,27 +174,27 @@ export function getDesktopLayerFullscreenRect() {
 /**
  * Mobile-Home: Finder als Karte unter dem Slideshow-/Widget-Stapel,
  * volle Breite zwischen den Rändern (`inset` links wie rechts),
- * mit Abstand zum unteren Icon-Raster — kein Vollbild (nur Viewports ≤767px).
+ * unten derselbe Mindestabstand `inset` — kein Vollbild (nur Viewports ≤767px).
  */
 function getMobileFinderHomeCardBounds() {
   if (typeof window === "undefined") {
     return {
       x: WINDOW_DESKTOP_INSET,
-      y: 220,
+      y: MOBILE_HOME_SLIDESHOW_BAND_EST_PX + 48,
       w: Math.max(MIN_WIN_W, 360 - 2 * WINDOW_DESKTOP_INSET),
       h: 420,
     };
   }
-  const { w: desktopW, h: desktopH } = getDesktopContentRect();
+  const { w: desktopW } = getDesktopContentRect();
   const { inset, maxBottomLayer } = getDesktopWindowLayoutLimits();
   const innerW = Math.max(MIN_WIN_W, desktopW - 2 * inset);
-  const gapBelowWidget = 4;
+  /** Sichtbarer Abstand Slideshow/Stapel → Finder (abgestimmt mit `MOBILE_WIDGET_BAND_PAD_FINDER_PX` in DesktopIcons). */
+  const gapBelowWidget = 48;
   /** Oberkante Finder ≈ unter der Slideshow-Kachel, nicht nach Prozent der Layer-Höhe. */
   const widgetBandH = MOBILE_HOME_SLIDESHOW_BAND_EST_PX;
   const top = Math.max(inset, widgetBandH + gapBelowWidget);
-  /** Unten: Icon-Raster — knapper, nach unten ist noch Luft ohne Überlappung. */
-  const bottomReserve = Math.max(64, Math.min(desktopH * 0.14, 120));
-  const h = Math.max(MIN_WIN_H, maxBottomLayer - top - bottomReserve);
+  /** `maxBottomLayer` = `desktopH - inset` — Kartenunterkante bündig, wie bei x/w für links/rechts. */
+  const h = Math.max(MIN_WIN_H, maxBottomLayer - top);
   return {
     x: inset,
     y: top,
