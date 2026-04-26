@@ -22,6 +22,8 @@
   }
 
   html {
+    /* Stabil: verhindert sichtbares Breiten-Zappeln, wenn die Scrollbar ein-/ausblendet (ResizeObserver ↔ Skala) */
+    scrollbar-gutter: stable;
     /* Globale UI-Skalierung 1,125× (0,75× der vorherigen 1,5×; Tailwind/rem folgt der Root) */
     font-size: 112.5%;
     height: 100%;

@@ -268,14 +268,16 @@ const desktopLayerMetrics = { w: 0, h: 0, top: SITE_HEADER_H };
 export function syncDesktopLayerMetrics(el) {
   if (!el || typeof window === "undefined") return;
   const r = el.getBoundingClientRect();
-  desktopLayerMetrics.w = r.width;
-  desktopLayerMetrics.h = r.height;
+  const w = Math.round(r.width);
+  const h = Math.round(r.height);
+  desktopLayerMetrics.w = w;
+  desktopLayerMetrics.h = h;
   desktopLayerMetrics.top = r.top;
-  const s = getDesktopUiScaleFromDims(
-    r.width,
-    r.height,
-    window.innerWidth
-  );
+  const s = getDesktopUiScaleFromDims(w, h, window.innerWidth);
+  const prevS = getLastDesktopUiScale();
+  if (Math.abs(s - prevS) < 0.01) {
+    return;
+  }
   setLastDesktopUiScale(s);
   applyDesktopUiDocumentVars(document.documentElement);
 }
@@ -291,10 +293,12 @@ export function getDesktopContentRect() {
   const el = document.querySelector("[data-mm-desktop-layer]");
   if (el) {
     const r = el.getBoundingClientRect();
-    desktopLayerMetrics.w = r.width;
-    desktopLayerMetrics.h = r.height;
+    const w = Math.round(r.width);
+    const h = Math.round(r.height);
+    desktopLayerMetrics.w = w;
+    desktopLayerMetrics.h = h;
     desktopLayerMetrics.top = r.top;
-    return { w: r.width, h: r.height, layerTop: r.top };
+    return { w, h, layerTop: r.top };
   }
   if (desktopLayerMetrics.w > 0 && desktopLayerMetrics.h > 0) {
     return {
