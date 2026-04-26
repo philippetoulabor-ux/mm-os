@@ -27,6 +27,10 @@ function useSyncVisualViewportInsets() {
         "--mm-vv-bottom-inset",
         `${bottom}px`
       );
+      document.documentElement.style.setProperty(
+        "--mm-vv-height",
+        `${Math.round(vv.height)}px`
+      );
     };
     sync();
     vv.addEventListener("resize", sync);

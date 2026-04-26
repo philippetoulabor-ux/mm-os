@@ -142,6 +142,22 @@ function getVisualViewportHeight() {
 }
 
 /**
+ * Mobile (Chrome/Brave iOS u. a.): Layer-`getBoundingClientRect().height` kann größer sein als der
+ * Streifen bis zur Visual-Viewport-Unterkante — Finder/Vollbild sonst hinter der Browser-UI.
+ * @param {number} layerRectH
+ * @param {number} layerTopPx `getBoundingClientRect().top` des Layers
+ */
+function capMobileDesktopLayerHPx(layerRectH, layerTopPx) {
+  if (!isMobileViewport() || typeof window === "undefined") return layerRectH;
+  const vv = window.visualViewport;
+  if (!vv) return layerRectH;
+  const visibleBelowTop = vv.offsetTop + vv.height - layerTopPx;
+  if (!Number.isFinite(visibleBelowTop)) return layerRectH;
+  const capped = Math.min(layerRectH, Math.floor(visibleBelowTop));
+  return Math.max(0, capped) || layerRectH;
+}
+
+/**
  * Vollblick-Rect im Layer-Koordinatensystem: Oberkante bündig mit dem Viewport (Screen-Oberkante),
  * Unterkante bündig mit dem unteren Rand des Desktop-Layers.
  * Früher: y = minLayerY = inset − layerTop ließ oben {@link WINDOW_DESKTOP_INSET} frei — hier y = −layerTop.
@@ -303,22 +319,28 @@ export function getDesktopContentRect() {
   if (el) {
     const r = el.getBoundingClientRect();
     const w = Math.round(r.width);
-    const h = Math.round(r.height);
+    const layerTop = r.top;
+    const rawH = Math.round(r.height);
+    const h = capMobileDesktopLayerHPx(rawH, layerTop);
     desktopLayerMetrics.w = w;
     desktopLayerMetrics.h = h;
-    desktopLayerMetrics.top = r.top;
-    return { w, h, layerTop: r.top };
+    desktopLayerMetrics.top = layerTop;
+    return { w, h, layerTop };
   }
   if (desktopLayerMetrics.w > 0 && desktopLayerMetrics.h > 0) {
+    const layerTop = desktopLayerMetrics.top;
+    const h = capMobileDesktopLayerHPx(desktopLayerMetrics.h, layerTop);
     return {
       w: desktopLayerMetrics.w,
-      h: desktopLayerMetrics.h,
-      layerTop: desktopLayerMetrics.top,
+      h,
+      layerTop,
     };
   }
   const w = document.documentElement?.clientWidth ?? window.innerWidth;
-  const h = window.innerHeight - SITE_HEADER_H;
-  return { w, h, layerTop: SITE_HEADER_H };
+  const layerTop = SITE_HEADER_H;
+  const rawH = window.innerHeight - SITE_HEADER_H;
+  const h = capMobileDesktopLayerHPx(rawH, layerTop);
+  return { w, h, layerTop };
 }
 
 /**
@@ -719,10 +741,12 @@ export function DesktopProvider({ children }) {
     ro.observe(el);
     window.addEventListener("resize", run);
     window.visualViewport?.addEventListener("resize", run);
+    window.visualViewport?.addEventListener("scroll", run);
     return () => {
       ro.disconnect();
       window.removeEventListener("resize", run);
       window.visualViewport?.removeEventListener("resize", run);
+      window.visualViewport?.removeEventListener("scroll", run);
     };
   }, []);
 
