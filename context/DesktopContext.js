@@ -324,8 +324,13 @@ export function syncMobileHomeLayoutMetrics() {
     mobileHomeLayoutMetrics.stackBottomInLayer = null;
     return;
   }
+  /** Sichtbare Kachel (WidgetStack) statt äußerem Band-Wrapper — Chrome misst sonst oft zu knapp zum Finder. */
+  const face = stack.querySelector("[data-mm-mobile-widget-stack-face]");
+  const faceR = face?.getBoundingClientRect();
+  const measureEl =
+    faceR && faceR.height >= 48 ? /** @type {Element} */ (face) : stack;
   const lr = layer.getBoundingClientRect();
-  const sr = stack.getBoundingClientRect();
+  const sr = measureEl.getBoundingClientRect();
   const bottom = Math.round(sr.bottom - lr.top);
   mobileHomeLayoutMetrics.stackBottomInLayer =
     bottom > WINDOW_DESKTOP_INSET ? bottom : null;

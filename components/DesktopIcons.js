@@ -225,9 +225,10 @@ export function DesktopIcons() {
       let bandTop;
       let height;
       if (inner > 0) {
-        /** Immer am Logo andocken — kein vertikales „Zentrieren“ im Slot (verursachte unterschiedliche Logo↔Stack-Abstände je nach innerHeight/Finder). */
-        bandTop = yLo;
+        /** Slot-Höhe begrenzen, freien Raum Logo↔Finder gleichmäßig verteilen (Safari-Verhalten in allen Browsern). */
         height = Math.max(48, Math.min(stackSlotH, inner));
+        const slack = inner - height;
+        bandTop = yLo + Math.max(0, slack / 2);
       } else {
         bandTop = Math.max(0, fY - stackSlotH);
         height = Math.max(48, fY - bandTop);
@@ -356,7 +357,7 @@ export function DesktopIcons() {
       {/* Mobile: Slideshow vertikal zwischen Logo (unten) und Finder (oben) zentriert; z-30 */}
       <div
         data-mm-mobile-widget-stack
-        className="pointer-events-none absolute left-0 right-0 z-[30] flex flex-col justify-start md:hidden"
+        className="pointer-events-none absolute left-0 right-0 z-[30] flex flex-col justify-center md:hidden"
         style={{
           top: mobileWidgetBand.top,
           height: mobileWidgetBand.height,

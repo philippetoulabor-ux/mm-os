@@ -338,7 +338,11 @@ function WidgetStack({
       };
 
   return (
-    <div className={outerClass} style={outerStyle}>
+    <div
+      className={outerClass}
+      style={outerStyle}
+      {...(!isDesktop ? { "data-mm-mobile-widget-stack-face": "" } : {})}
+    >
       <div className="overflow-visible" style={innerStyle}>
         {showBack ? (
           <div

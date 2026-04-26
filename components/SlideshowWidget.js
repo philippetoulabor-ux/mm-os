@@ -372,6 +372,7 @@ export function SlideshowWidget({
                   : ""
               }`
       }`}
+      {...(mobileHomeStripTile ? { "data-mm-mobile-widget-stack-face": "" } : {})}
       {...rootDrag}
       onClick={onRootClick}
     >
