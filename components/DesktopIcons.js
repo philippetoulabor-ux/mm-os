@@ -217,19 +217,17 @@ export function DesktopIcons() {
               stackSlotH + MOBILE_WIDGET_BAND_PAD_FINDER_PX,
               Math.round(lr.height * 0.42)
             );
+      /** Logo sitzt im Site-Header oberhalb des Layers; gleiche Viewport-Messung in allen Browsern. */
       const logoBottomLayer = gr.bottom - lr.top;
-      const yLo = logoBottomLayer + MOBILE_WIDGET_BAND_PAD_LOGO_PX;
+      const yLo = Math.max(0, logoBottomLayer + MOBILE_WIDGET_BAND_PAD_LOGO_PX);
       const yHi = fY - MOBILE_WIDGET_BAND_PAD_FINDER_PX;
       const inner = yHi - yLo;
       let bandTop;
       let height;
-      if (inner >= stackSlotH) {
-        bandTop = yLo + (inner - stackSlotH) / 2;
-        height = stackSlotH;
-      } else if (inner > 0) {
-        const tuckUnderFinder = yHi - stackSlotH;
-        bandTop = Math.max(0, Math.min(yLo, tuckUnderFinder));
-        height = Math.max(48, Math.min(stackSlotH, yHi - bandTop));
+      if (inner > 0) {
+        /** Immer am Logo andocken — kein vertikales „Zentrieren“ im Slot (verursachte unterschiedliche Logo↔Stack-Abstände je nach innerHeight/Finder). */
+        bandTop = yLo;
+        height = Math.max(48, Math.min(stackSlotH, inner));
       } else {
         bandTop = Math.max(0, fY - stackSlotH);
         height = Math.max(48, fY - bandTop);
@@ -358,7 +356,7 @@ export function DesktopIcons() {
       {/* Mobile: Slideshow vertikal zwischen Logo (unten) und Finder (oben) zentriert; z-30 */}
       <div
         data-mm-mobile-widget-stack
-        className="pointer-events-none absolute left-0 right-0 z-[30] flex flex-col justify-center md:hidden"
+        className="pointer-events-none absolute left-0 right-0 z-[30] flex flex-col justify-start md:hidden"
         style={{
           top: mobileWidgetBand.top,
           height: mobileWidgetBand.height,
