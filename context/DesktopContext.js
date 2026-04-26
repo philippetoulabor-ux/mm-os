@@ -239,12 +239,43 @@ export function getMobileHomeLayoutSnapshot() {
   };
 }
 
+/** Default für {@link getMobileFinderHomeCardBounds} (Initial-Fenster / SSR-Fallback). */
+const DEFAULT_FINDER_MOBILE_HOME_UI = {
+  finderProjectAppId: null,
+  finderTabAppIds: [],
+  finderClassicSearchExpanded: false,
+};
+
+function shouldUseMobileFinderCompactHomeHeight(ui) {
+  return (
+    ui.finderProjectAppId == null &&
+    (ui.finderTabAppIds?.length ?? 0) === 0 &&
+    !ui.finderClassicSearchExpanded
+  );
+}
+
+/**
+ * Geschätzte Gesamthöhe der Mobile-Finder-Karte (Classic Home, zugeklappt): OSWindow-Innenraum
+ * inkl. Pt, Kachelzeile 3×1, untere Such-/Expand-Leiste, safe-area-Padding (siehe OSWindow + FinderView).
+ */
+function getMobileFinderCollapsedClassicHomeChromeEstHPx() {
+  const innerTopPt = 12; // max(0.75rem, …) min
+  const mainPadY = 24; // p-3 oben+unten
+  const tileRow = 124; // min-h-[6.25rem] + Label (≈113px gemessen + Toleranz)
+  const bottomStrip = 2 + 8 + 44 + 40; // border-t-2, py-2 oben, h-11 Lupe (wie OSWindow-Chrome), pb min/safe (Näherung)
+  const outerScrollPb = 0; // kein extra pb am OSWindow-Scroll-Wrapper; Safe-Area nur in der Chrome-Zeile (Finder/AppContent)
+  const fudge = 28; // doppelte safe-insets / Notch
+  return innerTopPt + mainPadY + tileRow + bottomStrip + outerScrollPb + fudge;
+}
+
 /**
  * Mobile-Home: Finder als Karte unter dem Slideshow-/Widget-Stapel,
  * volle Breite zwischen den Rändern (`inset` links wie rechts),
  * unten derselbe Mindestabstand `inset` — kein Vollbild (nur Viewports ≤767px).
+ *
+ * @param {typeof DEFAULT_FINDER_MOBILE_HOME_UI} [ui] — bei kompaktem Classic-Home: niedrigere Kartenhöhe (nur 3 Kacheln sichtbar).
  */
-function getMobileFinderHomeCardBounds() {
+function getMobileFinderHomeCardBounds(ui = DEFAULT_FINDER_MOBILE_HOME_UI) {
   if (typeof window === "undefined") {
     return {
       x: WINDOW_DESKTOP_INSET,
@@ -254,7 +285,19 @@ function getMobileFinderHomeCardBounds() {
     };
   }
   const snap = getMobileHomeLayoutSnapshot();
-  if (snap) return snap.finderBounds;
+  if (snap) {
+    const { x, y, w, h: fullH } = snap.finderBounds;
+    if (!shouldUseMobileFinderCompactHomeHeight(ui)) {
+      return { x, y, w, h: fullH };
+    }
+    const compactH = getMobileFinderCollapsedClassicHomeChromeEstHPx();
+    return {
+      x,
+      y,
+      w,
+      h: Math.min(fullH, Math.max(MIN_WIN_H, compactH)),
+    };
+  }
 
   const { w: desktopW } = getDesktopContentRect();
   const { inset, maxBottomLayer } = getDesktopWindowLayoutLimits();
@@ -266,7 +309,10 @@ function getMobileFinderHomeCardBounds() {
       MOBILE_HOME_SLIDESHOW_BAND_EST_PX + MOBILE_BAND_PAD_FINDER_PX
     )
   );
-  const h = Math.max(MIN_WIN_H, maxBottomLayer - top);
+  const fullH = Math.max(MIN_WIN_H, maxBottomLayer - top);
+  const h = shouldUseMobileFinderCompactHomeHeight(ui)
+    ? Math.min(fullH, Math.max(MIN_WIN_H, getMobileFinderCollapsedClassicHomeChromeEstHPx()))
+    : fullH;
   return { x: inset, y: top, w: innerW, h };
 }
 
@@ -621,7 +667,10 @@ function getClampedDefaultDesktopIconPositions() {
   return clampFloatingDesktopIconPositions(defaults, w, h, layerTop);
 }
 
-function clampWindowsToViewport(windows) {
+function clampWindowsToViewport(
+  windows,
+  finderMobileHomeUi = DEFAULT_FINDER_MOBILE_HOME_UI
+) {
   if (typeof window === "undefined") return windows;
   const {
     desktopW,
@@ -664,7 +713,7 @@ function clampWindowsToViewport(windows) {
           ...win,
           ...(expanded
             ? getMobileFinderExpandedBounds()
-            : getMobileFinderHomeCardBounds()),
+            : getMobileFinderHomeCardBounds(finderMobileHomeUi)),
           maximized: false,
           mobileImmersive: false,
           prevBounds: null,
@@ -780,6 +829,14 @@ export function DesktopProvider({ children }) {
   const [finderTitlebarSearchSlotEl, setFinderTitlebarSearchSlotEl] =
     useState(null);
 
+  /** Für {@link getMobileFinderHomeCardBounds} in Callbacks (`toggleFinderMobile…`) ohne veraltete Closures. */
+  const finderMobileHomeBoundsUiRef = useRef(DEFAULT_FINDER_MOBILE_HOME_UI);
+  finderMobileHomeBoundsUiRef.current = {
+    finderProjectAppId,
+    finderTabAppIds,
+    finderClassicSearchExpanded,
+  };
+
   useEffect(() => {
     try {
       if (localStorage.getItem(FOLDER_PREVIEW_STORAGE_KEY) === "0") {
@@ -839,7 +896,9 @@ export function DesktopProvider({ children }) {
       syncDesktopLayerMetrics(el);
       syncMobileHomeLayoutMetrics();
       setDesktopUiScale(getLastDesktopUiScale());
-      setWindows((prev) => clampWindowsToViewport(prev));
+      setWindows((prev) =>
+        clampWindowsToViewport(prev, finderMobileHomeBoundsUiRef.current)
+      );
     };
     run();
     const ro = new ResizeObserver(run);
@@ -853,7 +912,11 @@ export function DesktopProvider({ children }) {
       window.visualViewport?.removeEventListener("resize", run);
       window.visualViewport?.removeEventListener("scroll", run);
     };
-  }, []);
+  }, [
+    finderProjectAppId,
+    finderTabAppIds,
+    finderClassicSearchExpanded,
+  ]);
 
   /** Letzter angewendeter Titelleisten-Zusatz (px), damit dh bei Toggle stabil bleibt. */
   const finderTitlebarExpandAppliedRef = useRef(0);
@@ -1070,7 +1133,7 @@ export function DesktopProvider({ children }) {
       const nextExpanded = !w.finderMobileExpanded;
       const bounds = nextExpanded
         ? getMobileFinderExpandedBounds()
-        : getMobileFinderHomeCardBounds();
+        : getMobileFinderHomeCardBounds(finderMobileHomeBoundsUiRef.current);
       const next = [...prev];
       next[idx] = {
         ...w,

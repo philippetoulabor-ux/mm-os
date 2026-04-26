@@ -764,11 +764,7 @@ export function OSWindow({ win }) {
                 ? finderMobileScrollRef
                 : undefined
             }
-            className={`flex min-h-0 flex-1 flex-col ${
-              win.appId !== "finder"
-                ? "pb-0"
-                : "pb-[max(0.5rem,calc(env(safe-area-inset-bottom,0px)+var(--mm-vv-bottom-inset,0px)))]"
-            } ${
+            className={`flex min-h-0 flex-1 flex-col pb-0 ${
               win.appId === "finder" && !win.finderMobileExpanded
                 ? "overflow-hidden"
                 : "overflow-y-auto overflow-x-hidden overscroll-y-contain [-webkit-overflow-scrolling:touch]"

@@ -13,6 +13,7 @@ import dynamic from "next/dynamic";
 import { APPS, webAssetAppId } from "@/lib/apps";
 import {
   FINDER_BROWSE_HOME_ROWS,
+  reorderFinderBrowseHomeRowsForMobileGrid,
   filterFinderSearchIndex,
 } from "@/lib/finderSearch";
 import {
@@ -1291,10 +1292,12 @@ function finderFilePreviewHref(dir, file) {
 }
 
 /** Wie `AssetFileListThumb`: Video-Frame als Miniatur in der Finder-Liste. */
-function FinderFileVideoThumb({ href, file }) {
+function FinderFileVideoThumb({ href, file, useStreamFrame = false }) {
   const { desktopUiScale } = useDesktop();
   const videoRef = useRef(null);
-  const box = "h-14 w-14 shrink-0 rounded object-cover";
+  const box = useStreamFrame
+    ? FINDER_ASSET_STREAM_THUMB_MEDIA
+    : "h-14 w-14 shrink-0 rounded object-cover";
 
   useEffect(() => {
     const v = videoRef.current;
@@ -1310,7 +1313,7 @@ function FinderFileVideoThumb({ href, file }) {
     return () => v.removeEventListener("loadeddata", seek);
   }, [href, file]);
 
-  return (
+  const video = (
     <video
       key={`${href}|${desktopUiScale}`}
       ref={videoRef}
@@ -1322,15 +1325,22 @@ function FinderFileVideoThumb({ href, file }) {
       aria-hidden
     />
   );
+  return useStreamFrame ? (
+    <div className={FINDER_ASSET_STREAM_THUMB_FRAME}>{video}</div>
+  ) : (
+    video
+  );
 }
 
 /** Wie `AssetFileListThumb` ohne Bild/Video: Endung im Kasten statt Emoji. */
-function FinderFileFormatThumb({ file, tileSize = "list" }) {
+function FinderFileFormatThumb({ file, tileSize = "list", streamSized = false }) {
   const ext = fileExtensionDisplay(file);
   const grid = tileSize === "grid";
-  const box = grid
-    ? "flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded border border-zinc-200 bg-zinc-100 px-0.5"
-    : "flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded border border-zinc-200 bg-zinc-100 px-0.5";
+  const boxDim =
+    grid && streamSized
+      ? "h-[5.25rem] w-[5.25rem]"
+      : "h-14 w-14";
+  const box = `flex ${boxDim} shrink-0 items-center justify-center overflow-hidden rounded border border-zinc-200 bg-zinc-100 px-0.5`;
   const extClass = grid
     ? "max-w-full truncate text-center font-mono text-[13.5px] font-semibold leading-tight text-zinc-600"
     : "max-w-full truncate text-center font-mono text-[13px] font-semibold leading-tight text-zinc-600";
@@ -1350,11 +1360,19 @@ function FinderFileFormatThumb({ file, tileSize = "list" }) {
  * Wie DesktopFolderIcon / Ordnerliste: Vorschaubild/Video bei FolderPreview,
  * sonst AppIcon bzw. Dateiendung wie in der Ordnerdateiliste (keine Typ-Emojis).
  */
-function FinderListIcon({ row, folderPreview, tileSize = "list" }) {
+function FinderListIcon({
+  row,
+  folderPreview,
+  tileSize = "list",
+  streamSizedGridThumb = false,
+}) {
   const { desktopUiScale } = useDesktop();
   const app = row.appId ? APPS[row.appId] : null;
   const grid = tileSize === "grid";
-  const imgBox = "h-14 w-14 shrink-0 rounded object-cover";
+  const stream = grid && streamSizedGridThumb;
+  const imgBox = stream
+    ? FINDER_ASSET_STREAM_THUMB_MEDIA
+    : "h-14 w-14 shrink-0 rounded object-cover";
   const appBox = grid
     ? "inline-flex h-14 w-14 shrink-0 items-center justify-center"
     : "inline-flex h-14 w-14 shrink-0 items-center justify-center";
@@ -1393,38 +1411,48 @@ function FinderListIcon({ row, folderPreview, tileSize = "list" }) {
   }
 
   if (row.kind === "folder" && folderPreviewHref && !imgFailed) {
-    return (
-      <>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          key={`${folderPreviewHref}|${previewDecodeKey}`}
-          src={folderPreviewHref}
-          alt=""
-          className={imgBox}
-          onError={() => setImgFailed(true)}
-        />
-      </>
+    const img = (
+      /* eslint-disable-next-line @next/next/no-img-element */
+      <img
+        key={`${folderPreviewHref}|${previewDecodeKey}`}
+        src={folderPreviewHref}
+        alt=""
+        className={imgBox}
+        onError={() => setImgFailed(true)}
+      />
+    );
+    return stream ? (
+      <div className={FINDER_ASSET_STREAM_THUMB_FRAME}>{img}</div>
+    ) : (
+      img
     );
   }
 
   if (row.kind === "file" && fileImageHref && !imgFailed) {
-    return (
-      <>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          key={`${fileImageHref}|${previewDecodeKey}`}
-          src={fileImageHref}
-          alt=""
-          className={imgBox}
-          onError={() => setImgFailed(true)}
-        />
-      </>
+    const img = (
+      /* eslint-disable-next-line @next/next/no-img-element */
+      <img
+        key={`${fileImageHref}|${previewDecodeKey}`}
+        src={fileImageHref}
+        alt=""
+        className={imgBox}
+        onError={() => setImgFailed(true)}
+      />
+    );
+    return stream ? (
+      <div className={FINDER_ASSET_STREAM_THUMB_FRAME}>{img}</div>
+    ) : (
+      img
     );
   }
 
   if (row.kind === "file" && fileVideoHref) {
     return (
-      <FinderFileVideoThumb href={fileVideoHref} file={row.file} />
+      <FinderFileVideoThumb
+        href={fileVideoHref}
+        file={row.file}
+        useStreamFrame={stream}
+      />
     );
   }
 
@@ -1437,7 +1465,13 @@ function FinderListIcon({ row, folderPreview, tileSize = "list" }) {
   }
 
   if (row.kind === "file") {
-    return <FinderFileFormatThumb file={row.file} tileSize={tileSize} />;
+    return (
+      <FinderFileFormatThumb
+        file={row.file}
+        tileSize={tileSize}
+        streamSized={stream}
+      />
+    );
   }
 
   return (
@@ -1499,6 +1533,9 @@ const FINDER_LIST_ROW_FRAME_MD = [
 /** Content-Vorschau: 1,5× `h-14 w-14` (3,5 rem) der linken Projekte — 5,25 rem. */
 const FINDER_ASSET_STREAM_THUMB_FRAME =
   "flex h-[5.25rem] w-[5.25rem] shrink-0 overflow-hidden rounded bg-zinc-100";
+
+const FINDER_ASSET_STREAM_THUMB_MEDIA =
+  "h-full w-full min-h-0 min-w-0 shrink-0 rounded border border-zinc-200 object-cover";
 
 /** Stream: große, durchlaufende Zeilen (Platzhalter — weiter ausbaubar). */
 function FinderAssetStream({
@@ -1667,16 +1704,32 @@ function FinderView({
 
   const q = query.trim();
   const showSearch = q.length > 0;
-  const rows = useMemo(
-    () => (showSearch ? filterFinderSearchIndex(q) : FINDER_BROWSE_HOME_ROWS),
-    [q, showSearch]
-  );
-  rowsRef.current = rows;
+  const rows = useMemo(() => {
+    if (showSearch) return filterFinderSearchIndex(q);
+    if (unifiedParentScroll) {
+      return reorderFinderBrowseHomeRowsForMobileGrid(FINDER_BROWSE_HOME_ROWS);
+    }
+    return FINDER_BROWSE_HOME_ROWS;
+  }, [q, showSearch, unifiedParentScroll]);
+
+  /** Mobile Classic-Home, Finder zugeklappt: nur eine Zeile mit drei Kacheln (kein Abzeichnen weiterer Projekte). */
+  const mobileCollapsedHomeThreeTilesOnly =
+    unifiedParentScroll &&
+    !finderMobileAllowsScroll &&
+    finderProjectAppId === null &&
+    finderTabAppIds.length === 0 &&
+    !showSearch &&
+    !finderClassicSearchExpanded;
+
+  const displayRows = mobileCollapsedHomeThreeTilesOnly
+    ? rows.slice(0, 3)
+    : rows;
+  rowsRef.current = displayRows;
 
   const browseGridMode =
     !showSearch &&
-    rows.length > 0 &&
-    rows.every((r) => r.kind === "folder" || r.kind === "app");
+    displayRows.length > 0 &&
+    displayRows.every((r) => r.kind === "folder" || r.kind === "app");
 
   /** Pfeiltasten: natives window-capture + flushSync — Liste oder Projekt-Raster. */
   useEffect(() => {
@@ -1798,10 +1851,10 @@ function FinderView({
   }, [selectedIndex]);
 
   useLayoutEffect(() => {
-    if (!isDesktopKb || rows.length === 0) return;
+    if (!isDesktopKb || displayRows.length === 0) return;
     const el = rowElRefs.current[selectedIndex];
     if (el) el.scrollIntoView({ block: "nearest" });
-  }, [selectedIndex, rows, isDesktopKb]);
+  }, [selectedIndex, displayRows, isDesktopKb]);
 
   const openHit = useCallback(
     (row) => {
@@ -1978,7 +2031,7 @@ function FinderView({
 
   const classicHomeMainScroll =
     finderScrollLocked && !showSearch
-      ? "min-h-0 flex-1 overflow-hidden p-3"
+      ? "min-h-0 shrink-0 overflow-hidden p-3"
       : finderScrollLocked && showSearch
         ? "min-h-0 flex-1 overflow-hidden p-2"
         : unifiedParentScroll && !showSearch
@@ -2006,7 +2059,7 @@ function FinderView({
     : FINDER_HOVER_DESKTOP_25;
 
   const classicSearchLupeBtnCls = unifiedParentScroll
-    ? "group flex h-12 w-12 shrink-0 cursor-pointer items-center justify-center rounded"
+    ? "group flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded"
     : "group flex h-6 w-4 shrink-0 cursor-pointer items-center justify-center rounded";
 
   const classicSearchLupeImgCls = unifiedParentScroll
@@ -2038,10 +2091,10 @@ function FinderView({
         }
         onKeyDownCapture={(e) => blockArrowScrollOnRow(e, isDesktopKb)}
       >
-        {rows.length === 0 ? (
+        {displayRows.length === 0 ? (
           <li className="px-2 py-3 text-zinc-500">Keine Treffer.</li>
         ) : (
-          rows.map((row, index) => (
+          displayRows.map((row, index) => (
             <li key={row.id}>
               <button
                 type="button"
@@ -2075,7 +2128,7 @@ function FinderView({
           ))
         )}
       </ul>
-    ) : rows.length === 0 ? (
+    ) : displayRows.length === 0 ? (
       <p className="px-1 py-3 text-zinc-500">Keine Einträge.</p>
     ) : (
       <div
@@ -2096,7 +2149,7 @@ function FinderView({
           }
         }}
       >
-        {rows.map((row, index) => (
+        {displayRows.map((row, index) => (
           <button
             key={row.id}
             type="button"
@@ -2115,6 +2168,7 @@ function FinderView({
               row={row}
               folderPreview={folderPreview}
               tileSize="grid"
+              streamSizedGridThumb={unifiedParentScroll}
             />
             <span className={browseLabelCls}>{row.primary}</span>
           </button>
@@ -2270,12 +2324,7 @@ function FinderView({
             ? "Vollbild beenden"
             : "Finder im Vollbild öffnen"
         }
-        title={
-          finderMobileExpanded
-            ? "Vollbild beenden"
-            : "Finder im Vollbild öffnen"
-        }
-        className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center self-center rounded-full bg-transparent transition duration-200 ease-out md:hover:opacity-90 active:scale-95 active:opacity-100"
+        className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center self-center rounded-full bg-transparent transition-transform duration-200 ease-out active:scale-95"
         onMouseDown={(e) => e.stopPropagation()}
         onClick={(e) => {
           raiseFinderWindow();
