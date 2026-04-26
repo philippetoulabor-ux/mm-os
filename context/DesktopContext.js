@@ -1049,6 +1049,13 @@ export function DesktopProvider({ children }) {
     focusFinderWindow();
   }, [focusFinderWindow]);
 
+  /** Mobile: Projektordner verlassen → Kachel-Leiste; Vollbild (`finderMobileExpanded`) bleibt. */
+  const finderBackToProjectTiles = useCallback(() => {
+    setFinderProjectAppId(null);
+    setFinderProjectSearchStripExpanded(false);
+    focusFinderWindow();
+  }, [focusFinderWindow]);
+
   /** Nur Mobile: Finder-Karte → gleichmäßig gepaddetes Layer-Vollbild; erneut tippen kehrt zur Karte zurück. */
   const toggleFinderMobileExpanded = useCallback(() => {
     if (typeof window === "undefined" || !isMobileViewport()) return;
@@ -1065,6 +1072,24 @@ export function DesktopProvider({ children }) {
         ...w,
         finderMobileExpanded: nextExpanded,
         ...bounds,
+      };
+      return next;
+    });
+  }, []);
+
+  /** Mobile: Vollbild, falls noch Karten-Modus — Klicks in Raster/Suche/Projekt-Datei öffnen nicht mehr „in der Karte“. */
+  const ensureFinderMobileExpanded = useCallback(() => {
+    if (typeof window === "undefined" || !isMobileViewport()) return;
+    setWindows((prev) => {
+      const idx = prev.findIndex((w) => w.appId === "finder" && !w.minimized);
+      if (idx === -1) return prev;
+      const w = prev[idx];
+      if (w.finderMobileExpanded) return prev;
+      const next = [...prev];
+      next[idx] = {
+        ...w,
+        finderMobileExpanded: true,
+        ...getMobileFinderExpandedBounds(),
       };
       return next;
     });
@@ -1545,6 +1570,7 @@ export function DesktopProvider({ children }) {
   const finderOpenProjectFile = useCallback(
     ({ dir, file, basePath = "/web" }) => {
       if (!dir || !file) return;
+      ensureFinderMobileExpanded();
       const pid = webAssetAppId(dir);
       if (APPS[pid]?.assetDir) {
         setFinderProjectAppId(pid);
@@ -1552,7 +1578,7 @@ export function DesktopProvider({ children }) {
       }
       openAssetFileWindow({ dir, file, basePath }, { fromFinder: true });
     },
-    [openAssetFileWindow, promoteFinderTabToFront]
+    [openAssetFileWindow, promoteFinderTabToFront, ensureFinderMobileExpanded]
   );
 
   const finderToggleProjectFile = useCallback(
@@ -1985,7 +2011,9 @@ export function DesktopProvider({ children }) {
       finderProjectAppId,
       finderTabAppIds,
       finderGoHome,
+      finderBackToProjectTiles,
       toggleFinderMobileExpanded,
+      ensureFinderMobileExpanded,
       finderOpenProject,
       finderOpenProjectFile,
       finderToggleProjectFile,
@@ -2000,7 +2028,7 @@ export function DesktopProvider({ children }) {
       collapseFinderProjectSearchStrip,
       finderTitlebarSearchSlotEl,
       setFinderTitlebarSearchSlotEl,
-      /** Ein Widget-Look-Asset-Fenster (vom Finder) ist offen → Stapel animieren. */
+      /** Widget-Chrome-Asset, oder mobil Finder Vollbild: Stapel + Logo einklappen. */
       desktopWidgetStacksCollapsed,
       /** Fenster-Koordinaten beziehen sich auf den Desktop unter dem Header; min y ≈ 0 */
       menuBarHeight: 0,
@@ -2046,7 +2074,9 @@ export function DesktopProvider({ children }) {
       finderProjectAppId,
       finderTabAppIds,
       finderGoHome,
+      finderBackToProjectTiles,
       toggleFinderMobileExpanded,
+      ensureFinderMobileExpanded,
       finderOpenProject,
       finderOpenProjectFile,
       finderToggleProjectFile,

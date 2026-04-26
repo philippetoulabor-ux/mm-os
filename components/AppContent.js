@@ -1523,7 +1523,7 @@ function FinderAssetStream({
     <ul
       className={
         unifiedParentScroll
-          ? "space-y-1 p-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          ? "min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-y-contain p-2 [-webkit-overflow-scrolling:touch] [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
           : "min-h-0 flex-1 space-y-1 overflow-auto overscroll-contain p-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       }
     >
@@ -1610,57 +1610,6 @@ function FinderProjectsColumn({
   );
 }
 
-/** Mobile (unifiedParentScroll): Projektwechsler als Kacheln statt schmaler Liste. */
-function FinderProjectsMobileTilePicker({
-  folderPreview,
-  finderProjectAppId,
-  finderOpenProject,
-  openOrFocus,
-}) {
-  return (
-    <div className="flex max-h-[min(44vh,320px)] min-h-0 w-full shrink-0 flex-col border-b border-zinc-200 bg-white">
-      <div
-        role="grid"
-        aria-label="Projekte"
-        aria-colcount={3}
-        className="min-h-0 flex-1 grid grid-cols-3 gap-2 overflow-y-auto overscroll-contain p-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-      >
-          {FINDER_BROWSE_HOME_ROWS.map((row) => {
-            const active =
-              row.kind === "folder" && finderProjectAppId === row.appId;
-            return (
-              <button
-                key={row.id}
-                type="button"
-                role="gridcell"
-                aria-selected={active}
-                onClick={() =>
-                  row.kind === "app"
-                    ? openOrFocus(row.appId)
-                    : finderOpenProject(row.appId)
-                }
-                className={`flex min-h-[6.25rem] flex-col items-center justify-center gap-1.5 rounded border-2 border-transparent px-1 py-2 text-center transition-colors duration-200 ease-out ${FINDER_HOVER_DESKTOP_25_MD} ${
-                  active
-                    ? "border-black/25 " + FINDER_SELECTED_DESKTOP_25
-                    : ""
-                }`}
-              >
-                <FinderListIcon
-                  row={row}
-                  folderPreview={folderPreview}
-                  tileSize="grid"
-                />
-                <span className="line-clamp-2 w-full max-w-[9rem] text-center text-[11px] font-medium leading-tight text-zinc-900">
-                  {row.primary}
-                </span>
-              </button>
-            );
-          })}
-      </div>
-    </div>
-  );
-}
-
 function FinderView({
   unifiedParentScroll = false,
   finderMobileAllowsScroll = true,
@@ -1679,9 +1628,12 @@ function FinderView({
     expandFinderClassicSearch,
     collapseFinderClassicSearch,
     finderProjectSearchStripExpanded,
+    expandFinderProjectSearchStrip,
     collapseFinderProjectSearchStrip,
     finderTitlebarSearchSlotEl,
     toggleFinderMobileExpanded,
+    ensureFinderMobileExpanded,
+    finderBackToProjectTiles,
   } = useDesktop();
 
   const finderWin = windows.find((w) => w.appId === "finder" && !w.minimized);
@@ -1853,6 +1805,7 @@ function FinderView({
 
   const openHit = useCallback(
     (row) => {
+      if (unifiedParentScroll) ensureFinderMobileExpanded();
       if (row.kind === "file") {
         finderOpenProjectFile({
           dir: row.dir,
@@ -1868,7 +1821,13 @@ function FinderView({
        *  (useEffect leert nur, wenn die Suchleiste eingeklappt ist). */
       setQuery("");
     },
-    [finderOpenProjectFile, finderOpenProject, openOrFocus]
+    [
+      unifiedParentScroll,
+      ensureFinderMobileExpanded,
+      finderOpenProjectFile,
+      finderOpenProject,
+      openOrFocus,
+    ]
   );
 
   const runFinderListKeys = useCallback(
@@ -1969,11 +1928,13 @@ function FinderView({
   useEffect(() => {
     if (isClassicFinderHome) return;
     if (finderProjectAppId !== null) return;
+    /** Mobile (untere Suchzeile): kein Autofokus — sonst springt die Tastatur nach „Zurück“ hoch. */
+    if (unifiedParentScroll) return;
     const id = requestAnimationFrame(() => {
       finderSearchRef.current?.focus();
     });
     return () => cancelAnimationFrame(id);
-  }, [finderProjectAppId, isClassicFinderHome]);
+  }, [finderProjectAppId, isClassicFinderHome, unifiedParentScroll]);
 
   /** Nach Ausklappen der Suche: Fokus ins Suchfeld (Desktop-Titelleiste + Mobile-Zeile unten). */
   useLayoutEffect(() => {
@@ -1983,6 +1944,20 @@ function FinderView({
     });
     return () => cancelAnimationFrame(id);
   }, [isClassicFinderHome, finderClassicSearchExpanded, finderTitlebarSearchSlotEl]);
+
+  /** Mobile Projekt: nach „Suche öffnen“ Fokus ins Feld (gleiches Muster wie Classic-Home). */
+  useLayoutEffect(() => {
+    if (isClassicFinderHome || !finderProjectSearchStripExpanded) return;
+    if (!unifiedParentScroll) return;
+    const id = requestAnimationFrame(() => {
+      finderSearchRef.current?.focus();
+    });
+    return () => cancelAnimationFrame(id);
+  }, [
+    isClassicFinderHome,
+    finderProjectSearchStripExpanded,
+    unifiedParentScroll,
+  ]);
 
   /** Eingeklappt: Suchtext leeren (Classic Home: Desktop + Mobile). */
   useEffect(() => {
@@ -2214,6 +2189,7 @@ function FinderView({
             onClick={(e) => {
               raiseFinderWindow();
               e.stopPropagation();
+              if (unifiedParentScroll) ensureFinderMobileExpanded();
               expandFinderClassicSearch();
             }}
           >
@@ -2268,34 +2244,53 @@ function FinderView({
     );
 
   const finderMobileExpandToggle = unifiedParentScroll ? (
-    <button
-      type="button"
-      data-mm-finder-expand-toggle
-      aria-label={
-        finderMobileExpanded
-          ? "Vollbild beenden"
-          : "Finder im Vollbild öffnen"
-      }
-      title={
-        finderMobileExpanded
-          ? "Vollbild beenden"
-          : "Finder im Vollbild öffnen"
-      }
-      className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center self-center rounded-full bg-transparent transition duration-200 ease-out md:hover:opacity-90 active:scale-95 active:opacity-100"
-      onMouseDown={(e) => e.stopPropagation()}
-      onClick={(e) => {
-        raiseFinderWindow();
-        e.stopPropagation();
-        toggleFinderMobileExpanded();
-      }}
-    >
-      <span
-        className={`block h-4 w-4 shrink-0 rounded-full transition-colors duration-200 ease-out ${
-          finderMobileExpanded ? "bg-[rgb(255,0,0)]" : "bg-[rgb(0,255,0)]"
-        }`}
-        aria-hidden
-      />
-    </button>
+    finderProjectAppId && finderMobileExpanded ? (
+      <div
+        className="flex h-11 w-11 shrink-0 items-center justify-center self-center"
+        data-mm-finder-project-back
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <WidgetChromeArrowButton
+          dir="left"
+          label="Zurück zur Kachelansicht"
+          opaqueAlways
+          onClick={() => {
+            raiseFinderWindow();
+            /** Nach dem Event ausführen — sonst Unmount dieses Buttons während Click → DOM/Portal-Warnungen. */
+            queueMicrotask(() => finderBackToProjectTiles());
+          }}
+        />
+      </div>
+    ) : (
+      <button
+        type="button"
+        data-mm-finder-expand-toggle
+        aria-label={
+          finderMobileExpanded
+            ? "Vollbild beenden"
+            : "Finder im Vollbild öffnen"
+        }
+        title={
+          finderMobileExpanded
+            ? "Vollbild beenden"
+            : "Finder im Vollbild öffnen"
+        }
+        className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center self-center rounded-full bg-transparent transition duration-200 ease-out md:hover:opacity-90 active:scale-95 active:opacity-100"
+        onMouseDown={(e) => e.stopPropagation()}
+        onClick={(e) => {
+          raiseFinderWindow();
+          e.stopPropagation();
+          toggleFinderMobileExpanded();
+        }}
+      >
+        <span
+          className={`block h-4 w-4 shrink-0 rounded-full transition-colors duration-200 ease-out ${
+            finderMobileExpanded ? "bg-[rgb(255,0,0)]" : "bg-[rgb(0,255,0)]"
+          }`}
+          aria-hidden
+        />
+      </button>
+    )
   ) : null;
 
   const projectSearchStrip = (
@@ -2306,44 +2301,98 @@ function FinderView({
           : "min-h-0 flex-1"
       }`}
     >
-      <label htmlFor="finder-search" className="sr-only">
-        Apps und Dateien durchsuchen
-      </label>
-      <div className="group/finder-search flex min-h-0 min-w-0 flex-1 items-center gap-2 rounded-sm border border-zinc-300 bg-white px-2 py-1.5 focus-within:ring-2 focus-within:ring-zinc-400 focus-within:ring-offset-0">
-        {!unifiedParentScroll ? (
-          <button
-            type="button"
-            className="group flex h-6 w-4 shrink-0 cursor-pointer items-center justify-center rounded"
-            aria-label="Suche schließen"
-            onMouseDown={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              raiseFinderWindow();
-              e.stopPropagation();
-              collapseFinderProjectSearchStrip();
-            }}
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/web/buttons/lupe.svg"
-              alt=""
-              aria-hidden
-              className="pointer-events-none h-4 w-4 shrink-0 opacity-50 transition-[opacity,transform] duration-200 ease-out group-focus-within/finder-search:opacity-100 group-hover:scale-[1.15] group-hover:opacity-100"
-              draggable={false}
-            />
-          </button>
-        ) : (
-          /* eslint-disable-next-line @next/next/no-img-element */
-          <img
-            src="/web/buttons/lupe.svg"
-            alt=""
-            aria-hidden
-            className="h-4 w-4 shrink-0 opacity-50"
-            draggable={false}
-          />
-        )}
-        {finderSearchInputEl}
-      </div>
-      {unifiedParentScroll ? finderMobileExpandToggle : null}
+      {unifiedParentScroll && !finderProjectSearchStripExpanded ? (
+        <>
+          <span className="sr-only">Apps und Dateien durchsuchen</span>
+          <div className="min-w-0 flex-1">
+            <div className="group/finder-search flex min-w-0 flex-1 items-center justify-start gap-2 bg-transparent px-0 py-0">
+              <button
+                type="button"
+                className={classicSearchLupeBtnCls}
+                aria-label="Suche öffnen"
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  raiseFinderWindow();
+                  e.stopPropagation();
+                  if (unifiedParentScroll) ensureFinderMobileExpanded();
+                  expandFinderProjectSearchStrip();
+                }}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/web/buttons/lupe.svg"
+                  alt=""
+                  aria-hidden
+                  className={classicSearchLupeImgCls}
+                  draggable={false}
+                />
+              </button>
+            </div>
+          </div>
+          {finderMobileExpandToggle}
+        </>
+      ) : (
+        <>
+          <div className="min-w-0 flex-1">
+            <label htmlFor="finder-search" className="sr-only">
+              Apps und Dateien durchsuchen
+            </label>
+            <div
+              className={
+                unifiedParentScroll
+                  ? "group/finder-search flex min-h-0 min-w-0 flex-1 items-center gap-2 bg-transparent px-0 py-0"
+                  : "group/finder-search flex min-h-0 min-w-0 flex-1 items-center gap-2 rounded-sm border-0 bg-white px-2 py-1.5 focus-within:ring-2 focus-within:ring-zinc-400 focus-within:ring-offset-0 md:border md:border-zinc-300"
+              }
+            >
+              {!unifiedParentScroll ? (
+                <button
+                  type="button"
+                  className="group flex h-6 w-4 shrink-0 cursor-pointer items-center justify-center rounded"
+                  aria-label="Suche schließen"
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    raiseFinderWindow();
+                    e.stopPropagation();
+                    collapseFinderProjectSearchStrip();
+                  }}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src="/web/buttons/lupe.svg"
+                    alt=""
+                    aria-hidden
+                    className="pointer-events-none h-4 w-4 shrink-0 opacity-50 transition-[opacity,transform] duration-200 ease-out group-focus-within/finder-search:opacity-100 group-hover:scale-[1.15] group-hover:opacity-100"
+                    draggable={false}
+                  />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className={classicSearchLupeBtnCls}
+                  aria-label="Suche schließen"
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    raiseFinderWindow();
+                    e.stopPropagation();
+                    collapseFinderProjectSearchStrip();
+                  }}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src="/web/buttons/lupe.svg"
+                    alt=""
+                    aria-hidden
+                    className={classicSearchLupeImgCls}
+                    draggable={false}
+                  />
+                </button>
+              )}
+              {finderSearchInputEl}
+            </div>
+          </div>
+          {unifiedParentScroll ? finderMobileExpandToggle : null}
+        </>
+      )}
     </div>
   );
 
@@ -2398,12 +2447,7 @@ function FinderView({
                   : "flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-y-contain [-webkit-overflow-scrolling:touch] lg:min-h-0 lg:min-w-0 lg:flex-row"
               }
             >
-              <FinderProjectsMobileTilePicker
-                folderPreview={folderPreview}
-                finderProjectAppId={finderProjectAppId}
-                finderOpenProject={finderOpenProject}
-                openOrFocus={openOrFocus}
-              />
+              {/** Eine Kachel-/Listen-Ansicht: kein zweites Raster (war identisch zu `homeOrSearchPane`). */}
               <div
                 className={`relative flex min-h-0 min-w-0 flex-1 flex-col pt-0 lg:min-w-0 ${leftPaneScroll}`}
               >

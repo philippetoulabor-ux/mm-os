@@ -130,8 +130,8 @@ function useIsMobileLayout() {
 export function OSWindow({ win }) {
   const {
     closeWindow,
-    closeAllTabs,
     focusWindow,
+    focusFinderWindow,
     moveWindow,
     setWindowBounds,
     toggleMediaPlayerVideoPanel,
@@ -193,7 +193,7 @@ export function OSWindow({ win }) {
     return () => window.removeEventListener("mouseup", onUp);
   }, []);
 
-  /** Vertikales Wischen: Karte → groß (nach oben), groß → Karte (nach unten, nur wenn Listen-Scroll oben). */
+  /** Vertikales Wischen: nur Karte → groß (nach oben); Schließen per Wischen nach unten absichtlich nicht. */
   useEffect(() => {
     if (!isMobile || win.appId !== "finder" || win.minimized) return undefined;
     const shell = finderShellRef.current;
@@ -210,25 +210,23 @@ export function OSWindow({ win }) {
       const el = t0.target;
       if (
         el instanceof Element &&
-        el.closest("[data-mm-finder-expand-toggle]")
+        (el.closest("[data-mm-finder-expand-toggle]") ||
+          el.closest("[data-mm-finder-project-back]"))
       ) {
         tr = null;
         return;
       }
-      const scrollEl = finderMobileScrollRef.current;
       tr = {
         sx: t0.clientX,
         sy: t0.clientY,
         t0:
           typeof performance !== "undefined" ? performance.now() : Date.now(),
         axis: null,
-        dead: false,
-        startScrollTop: scrollEl?.scrollTop ?? 0,
       };
     };
 
     const onTouchMove = (e) => {
-      if (!tr || tr.dead || e.touches.length !== 1) return;
+      if (!tr || e.touches.length !== 1) return;
       const t = e.touches[0];
       const dx = t.clientX - tr.sx;
       const dy = t.clientY - tr.sy;
@@ -243,16 +241,10 @@ export function OSWindow({ win }) {
           tr.axis = "v";
         }
       }
-      const scrollEl = finderMobileScrollRef.current;
-      if (finderExpandedRef.current && scrollEl && scrollEl.scrollTop > 10) {
-        tr.dead = true;
-        return;
-      }
       if (
         tr.axis === "v" &&
         ay > FINDER_MOBILE_SWIPE_PREVENT_DEFAULT_MIN_PX &&
-        (!finderExpandedRef.current ||
-          (scrollEl && scrollEl.scrollTop < 10 && tr.startScrollTop < 10))
+        !finderExpandedRef.current
       ) {
         e.preventDefault();
       }
@@ -261,7 +253,7 @@ export function OSWindow({ win }) {
     const onTouchEnd = (e) => {
       const saved = tr;
       tr = null;
-      if (!saved || saved.dead || saved.axis !== "v") return;
+      if (!saved || saved.axis !== "v") return;
       if (e.changedTouches.length !== 1) return;
       const t = e.changedTouches[0];
       const dy = t.clientY - saved.sy;
@@ -269,16 +261,7 @@ export function OSWindow({ win }) {
         typeof performance !== "undefined" ? performance.now() : Date.now();
       if (t1 - saved.t0 > FINDER_MOBILE_SWIPE_MAX_MS) return;
       const expanded = finderExpandedRef.current;
-      const scrollEl = finderMobileScrollRef.current;
-      const st = scrollEl?.scrollTop ?? 0;
       if (!expanded && dy <= -FINDER_MOBILE_SWIPE_MIN_DIST_PX) {
-        toggleFinderMobileExpanded();
-      } else if (
-        expanded &&
-        dy >= FINDER_MOBILE_SWIPE_MIN_DIST_PX &&
-        saved.startScrollTop < 10 &&
-        st < 10
-      ) {
         toggleFinderMobileExpanded();
       }
     };
@@ -794,20 +777,20 @@ export function OSWindow({ win }) {
                   <div className="flex shrink-0 items-center">
                     <button
                       type="button"
-                      aria-label="Home"
-                      title="Home"
-                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-transparent hover:opacity-90 active:opacity-90"
+                      aria-label="Zurück zum Finder-Projekt"
+                      title="Zurück zum Finder-Projekt"
+                      className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center self-center rounded-full bg-transparent transition duration-200 ease-out md:hover:opacity-90 active:scale-95 active:opacity-100"
                       onMouseDown={(e) => e.stopPropagation()}
                       onClick={(e) => {
                         e.stopPropagation();
-                        closeAllTabs();
+                        closeWindow(win.id);
+                        focusFinderWindow();
                       }}
                     >
                       <span
-                        className="block h-3 w-3 shrink-0 rounded-full bg-[rgb(255,0,0)]"
+                        className="block h-4 w-4 shrink-0 rounded-full transition-colors duration-200 ease-out bg-[rgb(255,0,0)]"
                         aria-hidden
                       />
-                      <span className="sr-only">Home</span>
                     </button>
                   </div>
                   <div className="min-w-0 flex-1 px-1 text-center">
@@ -840,7 +823,7 @@ export function OSWindow({ win }) {
                       </p>
                     ) : null}
                   </div>
-                  <div className="h-8 w-8 shrink-0" aria-hidden />
+                  <div className="h-11 w-11 shrink-0" aria-hidden />
                 </div>
               ) : (
                 <span className="sr-only">{win.title}</span>

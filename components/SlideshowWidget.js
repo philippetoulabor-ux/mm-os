@@ -59,7 +59,14 @@ function SlideshowSlideMedia({
 }
 
 /** Gleiche Pfeil-Buttons wie in der Slideshow — auch für Asset-Fenster im Widget-Look. */
-export function WidgetChromeArrowButton({ dir, label, onClick, disabled }) {
+export function WidgetChromeArrowButton({
+  dir,
+  label,
+  onClick,
+  disabled,
+  /** Ohne halbe Deckkraft (z. B. mobiler Finder „Zurück“). */
+  opaqueAlways = false,
+}) {
   return (
     <button
       type="button"
@@ -73,7 +80,9 @@ export function WidgetChromeArrowButton({ dir, label, onClick, disabled }) {
       className={`flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full border-0 bg-[var(--mm-desktop-bg)] text-[var(--mm-shell-text)] transition duration-200 ease-out ${
         disabled
           ? "cursor-not-allowed opacity-25"
-          : "opacity-50 hover:opacity-100 focus-visible:opacity-100 active:scale-95 active:opacity-100"
+          : opaqueAlways
+            ? "opacity-100 active:scale-95"
+            : "opacity-50 hover:opacity-100 focus-visible:opacity-100 active:scale-95 active:opacity-100"
       }`}
     >
       <svg
