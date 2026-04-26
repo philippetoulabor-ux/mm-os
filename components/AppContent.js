@@ -1995,9 +1995,9 @@ function FinderView({ unifiedParentScroll = false }) {
 
   const classicHomeMainScroll =
     unifiedParentScroll && !showSearch
-      ? "min-h-0 overflow-visible p-3"
+      ? "min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-3 [-webkit-overflow-scrolling:touch]"
       : unifiedParentScroll && showSearch
-        ? "min-h-0 overflow-visible"
+        ? "min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-2 [-webkit-overflow-scrolling:touch]"
         : !showSearch
           ? "min-h-0 flex-1 overflow-auto overscroll-contain p-3"
           : "min-h-0 flex-1 overflow-auto overscroll-contain p-2";
@@ -2015,9 +2015,9 @@ function FinderView({ unifiedParentScroll = false }) {
 
   const leftPaneScroll =
     unifiedParentScroll && !showSearch
-      ? "min-h-0 overflow-visible p-2"
+      ? "min-h-0 flex-1 flex-col p-2"
       : unifiedParentScroll && showSearch
-        ? "min-h-0 overflow-visible"
+        ? "min-h-0 flex-1 flex-col"
         : !showSearch
           ? "min-h-0 flex-1 overflow-auto overscroll-contain p-2"
           : "min-h-0 flex-1 overflow-auto overscroll-contain p-2";
@@ -2165,6 +2165,92 @@ function FinderView({ unifiedParentScroll = false }) {
         )
       : null;
 
+  const showClassicSearchBody =
+    isClassicFinderHome && showClassicSearchStrip && !finderSearchInTitlebarDesktop;
+
+  const showProjectSearchBody =
+    (finderProjectSearchStripExpanded || unifiedParentScroll) &&
+    !finderSearchInTitlebarDesktop;
+
+  const classicSearchStrip = (
+    <>
+      <label htmlFor="finder-search" className="sr-only">
+        Apps und Dateien durchsuchen
+      </label>
+      <div className="group/finder-search flex items-center gap-2 rounded bg-white px-2 py-1.5 focus-within:ring-2 focus-within:ring-zinc-400 focus-within:ring-offset-0">
+        <button
+          type="button"
+          className="group flex h-6 w-4 shrink-0 cursor-pointer items-center justify-center rounded"
+          aria-label="Suche schließen"
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            raiseFinderWindow();
+            e.stopPropagation();
+            collapseFinderClassicSearch();
+          }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/web/buttons/lupe.svg"
+            alt=""
+            aria-hidden
+            className="pointer-events-none h-4 w-4 shrink-0 opacity-50 transition-[opacity,transform] duration-200 ease-out group-focus-within/finder-search:opacity-100 group-hover:scale-[1.15] group-hover:opacity-100"
+            draggable={false}
+          />
+        </button>
+        {finderSearchInputEl}
+      </div>
+    </>
+  );
+
+  const projectSearchStrip = (
+    <div
+      className={`flex w-full min-w-0 ${
+        unifiedParentScroll
+          ? "z-20 shrink-0 border-t-2 border-black bg-white px-2 pb-[max(0.5rem,calc(env(safe-area-inset-bottom,0px)+var(--mm-vv-bottom-inset,0px)))] pt-2"
+          : "min-h-0 flex-1"
+      }`}
+    >
+      <label htmlFor="finder-search" className="sr-only">
+        Apps und Dateien durchsuchen
+      </label>
+      <div className="group/finder-search flex w-full min-w-0 items-center gap-2 rounded-sm border border-zinc-300 bg-white px-2 py-1.5 focus-within:ring-2 focus-within:ring-zinc-400 focus-within:ring-offset-0">
+        {!unifiedParentScroll ? (
+          <button
+            type="button"
+            className="group flex h-6 w-4 shrink-0 cursor-pointer items-center justify-center rounded"
+            aria-label="Suche schließen"
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              raiseFinderWindow();
+              e.stopPropagation();
+              collapseFinderProjectSearchStrip();
+            }}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/web/buttons/lupe.svg"
+              alt=""
+              aria-hidden
+              className="pointer-events-none h-4 w-4 shrink-0 opacity-50 transition-[opacity,transform] duration-200 ease-out group-focus-within/finder-search:opacity-100 group-hover:scale-[1.15] group-hover:opacity-100"
+              draggable={false}
+            />
+          </button>
+        ) : (
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img
+            src="/web/buttons/lupe.svg"
+            alt=""
+            aria-hidden
+            className="h-4 w-4 shrink-0 opacity-50"
+            draggable={false}
+          />
+        )}
+        {finderSearchInputEl}
+      </div>
+    </div>
+  );
+
   return (
     <>
       {finderTitlebarSearchPortal}
@@ -2173,128 +2259,83 @@ function FinderView({ unifiedParentScroll = false }) {
         data-mm-finder-root
         className={`relative flex min-h-0 flex-col bg-white text-sm text-zinc-800 ${
           unifiedParentScroll
-            ? "h-auto overflow-visible"
+            ? "h-full min-h-0 w-full flex-1 overflow-hidden"
             : "h-full overflow-hidden"
         }`}
         onKeyDownCapture={runFinderListKeys}
       >
-      {isClassicFinderHome &&
-      showClassicSearchStrip &&
-      !finderSearchInTitlebarDesktop ? (
-        <div className="shrink-0 border-b-2 border-black px-3 py-2">
-          <label htmlFor="finder-search" className="sr-only">
-            Apps und Dateien durchsuchen
-          </label>
-          <div className="group/finder-search flex items-center gap-2 rounded bg-transparent px-2 py-1.5 focus-within:ring-2 focus-within:ring-zinc-400 focus-within:ring-offset-0">
-            <button
-              type="button"
-              className="group flex h-6 w-4 shrink-0 cursor-pointer items-center justify-center rounded"
-              aria-label="Suche schließen"
-              onMouseDown={(e) => e.stopPropagation()}
-              onClick={(e) => {
-                raiseFinderWindow();
-                e.stopPropagation();
-                collapseFinderClassicSearch();
-              }}
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="/web/buttons/lupe.svg"
-                alt=""
-                aria-hidden
-                className="pointer-events-none h-4 w-4 shrink-0 opacity-50 transition-[opacity,transform] duration-200 ease-out group-focus-within/finder-search:opacity-100 group-hover:scale-[1.15] group-hover:opacity-100"
-                draggable={false}
-              />
-            </button>
-            {finderSearchInputEl}
-          </div>
+      {showClassicSearchBody && !unifiedParentScroll ? (
+        <div className="shrink-0 border-b-2 border-black bg-white px-3 py-2">
+          {classicSearchStrip}
         </div>
       ) : null}
 
       {isClassicFinderHome ? (
+        <>
         <div
-          className={`min-h-0 min-w-0 flex-1 ${
-            unifiedParentScroll ? "min-h-[min(70vh,520px)]" : ""
-          } ${classicHomeMainScroll}`}
+          className={`min-h-0 min-w-0 flex-1 ${classicHomeMainScroll}`}
         >
           {homeOrSearchPane}
         </div>
-      ) : (
-        <>
-          {(finderProjectSearchStripExpanded || unifiedParentScroll) &&
-          !finderSearchInTitlebarDesktop ? (
-            <div className="flex shrink-0 flex-col gap-2 border-b-2 border-black bg-white px-2 py-2">
-              <div className="flex w-full min-w-0 flex-1">
-                <label htmlFor="finder-search" className="sr-only">
-                  Apps und Dateien durchsuchen
-                </label>
-                <div className="group/finder-search flex w-full min-w-0 items-center gap-2 rounded-sm border border-zinc-300 bg-white px-2 py-1.5 focus-within:ring-2 focus-within:ring-zinc-400 focus-within:ring-offset-0">
-                  {!unifiedParentScroll ? (
-                    <button
-                      type="button"
-                      className="group flex h-6 w-4 shrink-0 cursor-pointer items-center justify-center rounded"
-                      aria-label="Suche schließen"
-                      onMouseDown={(e) => e.stopPropagation()}
-                      onClick={(e) => {
-                        raiseFinderWindow();
-                        e.stopPropagation();
-                        collapseFinderProjectSearchStrip();
-                      }}
-                    >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src="/web/buttons/lupe.svg"
-                        alt=""
-                        aria-hidden
-                        className="pointer-events-none h-4 w-4 shrink-0 opacity-50 transition-[opacity,transform] duration-200 ease-out group-focus-within/finder-search:opacity-100 group-hover:scale-[1.15] group-hover:opacity-100"
-                        draggable={false}
-                      />
-                    </button>
-                  ) : (
-                    /* eslint-disable-next-line @next/next/no-img-element */
-                    <img
-                      src="/web/buttons/lupe.svg"
-                      alt=""
-                      aria-hidden
-                      className="h-4 w-4 shrink-0 opacity-50"
-                      draggable={false}
-                    />
-                  )}
-                  {finderSearchInputEl}
-                </div>
-              </div>
-            </div>
-          ) : null}
-
+        {showClassicSearchBody && unifiedParentScroll ? (
+          <div
+            className="relative z-20 shrink-0 border-t-2 border-black bg-white px-3 py-2 pb-[max(0.5rem,calc(env(safe-area-inset-bottom,0px)+var(--mm-vv-bottom-inset,0px)))]"
+          >
+            {classicSearchStrip}
+          </div>
+        ) : null}
+        </>
+      ) : unifiedParentScroll ? (
+        <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden">
           {showSearch ? (
             <div
-              className={`min-h-0 min-w-0 flex-1 ${
-                unifiedParentScroll ? "min-h-[min(70vh,520px)]" : ""
-              } ${classicHomeMainScroll}`}
+              className={`min-h-0 min-w-0 flex-1 ${classicHomeMainScroll}`}
             >
               {homeOrSearchPane}
             </div>
           ) : (
             <div
-              className={`flex min-h-0 min-w-0 flex-1 flex-col lg:flex-row ${
-                unifiedParentScroll ? "min-h-[min(70vh,520px)]" : ""
-              }`}
+              className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-y-contain [-webkit-overflow-scrolling:touch] lg:min-h-0 lg:min-w-0 lg:flex-row"
             >
-              {unifiedParentScroll ? (
-                <FinderProjectsMobileTilePicker
-                  folderPreview={folderPreview}
-                  finderProjectAppId={finderProjectAppId}
-                  finderOpenProject={finderOpenProject}
-                  openOrFocus={openOrFocus}
-                />
-              ) : (
-                <FinderProjectsColumn
-                  folderPreview={folderPreview}
-                  finderProjectAppId={finderProjectAppId}
-                  finderOpenProject={finderOpenProject}
-                  openOrFocus={openOrFocus}
-                />
-              )}
+              <FinderProjectsMobileTilePicker
+                folderPreview={folderPreview}
+                finderProjectAppId={finderProjectAppId}
+                finderOpenProject={finderOpenProject}
+                openOrFocus={openOrFocus}
+              />
+              <div
+                className={`relative flex min-h-0 min-w-0 flex-1 flex-col pt-0 lg:min-w-0 ${leftPaneScroll}`}
+              >
+                {finderProjectAppId ? projectPane : homeOrSearchPane}
+              </div>
+            </div>
+          )}
+          {showProjectSearchBody ? projectSearchStrip : null}
+        </div>
+      ) : (
+        <>
+          {showProjectSearchBody && !unifiedParentScroll ? (
+            <div className="flex shrink-0 flex-col gap-2 border-b-2 border-black bg-white px-2 py-2">
+              {projectSearchStrip}
+            </div>
+          ) : null}
+
+          {showSearch ? (
+            <div
+              className={`min-h-0 min-w-0 flex-1 ${classicHomeMainScroll}`}
+            >
+              {homeOrSearchPane}
+            </div>
+          ) : (
+            <div
+              className="flex min-h-0 min-w-0 flex-1 flex-col lg:flex-row"
+            >
+              <FinderProjectsColumn
+                folderPreview={folderPreview}
+                finderProjectAppId={finderProjectAppId}
+                finderOpenProject={finderOpenProject}
+                openOrFocus={openOrFocus}
+              />
               <div
                 className={`relative flex min-h-0 min-w-0 flex-1 flex-col lg:min-w-0 ${leftPaneScroll}`}
               >
@@ -2554,6 +2595,13 @@ export function AppContent({
 
   switch (appId) {
     case "finder":
+      if (unifiedParentScroll) {
+        return (
+          <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col">
+            <FinderView unifiedParentScroll={unifiedParentScroll} />
+          </div>
+        );
+      }
       return <FinderView unifiedParentScroll={unifiedParentScroll} />;
     case "notes":
       return <NotesAppView unifiedParentScroll={unifiedParentScroll} />;

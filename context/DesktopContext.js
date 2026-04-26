@@ -61,6 +61,12 @@ export const WINDOW_DESKTOP_INSET = 6;
 
 /** Entspricht Tailwind `max-md` — schmale Viewports: Fenster immer fullscreen im Desktop-Layer. */
 const MOBILE_LAYOUT_MAX_WIDTH_PX = 767;
+/**
+ * Mobile-Slideshowzeile: Kachel 208px (`WIDGET_BASE_MOBILE_HOME` in `DesktopWidgets.js`) + vertikales
+ * Padding `DesktopWidgetsMobile` — nicht als Bruchteil von `desktopH` schätzen (sonst riesiger Lückenstreifen).
+ */
+/** Passend zu `MOBILE_WIDGET_STACK_SLOT_MIN_PX` in `DesktopIcons.js` (Slideshow + Rand). */
+const MOBILE_HOME_SLIDESHOW_BAND_EST_PX = 228;
 
 export function isMobileViewport() {
   if (typeof window === "undefined") return false;
@@ -166,8 +172,9 @@ export function getDesktopLayerFullscreenRect() {
 }
 
 /**
- * Mobile-Home: Finder als Karte unter dem Slideshow-/Widget-Stapel (`w-[75%] aspect-[3/2]`),
- * mit Abstand zum unteren Icon-Raster — kein Vollbild.
+ * Mobile-Home: Finder als Karte unter dem Slideshow-/Widget-Stapel,
+ * volle Breite zwischen den Rändern (`inset` links wie rechts),
+ * mit Abstand zum unteren Icon-Raster — kein Vollbild (nur Viewports ≤767px).
  */
 function getMobileFinderHomeCardBounds() {
   if (typeof window === "undefined") {
@@ -181,10 +188,12 @@ function getMobileFinderHomeCardBounds() {
   const { w: desktopW, h: desktopH } = getDesktopContentRect();
   const { inset, maxBottomLayer } = getDesktopWindowLayoutLimits();
   const innerW = Math.max(MIN_WIN_W, desktopW - 2 * inset);
-  const widgetBandH = Math.min(desktopH * 0.46, desktopW * 0.5 + 40);
-  const gapBelowWidget = 12;
+  const gapBelowWidget = 4;
+  /** Oberkante Finder ≈ unter der Slideshow-Kachel, nicht nach Prozent der Layer-Höhe. */
+  const widgetBandH = MOBILE_HOME_SLIDESHOW_BAND_EST_PX;
   const top = Math.max(inset, widgetBandH + gapBelowWidget);
-  const bottomReserve = Math.max(120, Math.min(desktopH * 0.24, 210));
+  /** Unten: Icon-Raster — knapper, nach unten ist noch Luft ohne Überlappung. */
+  const bottomReserve = Math.max(64, Math.min(desktopH * 0.14, 120));
   const h = Math.max(MIN_WIN_H, maxBottomLayer - top - bottomReserve);
   return {
     x: inset,

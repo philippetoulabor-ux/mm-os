@@ -245,6 +245,9 @@ export function SlideshowWidget({
   }, [prevIndex, index]);
 
   const isMobile = layout === "mobile";
+  /** Einzel-Kachel in der mobilen Home-Zeile (3:2, rechts) — nicht Stapel-Karten. */
+  const mobileHomeStripTile =
+    isMobile && !stackDeckLayer && stackNavigation == null;
 
   const openCurrentInFinder = useCallback(() => {
     if (!currentFile || !widget.assetDir) return;
@@ -358,12 +361,16 @@ export function SlideshowWidget({
       className={`relative flex flex-col overflow-hidden rounded-lg mm-os-paint-stroke bg-white shadow-none ${
         stackDeckLayer ? "pointer-events-none" : ""
       } ${
-        isMobile
+        mobileHomeStripTile
           ? /* Mobile Home: 3×2 Rasterzellen, rechts */
             "ml-auto aspect-[3/2] w-[75%] max-w-full shrink-0"
           : stackDeckLayer
             ? "h-full w-full"
-            : "h-full w-full md:cursor-grab md:active:cursor-grabbing"
+            : `h-full w-full${
+                layout === "desktop"
+                  ? " md:cursor-grab md:active:cursor-grabbing"
+                  : ""
+              }`
       }`}
       {...rootDrag}
       onClick={onRootClick}

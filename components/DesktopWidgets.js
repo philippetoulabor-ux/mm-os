@@ -14,6 +14,8 @@ import { scaleLayoutPx } from "@/lib/desktopUiScale";
 import { DESKTOP_WIDGET_STACK_OFFSET_PX as STACK_OFFSET_PX } from "@/lib/desktopWidgets";
 
 const WIDGET_BASE = 340;
+/** Schmal: Home-Slideshow/Stapel — nicht volle Desktop-Kachel (340). */
+const WIDGET_BASE_MOBILE_HOME = 208;
 /** Hintere Karten: Versatz; skaliert mit `desktopUiScale` aus Context. */
 const STACK_DEAL_EXIT_MS = 235;
 const STACK_DEAL_EASE_TRANSFORM = "linear";
@@ -255,20 +257,24 @@ function WidgetStack({
         width: tileW + stackPad,
         height: tileH + stackPad,
       }
-    : showBack
-      ? {
-          paddingTop: stackPad,
-          paddingRight: stackPad,
-          boxSizing: "border-box",
-        }
-      : undefined;
+    : {
+        /* Wie Desktop: quadratische Kachel + Versatz — kein 3:2 der Einzel-Zeile */
+        width: tileW + (showBack ? stackPad : 0),
+        height: tileW + (showBack ? stackPad : 0),
+        maxWidth: "100%",
+        marginLeft: "auto",
+        boxSizing: "border-box",
+        ...(showBack
+          ? { paddingTop: stackPad, paddingRight: stackPad }
+          : {}),
+      };
 
   const stackCollapseCls = desktopWidgetStacksCollapsed
     ? "pointer-events-none scale-0 opacity-0"
     : "scale-100 opacity-100";
   const outerClass = isDesktop
     ? `pointer-events-auto absolute origin-center overflow-visible transition-[transform,opacity] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${stackCollapseCls}`
-    : `pointer-events-auto relative ml-auto aspect-[3/2] w-[75%] max-w-full shrink-0 overflow-visible transition-[transform,opacity] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${stackCollapseCls}`;
+    : `pointer-events-auto relative ml-auto shrink-0 overflow-visible transition-[transform,opacity] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${stackCollapseCls}`;
 
   const innerStyle = isDesktop
     ? {
@@ -421,7 +427,7 @@ function WidgetStack({
 export function DesktopWidgetsMobile() {
   const { desktopWidgets, desktopUiScale } = useDesktop();
   const tileW = useMemo(
-    () => scaleLayoutPx(WIDGET_BASE, desktopUiScale),
+    () => scaleLayoutPx(WIDGET_BASE_MOBILE_HOME, desktopUiScale),
     [desktopUiScale]
   );
   const stackOffM = useMemo(
@@ -442,7 +448,7 @@ export function DesktopWidgetsMobile() {
   );
 
   return (
-    <div className="pointer-events-auto z-[2] w-full shrink-0 px-1 pb-2 pt-1 min-[400px]:px-2">
+    <div className="pointer-events-auto z-[2] w-full shrink-0 px-1 pb-1 pt-0.5 min-[400px]:px-2">
       {groups.map((group) =>
         group.length === 1 ? (
           <SlideshowWidget

@@ -11,7 +11,7 @@ import { AppIcon } from "@/components/AppIcon";
 import { DesktopWidgetsMobile } from "@/components/DesktopWidgets";
 import { APPS, DESKTOP_ICONS } from "@/lib/apps";
 import { getWebAssetFolderPreviewHref } from "@/lib/webAssetFolderPreview";
-import { useDesktop } from "@/context/DesktopContext";
+import { isMobileViewport, useDesktop } from "@/context/DesktopContext";
 
 /** Bounds fürs Drag-Clamping — an max. Kachelbreite/-höhe mit mehrzeiligem Label angepasst */
 const ICON_W = 200;
@@ -167,12 +167,16 @@ function DesktopIconTile({
   );
 }
 
+/** Mindest-Slot vor dem Finder, damit Slideshow-Stack (~222px) vertikal zentriert werden kann. */
+const MOBILE_WIDGET_STACK_SLOT_MIN_PX = 228;
+
 export function DesktopIcons() {
   const {
     openOrFocus,
     desktopIconPositions,
     setDesktopIconPosition,
     folderPreview,
+    windows,
   } = useDesktop();
   /** Desktop-Layer: Breite/Höhe wie bisher; `top` = Abstand Layer-Oberkante → Viewport-Oberkante (= Header-Höhe) */
   const [layerMetrics, setLayerMetrics] = useState({
@@ -180,9 +184,49 @@ export function DesktopIcons() {
     w: 0,
     h: 0,
   });
+  /** Vertikaler Slot Logo-unten → Finder-oben (Layer-Koordinaten), nur Mobile. */
+  const [mobileWidgetBand, setMobileWidgetBand] = useState({
+    top: 0,
+    height: MOBILE_WIDGET_STACK_SLOT_MIN_PX,
+  });
   const desktopRef = useRef(null);
   const dragRef = useRef(null);
   const blockClickRef = useRef(false);
+
+  const finderWin = windows.find(
+    (w) => w.appId === "finder" && !w.minimized
+  );
+
+  useLayoutEffect(() => {
+    const syncMobileWidgetBand = () => {
+      if (!isMobileViewport()) return;
+      const layer = document.querySelector("[data-mm-desktop-layer]");
+      const logo = document.querySelector("#logo-container");
+      if (!layer || !logo) return;
+      const lr = layer.getBoundingClientRect();
+      const gr = logo.getBoundingClientRect();
+      const fY =
+        finderWin && typeof finderWin.y === "number" && Number.isFinite(finderWin.y)
+          ? finderWin.y
+          : MOBILE_WIDGET_STACK_SLOT_MIN_PX;
+      const logoBottomLayer = gr.bottom - lr.top;
+      let bandTop = Math.max(0, logoBottomLayer);
+      let bandH = fY - bandTop;
+      if (bandH < MOBILE_WIDGET_STACK_SLOT_MIN_PX) {
+        bandTop = Math.max(0, fY - MOBILE_WIDGET_STACK_SLOT_MIN_PX);
+        bandH = fY - bandTop;
+      }
+      const height = Math.max(48, bandH);
+      setMobileWidgetBand((prev) =>
+        prev.top === bandTop && prev.height === height
+          ? prev
+          : { top: bandTop, height }
+      );
+    };
+    syncMobileWidgetBand();
+    window.addEventListener("resize", syncMobileWidgetBand);
+    return () => window.removeEventListener("resize", syncMobileWidgetBand);
+  }, [finderWin?.y, finderWin?.id, layerMetrics.w, layerMetrics.h, layerMetrics.top]);
 
   useLayoutEffect(() => {
     const layer = document.querySelector("[data-mm-desktop-layer]");
@@ -285,10 +329,12 @@ export function DesktopIcons() {
 
   return (
     <>
-      {/* Mobile: Widgets über dem Finder (z-30); Raster unten unter dem Finder (z-8), damit keine „Geister“-Kacheln auf der Finder-Karte liegen. */}
+      {/* Mobile: Slideshow vertikal zwischen Logo (unten) und Finder (oben) zentriert; z-30 */}
       <div
-        className="pointer-events-none absolute left-0 right-0 top-0 z-[30] md:hidden"
+        className="pointer-events-none absolute left-0 right-0 z-[30] flex flex-col justify-center md:hidden"
         style={{
+          top: mobileWidgetBand.top,
+          height: mobileWidgetBand.height,
           paddingLeft: "max(0.5rem, env(safe-area-inset-left, 0px))",
           paddingRight: "max(0.5rem, env(safe-area-inset-right, 0px))",
         }}
