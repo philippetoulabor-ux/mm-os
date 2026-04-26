@@ -1650,7 +1650,10 @@ function FinderProjectsMobileTilePicker({
   );
 }
 
-function FinderView({ unifiedParentScroll = false }) {
+function FinderView({
+  unifiedParentScroll = false,
+  finderMobileAllowsScroll = true,
+}) {
   const {
     openOrFocus,
     focusWindow,
@@ -1666,7 +1669,11 @@ function FinderView({ unifiedParentScroll = false }) {
     finderProjectSearchStripExpanded,
     collapseFinderProjectSearchStrip,
     finderTitlebarSearchSlotEl,
+    toggleFinderMobileExpanded,
   } = useDesktop();
+
+  const finderWin = windows.find((w) => w.appId === "finder" && !w.minimized);
+  const finderMobileExpanded = !!finderWin?.finderMobileExpanded;
 
   const raiseFinderWindow = useCallback(() => {
     const fw = windows.find((w) => w.appId === "finder" && !w.minimized);
@@ -1993,14 +2000,21 @@ function FinderView({ unifiedParentScroll = false }) {
     setQuery("");
   }, [finderProjectSearchStripExpanded, isClassicFinderHome]);
 
+  const finderScrollLocked =
+    unifiedParentScroll && !finderMobileAllowsScroll;
+
   const classicHomeMainScroll =
-    unifiedParentScroll && !showSearch
-      ? "min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-3 [-webkit-overflow-scrolling:touch]"
-      : unifiedParentScroll && showSearch
-        ? "min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-2 [-webkit-overflow-scrolling:touch]"
-        : !showSearch
-          ? "min-h-0 flex-1 overflow-auto overscroll-contain p-3"
-          : "min-h-0 flex-1 overflow-auto overscroll-contain p-2";
+    finderScrollLocked && !showSearch
+      ? "min-h-0 flex-1 overflow-hidden p-3"
+      : finderScrollLocked && showSearch
+        ? "min-h-0 flex-1 overflow-hidden p-2"
+        : unifiedParentScroll && !showSearch
+          ? "min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-3 [-webkit-overflow-scrolling:touch]"
+          : unifiedParentScroll && showSearch
+            ? "min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-2 [-webkit-overflow-scrolling:touch]"
+            : !showSearch
+              ? "min-h-0 flex-1 overflow-auto overscroll-contain p-3"
+              : "min-h-0 flex-1 overflow-auto overscroll-contain p-2";
 
   /** Schmale Telefone: 3 Spalten; Desktop-Finder: 4 (Tastatur-Navigation nutzt weiter 4). */
   const browseGridClass = unifiedParentScroll
@@ -2014,13 +2028,17 @@ function FinderView({ unifiedParentScroll = false }) {
     : "line-clamp-2 w-full max-w-[10rem] text-center text-xs font-medium leading-tight text-zinc-900";
 
   const leftPaneScroll =
-    unifiedParentScroll && !showSearch
-      ? "min-h-0 flex-1 flex-col p-2"
-      : unifiedParentScroll && showSearch
-        ? "min-h-0 flex-1 flex-col"
-        : !showSearch
-          ? "min-h-0 flex-1 overflow-auto overscroll-contain p-2"
-          : "min-h-0 flex-1 overflow-auto overscroll-contain p-2";
+    finderScrollLocked && !showSearch
+      ? "min-h-0 flex-1 flex-col overflow-hidden p-2"
+      : finderScrollLocked && showSearch
+        ? "min-h-0 flex-1 flex-col overflow-hidden"
+        : unifiedParentScroll && !showSearch
+          ? "min-h-0 flex-1 flex-col p-2"
+          : unifiedParentScroll && showSearch
+            ? "min-h-0 flex-1 flex-col"
+            : !showSearch
+              ? "min-h-0 flex-1 overflow-auto overscroll-contain p-2"
+              : "min-h-0 flex-1 overflow-auto overscroll-contain p-2";
 
   const homeOrSearchPane =
     showSearch ? (
@@ -2264,6 +2282,37 @@ function FinderView({ unifiedParentScroll = false }) {
         }`}
         onKeyDownCapture={runFinderListKeys}
       >
+      {unifiedParentScroll ? (
+        <button
+          type="button"
+          aria-label={
+            finderMobileExpanded
+              ? "Vollbild beenden"
+              : "Finder im Vollbild öffnen"
+          }
+          title={
+            finderMobileExpanded
+              ? "Vollbild beenden"
+              : "Finder im Vollbild öffnen"
+          }
+          className="absolute left-1 top-0 z-30 flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full bg-transparent transition duration-200 ease-out hover:opacity-90 active:scale-95 active:opacity-100"
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            raiseFinderWindow();
+            e.stopPropagation();
+            toggleFinderMobileExpanded();
+          }}
+        >
+          <span
+            className={`block h-3 w-3 shrink-0 rounded-full transition-colors duration-200 ease-out ${
+              finderMobileExpanded
+                ? "bg-[rgb(255,0,0)]"
+                : "bg-[rgb(0,255,0)]"
+            }`}
+            aria-hidden
+          />
+        </button>
+      ) : null}
       {showClassicSearchBody && !unifiedParentScroll ? (
         <div className="shrink-0 border-b-2 border-black bg-white px-3 py-2">
           {classicSearchStrip}
@@ -2295,7 +2344,11 @@ function FinderView({ unifiedParentScroll = false }) {
             </div>
           ) : (
             <div
-              className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-y-contain [-webkit-overflow-scrolling:touch] lg:min-h-0 lg:min-w-0 lg:flex-row"
+              className={
+                finderScrollLocked
+                  ? "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden lg:min-h-0 lg:min-w-0 lg:flex-row"
+                  : "flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-y-contain [-webkit-overflow-scrolling:touch] lg:min-h-0 lg:min-w-0 lg:flex-row"
+              }
             >
               <FinderProjectsMobileTilePicker
                 folderPreview={folderPreview}
@@ -2558,6 +2611,8 @@ export function AppContent({
   assetFile,
   windowId,
   unifiedParentScroll = false,
+  /** Mobile Finder: nur im erweiterten Vollbild innen scrollen. */
+  finderMobileAllowsScroll = true,
   windowDragProps,
 }) {
   const app = APPS[appId];
@@ -2598,11 +2653,19 @@ export function AppContent({
       if (unifiedParentScroll) {
         return (
           <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col">
-            <FinderView unifiedParentScroll={unifiedParentScroll} />
+            <FinderView
+              unifiedParentScroll={unifiedParentScroll}
+              finderMobileAllowsScroll={finderMobileAllowsScroll}
+            />
           </div>
         );
       }
-      return <FinderView unifiedParentScroll={unifiedParentScroll} />;
+      return (
+        <FinderView
+          unifiedParentScroll={unifiedParentScroll}
+          finderMobileAllowsScroll={finderMobileAllowsScroll}
+        />
+      );
     case "notes":
       return <NotesAppView unifiedParentScroll={unifiedParentScroll} />;
     case "media":

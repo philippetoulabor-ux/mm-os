@@ -270,6 +270,22 @@ function getMobileFinderHomeCardBounds() {
   return { x: inset, y: top, w: innerW, h };
 }
 
+/**
+ * Mobile: Finder bis an den sichtbaren Layer-Rand — gleiches Außenmaß wie
+ * {@link WINDOW_DESKTOP_INSET} auf allen Seiten (wie Kartenmodus links/rechts).
+ */
+function getMobileFinderExpandedBounds() {
+  const fs = getDesktopLayerFullscreenRect();
+  const { inset, minWinW, minWinH } = getDesktopWindowLayoutLimits();
+  const p = inset;
+  return {
+    x: p,
+    y: fs.y + p,
+    w: Math.max(minWinW, fs.w - 2 * p),
+    h: Math.max(minWinH, fs.h - 2 * p),
+  };
+}
+
 /** Gleichmäßiger Rand zum Layer-Rand für Finder-Widget-Asset-Vollbild (animiert wie Fenster-Bounds). */
 export const ASSET_WIDGET_CHROME_FULLSCREEN_PAD =
   DESKTOP_ASSET_WIDGET_CHROME_FULLSCREEN_PAD_PX;
@@ -497,6 +513,7 @@ function createInitialFinderWindow() {
       maximized: false,
       prevBounds: null,
       mobileImmersive: false,
+      finderMobileExpanded: false,
     };
   }
   const defSize = getScaledAppDefaultSize("finder");
@@ -638,12 +655,16 @@ function clampWindowsToViewport(windows) {
     return list.map((win) => {
       if (win.minimized) return win;
       if (win.appId === "finder") {
+        const expanded = !!win.finderMobileExpanded;
         return {
           ...win,
-          ...getMobileFinderHomeCardBounds(),
+          ...(expanded
+            ? getMobileFinderExpandedBounds()
+            : getMobileFinderHomeCardBounds()),
           maximized: false,
           mobileImmersive: false,
           prevBounds: null,
+          finderMobileExpanded: expanded,
         };
       }
       const fs = getDesktopLayerFullscreenRect();
@@ -1020,8 +1041,34 @@ export function DesktopProvider({ children }) {
     setFinderProjectAppId(null);
     setFinderClassicSearchExpanded(false);
     setFinderProjectSearchStripExpanded(false);
+    setWindows((prev) =>
+      prev.map((w) =>
+        w.appId === "finder" ? { ...w, finderMobileExpanded: false } : w
+      )
+    );
     focusFinderWindow();
   }, [focusFinderWindow]);
+
+  /** Nur Mobile: Finder-Karte → gleichmäßig gepaddetes Layer-Vollbild; erneut tippen kehrt zur Karte zurück. */
+  const toggleFinderMobileExpanded = useCallback(() => {
+    if (typeof window === "undefined" || !isMobileViewport()) return;
+    setWindows((prev) => {
+      const idx = prev.findIndex((w) => w.appId === "finder" && !w.minimized);
+      if (idx === -1) return prev;
+      const w = prev[idx];
+      const nextExpanded = !w.finderMobileExpanded;
+      const bounds = nextExpanded
+        ? getMobileFinderExpandedBounds()
+        : getMobileFinderHomeCardBounds();
+      const next = [...prev];
+      next[idx] = {
+        ...w,
+        finderMobileExpanded: nextExpanded,
+        ...bounds,
+      };
+      return next;
+    });
+  }, []);
 
   const finderOpenProject = useCallback(
     (appId) => {
@@ -1938,6 +1985,7 @@ export function DesktopProvider({ children }) {
       finderProjectAppId,
       finderTabAppIds,
       finderGoHome,
+      toggleFinderMobileExpanded,
       finderOpenProject,
       finderOpenProjectFile,
       finderToggleProjectFile,
@@ -1998,6 +2046,7 @@ export function DesktopProvider({ children }) {
       finderProjectAppId,
       finderTabAppIds,
       finderGoHome,
+      toggleFinderMobileExpanded,
       finderOpenProject,
       finderOpenProjectFile,
       finderToggleProjectFile,

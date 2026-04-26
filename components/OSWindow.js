@@ -650,7 +650,13 @@ export function OSWindow({ win }) {
         }
       >
         {useMobileUnifiedChrome ? (
-          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-y-contain pb-[max(0.5rem,calc(env(safe-area-inset-bottom,0px)+var(--mm-vv-bottom-inset,0px)))] [-webkit-overflow-scrolling:touch]">
+          <div
+            className={`flex min-h-0 flex-1 flex-col pb-[max(0.5rem,calc(env(safe-area-inset-bottom,0px)+var(--mm-vv-bottom-inset,0px)))] ${
+              win.appId === "finder" && !win.finderMobileExpanded
+                ? "overflow-hidden"
+                : "overflow-y-auto overflow-x-hidden overscroll-y-contain [-webkit-overflow-scrolling:touch]"
+            }`}
+          >
             <div className="flex min-h-full flex-col">
               {win.appId !== "finder" ? (
                 <div
@@ -716,13 +722,18 @@ export function OSWindow({ win }) {
                 className={`flex min-h-0 flex-1 flex-col ${
                   win.appId === "media"
                     ? "bg-[#050508]"
-                    : win.appId === "finder"
+                    : win.appId === "finder" && !win.finderMobileExpanded
                       ? "pt-[max(0.75rem,env(safe-area-inset-top,0px))]"
+                    : win.appId === "finder"
+                      ? ""
                       : "border-t border-zinc-100/80"
                 }`}
               >
                 <AppContent
                   unifiedParentScroll
+                  finderMobileAllowsScroll={
+                    win.appId !== "finder" || !!win.finderMobileExpanded
+                  }
                   appId={win.appId}
                   assetFile={win.assetFile}
                   windowId={win.id}
