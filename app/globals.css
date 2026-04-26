@@ -93,10 +93,10 @@ html.mm-os-html {
 
 @media (max-width: 767px) {
   html.mm-os-html {
-    /* Fest auf sichtbare Höhe: min-height darf nicht größer als max sein (sonst wirkte Kappung nicht) */
+    /* Fest auf sichtbare Höhe: @layer base `min-height: -webkit-fill-available` nicht dagegen gewinnen lassen */
     height: var(--mm-vv-height, 100svh);
     max-height: var(--mm-vv-height, 100svh);
-    min-height: 0;
+    min-height: unset;
     overscroll-behavior-y: none;
   }
 

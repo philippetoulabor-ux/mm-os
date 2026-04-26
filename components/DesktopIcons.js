@@ -242,7 +242,13 @@ export function DesktopIcons() {
     };
     syncMobileWidgetBand();
     window.addEventListener("resize", syncMobileWidgetBand);
-    return () => window.removeEventListener("resize", syncMobileWidgetBand);
+    window.visualViewport?.addEventListener("resize", syncMobileWidgetBand);
+    window.visualViewport?.addEventListener("scroll", syncMobileWidgetBand);
+    return () => {
+      window.removeEventListener("resize", syncMobileWidgetBand);
+      window.visualViewport?.removeEventListener("resize", syncMobileWidgetBand);
+      window.visualViewport?.removeEventListener("scroll", syncMobileWidgetBand);
+    };
   }, [finderWin?.y, finderWin?.id, layerMetrics.w, layerMetrics.h, layerMetrics.top]);
 
   useLayoutEffect(() => {
@@ -256,9 +262,13 @@ export function DesktopIcons() {
     const ro = new ResizeObserver(sync);
     ro.observe(layer);
     window.addEventListener("resize", sync);
+    window.visualViewport?.addEventListener("resize", sync);
+    window.visualViewport?.addEventListener("scroll", sync);
     return () => {
       ro.disconnect();
       window.removeEventListener("resize", sync);
+      window.visualViewport?.removeEventListener("resize", sync);
+      window.visualViewport?.removeEventListener("scroll", sync);
     };
   }, []);
 
@@ -347,6 +357,7 @@ export function DesktopIcons() {
     <>
       {/* Mobile: Slideshow vertikal zwischen Logo (unten) und Finder (oben) zentriert; z-30 */}
       <div
+        data-mm-mobile-widget-stack
         className="pointer-events-none absolute left-0 right-0 z-[30] flex flex-col justify-center md:hidden"
         style={{
           top: mobileWidgetBand.top,

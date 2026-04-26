@@ -206,9 +206,16 @@ function getMobileFinderHomeCardBounds() {
   const innerW = Math.max(MIN_WIN_W, desktopW - 2 * inset);
   /** Sichtbarer Abstand Slideshow/Stapel → Finder (abgestimmt mit `MOBILE_WIDGET_BAND_PAD_FINDER_PX` in DesktopIcons). */
   const gapBelowWidget = 48;
-  /** Oberkante Finder ≈ unter der Slideshow-Kachel, nicht nach Prozent der Layer-Höhe. */
-  const widgetBandH = MOBILE_HOME_SLIDESHOW_BAND_EST_PX;
-  const top = Math.max(inset, widgetBandH + gapBelowWidget);
+  /** Gemessene Stack-Unterkante in Layer-px; sonst Legacy-Schätzung (Bandhöhe als Offset von oben). */
+  const measuredBottom = getMobileWidgetStackBottomInLayerPx();
+  const topFromMeasured =
+    measuredBottom != null
+      ? measuredBottom + gapBelowWidget
+      : MOBILE_HOME_SLIDESHOW_BAND_EST_PX + gapBelowWidget;
+  let top = Math.max(inset, topFromMeasured);
+  /** Finder muss in den Layer passen (min. Höhe). */
+  top = Math.min(top, maxBottomLayer - MIN_WIN_H);
+  top = Math.max(inset, top);
   /** `maxBottomLayer` = `desktopH - inset` — Kartenunterkante bündig, wie bei x/w für links/rechts. */
   const h = Math.max(MIN_WIN_H, maxBottomLayer - top);
   return {
@@ -288,6 +295,41 @@ function getDesktopFinderWidgetChromeSplitBounds(finderSize, assetSize) {
  * Wird per {@link syncDesktopLayerMetrics} (ResizeObserver im `DesktopProvider`) aktualisiert.
  */
 const desktopLayerMetrics = { w: 0, h: 0, top: SITE_HEADER_H };
+
+/**
+ * Mobile Home: Unterkante `[data-mm-mobile-widget-stack]` in Layer-Koordinaten (px von Layer-Oberkante).
+ * Wird von {@link syncMobileHomeLayoutMetrics} gesetzt; `getMobileFinderHomeCardBounds` nutzt das statt fester Schätzwerte.
+ */
+const mobileHomeLayoutMetrics = {
+  /** @type {number | null} */
+  stackBottomInLayer: null,
+};
+
+/** @returns {number | null} gültige gemessene Unterkante oder null (Fallback in getMobileFinderHomeCardBounds). */
+export function getMobileWidgetStackBottomInLayerPx() {
+  if (typeof window === "undefined" || !isMobileViewport()) return null;
+  const v = mobileHomeLayoutMetrics.stackBottomInLayer;
+  return v != null && Number.isFinite(v) && v > WINDOW_DESKTOP_INSET ? v : null;
+}
+
+/** Misst den Mobile-Slideshow-/Widget-Stack relativ zum Desktop-Layer (nur Viewport ≤767px). */
+export function syncMobileHomeLayoutMetrics() {
+  if (typeof window === "undefined" || !isMobileViewport()) {
+    mobileHomeLayoutMetrics.stackBottomInLayer = null;
+    return;
+  }
+  const layer = document.querySelector("[data-mm-desktop-layer]");
+  const stack = document.querySelector("[data-mm-mobile-widget-stack]");
+  if (!layer || !stack) {
+    mobileHomeLayoutMetrics.stackBottomInLayer = null;
+    return;
+  }
+  const lr = layer.getBoundingClientRect();
+  const sr = stack.getBoundingClientRect();
+  const bottom = Math.round(sr.bottom - lr.top);
+  mobileHomeLayoutMetrics.stackBottomInLayer =
+    bottom > WINDOW_DESKTOP_INSET ? bottom : null;
+}
 
 /** @param {HTMLElement | null} el Desktop-Layer unter dem Site-Header */
 export function syncDesktopLayerMetrics(el) {
@@ -733,17 +775,25 @@ export function DesktopProvider({ children }) {
     if (!el) return undefined;
     const run = () => {
       syncDesktopLayerMetrics(el);
+      syncMobileHomeLayoutMetrics();
       setDesktopUiScale(getLastDesktopUiScale());
       setWindows((prev) => clampWindowsToViewport(prev));
     };
     run();
     const ro = new ResizeObserver(run);
     ro.observe(el);
+    const stackEl = document.querySelector("[data-mm-mobile-widget-stack]");
+    const roStack =
+      stackEl && isMobileViewport()
+        ? new ResizeObserver(run)
+        : null;
+    if (stackEl && roStack) roStack.observe(stackEl);
     window.addEventListener("resize", run);
     window.visualViewport?.addEventListener("resize", run);
     window.visualViewport?.addEventListener("scroll", run);
     return () => {
       ro.disconnect();
+      roStack?.disconnect();
       window.removeEventListener("resize", run);
       window.visualViewport?.removeEventListener("resize", run);
       window.visualViewport?.removeEventListener("scroll", run);
