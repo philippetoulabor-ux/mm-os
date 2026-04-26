@@ -125,7 +125,7 @@ export function SlideshowWidget({
   stackMediaReveal = null,
   blockClickAfterDragRef = null,
 }) {
-  const { finderOpenProjectFile } = useDesktop();
+  const { finderOpenProjectFile, desktopWidgetStacksCollapsed } = useDesktop();
   const basePath = widget.basePath ?? "/web";
   const files = useMemo(
     () =>
@@ -257,6 +257,11 @@ export function SlideshowWidget({
   /** Einzel-Kachel in der mobilen Home-Zeile (3:2, rechts) — nicht Stapel-Karten. */
   const mobileHomeStripTile =
     isMobile && !stackDeckLayer && stackNavigation == null;
+  const mobileHomeCollapseCls = mobileHomeStripTile
+    ? desktopWidgetStacksCollapsed
+      ? "pointer-events-none origin-center scale-0 opacity-0 transition-[transform,opacity] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]"
+      : "origin-center scale-100 opacity-100 transition-[transform,opacity] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]"
+    : "";
 
   const openCurrentInFinder = useCallback(() => {
     if (!currentFile || !widget.assetDir) return;
@@ -372,7 +377,7 @@ export function SlideshowWidget({
       } ${
         mobileHomeStripTile
           ? /* Mobile Home: 3×2 Rasterzellen, rechts */
-            "ml-auto aspect-[3/2] w-[75%] max-w-full shrink-0"
+            `ml-auto aspect-[3/2] w-[75%] max-w-full shrink-0 ${mobileHomeCollapseCls}`
           : stackDeckLayer
             ? "h-full w-full"
             : `h-full w-full${

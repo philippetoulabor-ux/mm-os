@@ -76,6 +76,17 @@ export function isMobileViewport() {
   return window.innerWidth <= MOBILE_LAYOUT_MAX_WIDTH_PX;
 }
 
+/**
+ * Nur schmale Viewports: Logo + Home-Slideshow/Stapel wie beim Desktop-Widget-Chrome einklappen,
+ * wenn der Finder im Vollbild-Kartenmodus ist oder ein weiteres (nicht minimiertes) Fenster den Inhalt zeigt.
+ */
+function mobileHomeWidgetStacksShouldCollapse(windows) {
+  if (typeof window === "undefined" || !isMobileViewport()) return false;
+  const finderWin = windows.find((w) => w.appId === "finder" && !w.minimized);
+  if (finderWin?.finderMobileExpanded) return true;
+  return windows.some((w) => !w.minimized && w.appId !== "finder");
+}
+
 function getLayoutUiScale() {
   if (typeof window === "undefined" || isMobileViewport()) return 1;
   return getLastDesktopUiScale();
@@ -2034,16 +2045,17 @@ export function DesktopProvider({ children }) {
   []
 );
 
-  const desktopWidgetStacksCollapsed = useMemo(
-    () =>
-      windows.some(
-        (w) =>
-          w.appId === "assetFile" &&
-          w.assetFile?.widgetChrome &&
-          !w.minimized
-      ),
-    [windows]
-  );
+  const desktopWidgetStacksCollapsed = useMemo(() => {
+    const widgetChromeAssetOpen = windows.some(
+      (w) =>
+        w.appId === "assetFile" &&
+        w.assetFile?.widgetChrome &&
+        !w.minimized
+    );
+    return (
+      widgetChromeAssetOpen || mobileHomeWidgetStacksShouldCollapse(windows)
+    );
+  }, [windows]);
 
   const value = useMemo(
     () => ({
@@ -2097,7 +2109,7 @@ export function DesktopProvider({ children }) {
       collapseFinderProjectSearchStrip,
       finderTitlebarSearchSlotEl,
       setFinderTitlebarSearchSlotEl,
-      /** Widget-Chrome-Asset, oder mobil Finder Vollbild: Stapel + Logo einklappen. */
+      /** Widget-Chrome-Asset; mobil zusätzlich Finder-Vollbild oder Inhalts-Fenster: Stapel + Logo einklappen. */
       desktopWidgetStacksCollapsed,
       /** Fenster-Koordinaten beziehen sich auf den Desktop unter dem Header; min y ≈ 0 */
       menuBarHeight: 0,
