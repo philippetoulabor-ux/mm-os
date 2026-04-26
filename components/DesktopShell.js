@@ -35,9 +35,11 @@ function useSyncVisualViewportInsets() {
     sync();
     vv.addEventListener("resize", sync);
     vv.addEventListener("scroll", sync);
+    window.addEventListener("resize", sync);
     return () => {
       vv.removeEventListener("resize", sync);
       vv.removeEventListener("scroll", sync);
+      window.removeEventListener("resize", sync);
     };
   }, []);
 }
@@ -95,7 +97,7 @@ function DesktopShellInner() {
 
   return (
     <div
-      className="flex min-h-0 w-full min-h-[100dvh] min-h-[100svh] flex-1 flex-col overflow-x-hidden md:min-h-[max(100dvh,800px)]"
+      className="flex min-h-0 w-full flex-1 flex-col overflow-x-hidden max-md:h-full max-md:max-h-full md:min-h-[max(100dvh,800px)]"
       style={{
         backgroundColor: "var(--mm-desktop-bg)",
         color: "var(--mm-shell-text)",

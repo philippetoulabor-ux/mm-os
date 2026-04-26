@@ -16,12 +16,11 @@ export const viewport = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="de" style={{ height: "100%" }}>
+    <html lang="de" className="mm-os-html">
       <body
-        className={`${inter.className} antialiased`}
+        className={`${inter.className} antialiased mm-os-body`}
         style={{
           margin: 0,
-          minHeight: "100%",
           backgroundColor: "var(--mm-desktop-bg)",
           color: "var(--mm-shell-text)",
         }}
