@@ -13,6 +13,13 @@ import { clampAspectWindowBounds } from "@/lib/osWindowBounds";
 
 /** Über Schreibtisch-Icons/Widgets (`z` 1–2); `win.z` bleibt die relative Reihenfolge. */
 const OS_WINDOW_Z_BASE = 100;
+
+/** Mobile Finder: vertikales Wischen groß/klein (nicht mit horizontalem Raster verwechseln). */
+const FINDER_MOBILE_SWIPE_AXIS_LOCK_PX = 14;
+const FINDER_MOBILE_SWIPE_VERT_DOMINANCE = 1.28;
+const FINDER_MOBILE_SWIPE_MIN_DIST_PX = 48;
+const FINDER_MOBILE_SWIPE_MAX_MS = 580;
+const FINDER_MOBILE_SWIPE_PREVENT_DEFAULT_MIN_PX = 22;
 /**
  * @param {object} rs resizeState mit startWinX, startWinY, startW, startH, edge
  * @param {{ rw: number, rh: number }} aspect Inhalts-Seitenverhältnis (Breite/Höhe ohne Titelleiste)
@@ -142,6 +149,7 @@ export function OSWindow({ win }) {
     setFinderTitlebarSearchSlotEl,
     collapseFinderClassicSearch,
     collapseFinderProjectSearchStrip,
+    toggleFinderMobileExpanded,
   } = useDesktop();
 
   const isMobile = useIsMobileLayout();
@@ -166,6 +174,11 @@ export function OSWindow({ win }) {
   const dragging = useRef(false);
   const dragOffset = useRef({ x: 0, y: 0 });
   const resizeState = useRef(null);
+  const finderShellRef = useRef(null);
+  const finderMobileScrollRef = useRef(null);
+  const finderExpandedRef = useRef(false);
+  finderExpandedRef.current =
+    win.appId === "finder" && !!win.finderMobileExpanded;
   const [mounted, setMounted] = useState(false);
   /** Keine CSS-Transition der Bounds während Ziehen/Resize — sonst folgt das Fenster der Maus mit Verzögerung. */
   const [boundsInteraction, setBoundsInteraction] = useState(false);
@@ -179,6 +192,114 @@ export function OSWindow({ win }) {
     window.addEventListener("mouseup", onUp);
     return () => window.removeEventListener("mouseup", onUp);
   }, []);
+
+  /** Vertikales Wischen: Karte → groß (nach oben), groß → Karte (nach unten, nur wenn Listen-Scroll oben). */
+  useEffect(() => {
+    if (!isMobile || win.appId !== "finder" || win.minimized) return undefined;
+    const shell = finderShellRef.current;
+    if (!shell) return undefined;
+
+    let tr = null;
+
+    const onTouchStart = (e) => {
+      if (e.touches.length !== 1) {
+        tr = null;
+        return;
+      }
+      const t0 = e.touches[0];
+      const el = t0.target;
+      if (
+        el instanceof Element &&
+        el.closest("[data-mm-finder-expand-toggle]")
+      ) {
+        tr = null;
+        return;
+      }
+      const scrollEl = finderMobileScrollRef.current;
+      tr = {
+        sx: t0.clientX,
+        sy: t0.clientY,
+        t0:
+          typeof performance !== "undefined" ? performance.now() : Date.now(),
+        axis: null,
+        dead: false,
+        startScrollTop: scrollEl?.scrollTop ?? 0,
+      };
+    };
+
+    const onTouchMove = (e) => {
+      if (!tr || tr.dead || e.touches.length !== 1) return;
+      const t = e.touches[0];
+      const dx = t.clientX - tr.sx;
+      const dy = t.clientY - tr.sy;
+      const ax = Math.abs(dx);
+      const ay = Math.abs(dy);
+      if (!tr.axis && (ax > FINDER_MOBILE_SWIPE_AXIS_LOCK_PX || ay > FINDER_MOBILE_SWIPE_AXIS_LOCK_PX)) {
+        if (ax > ay * FINDER_MOBILE_SWIPE_VERT_DOMINANCE) {
+          tr = null;
+          return;
+        }
+        if (ay > ax * FINDER_MOBILE_SWIPE_VERT_DOMINANCE) {
+          tr.axis = "v";
+        }
+      }
+      const scrollEl = finderMobileScrollRef.current;
+      if (finderExpandedRef.current && scrollEl && scrollEl.scrollTop > 10) {
+        tr.dead = true;
+        return;
+      }
+      if (
+        tr.axis === "v" &&
+        ay > FINDER_MOBILE_SWIPE_PREVENT_DEFAULT_MIN_PX &&
+        (!finderExpandedRef.current ||
+          (scrollEl && scrollEl.scrollTop < 10 && tr.startScrollTop < 10))
+      ) {
+        e.preventDefault();
+      }
+    };
+
+    const onTouchEnd = (e) => {
+      const saved = tr;
+      tr = null;
+      if (!saved || saved.dead || saved.axis !== "v") return;
+      if (e.changedTouches.length !== 1) return;
+      const t = e.changedTouches[0];
+      const dy = t.clientY - saved.sy;
+      const t1 =
+        typeof performance !== "undefined" ? performance.now() : Date.now();
+      if (t1 - saved.t0 > FINDER_MOBILE_SWIPE_MAX_MS) return;
+      const expanded = finderExpandedRef.current;
+      const scrollEl = finderMobileScrollRef.current;
+      const st = scrollEl?.scrollTop ?? 0;
+      if (!expanded && dy <= -FINDER_MOBILE_SWIPE_MIN_DIST_PX) {
+        toggleFinderMobileExpanded();
+      } else if (
+        expanded &&
+        dy >= FINDER_MOBILE_SWIPE_MIN_DIST_PX &&
+        saved.startScrollTop < 10 &&
+        st < 10
+      ) {
+        toggleFinderMobileExpanded();
+      }
+    };
+
+    shell.addEventListener("touchstart", onTouchStart, { passive: true });
+    shell.addEventListener("touchmove", onTouchMove, { passive: false });
+    shell.addEventListener("touchend", onTouchEnd, { passive: true });
+    shell.addEventListener("touchcancel", onTouchEnd, { passive: true });
+    return () => {
+      shell.removeEventListener("touchstart", onTouchStart);
+      shell.removeEventListener("touchmove", onTouchMove);
+      shell.removeEventListener("touchend", onTouchEnd);
+      shell.removeEventListener("touchcancel", onTouchEnd);
+    };
+  }, [
+    isMobile,
+    win.appId,
+    win.minimized,
+    mounted,
+    toggleFinderMobileExpanded,
+  ]);
 
   const onBarMouseDown = useCallback(
     (e) => {
@@ -431,6 +552,7 @@ export function OSWindow({ win }) {
 
   return (
     <div
+      ref={win.appId === "finder" && isMobile ? finderShellRef : undefined}
       className={`absolute flex flex-col overflow-hidden mm-os-paint-stroke bg-white shadow-none ${
         win.maximized ? "rounded-none" : "rounded-lg"
       }`}
@@ -651,6 +773,11 @@ export function OSWindow({ win }) {
       >
         {useMobileUnifiedChrome ? (
           <div
+            ref={
+              win.appId === "finder" && useMobileUnifiedChrome
+                ? finderMobileScrollRef
+                : undefined
+            }
             className={`flex min-h-0 flex-1 flex-col pb-[max(0.5rem,calc(env(safe-area-inset-bottom,0px)+var(--mm-vv-bottom-inset,0px)))] ${
               win.appId === "finder" && !win.finderMobileExpanded
                 ? "overflow-hidden"

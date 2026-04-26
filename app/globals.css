@@ -68,6 +68,13 @@
   .mm-os-paint-stroke-b {
     border-bottom-width: var(--mm-paint-stroke, 2.5px);
   }
+  /** Obere Kante wie {@link .mm-os-paint-stroke} (z. B. Trenner im Mobile-Finder). */
+  .mm-os-paint-stroke-t {
+    box-sizing: border-box;
+    border-top-style: solid;
+    border-top-color: #000;
+    border-top-width: var(--mm-paint-stroke, 2.5px);
+  }
   .mm-os-paint-stroke-w {
     border-width: var(--mm-paint-stroke, 2.5px);
   }
