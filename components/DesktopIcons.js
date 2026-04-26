@@ -61,6 +61,7 @@ function toPixelPosition(pos, containerWidth, containerHeight) {
 }
 
 export function DesktopFolderIcon({ app, folderPreview, iconVariant = "default" }) {
+  const { desktopUiScale } = useDesktop();
   const href =
     folderPreview && app.assetDir
       ? getWebAssetFolderPreviewHref(app.assetDir)
@@ -85,6 +86,7 @@ export function DesktopFolderIcon({ app, folderPreview, iconVariant = "default" 
       <>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
+          key={`${href}|${desktopUiScale}`}
           src={href}
           alt=""
           className={previewClass}

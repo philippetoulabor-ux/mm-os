@@ -110,8 +110,11 @@ function isPreviewVideoFile(name) {
 
 /** Kleines Vorschaubild in der Ordnerliste (Bild/Video), sonst Typ-Emoji. */
 function AssetFileListThumb({ href, file, fillContainer = false }) {
+  const { desktopUiScale } = useDesktop();
   const [imgFailed, setImgFailed] = useState(false);
   const videoRef = useRef(null);
+  /** Neu mounten wenn UI-Skala springt — sonst kann Chromium subsampled decodieren und beim Vergrößern unscharf bleiben. */
+  const mediaDecodeKey = `${desktopUiScale}`;
 
   const mediaBox = fillContainer
     ? "h-full w-full min-h-0 min-w-0 shrink-0 rounded border border-zinc-200 object-cover"
@@ -139,6 +142,7 @@ function AssetFileListThumb({ href, file, fillContainer = false }) {
       <>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
+          key={`${href}|${mediaDecodeKey}`}
           src={href}
           alt=""
           className={mediaBox}
@@ -151,6 +155,7 @@ function AssetFileListThumb({ href, file, fillContainer = false }) {
   if (isPreviewVideoFile(file)) {
     return (
       <video
+        key={`${href}|${mediaDecodeKey}`}
         ref={videoRef}
         src={href}
         muted
@@ -1286,12 +1291,10 @@ function finderFilePreviewHref(dir, file) {
 }
 
 /** Wie `AssetFileListThumb`: Video-Frame als Miniatur in der Finder-Liste. */
-function FinderFileVideoThumb({ href, file, tileSize = "list" }) {
+function FinderFileVideoThumb({ href, file }) {
+  const { desktopUiScale } = useDesktop();
   const videoRef = useRef(null);
-  const box =
-    tileSize === "grid"
-      ? "h-14 w-14 shrink-0 rounded-lg object-cover"
-      : "h-14 w-14 shrink-0 rounded object-cover";
+  const box = "h-14 w-14 shrink-0 rounded object-cover";
 
   useEffect(() => {
     const v = videoRef.current;
@@ -1309,6 +1312,7 @@ function FinderFileVideoThumb({ href, file, tileSize = "list" }) {
 
   return (
     <video
+      key={`${href}|${desktopUiScale}`}
       ref={videoRef}
       src={href}
       muted
@@ -1347,11 +1351,10 @@ function FinderFileFormatThumb({ file, tileSize = "list" }) {
  * sonst AppIcon bzw. Dateiendung wie in der Ordnerdateiliste (keine Typ-Emojis).
  */
 function FinderListIcon({ row, folderPreview, tileSize = "list" }) {
+  const { desktopUiScale } = useDesktop();
   const app = row.appId ? APPS[row.appId] : null;
   const grid = tileSize === "grid";
-  const imgBox = grid
-    ? "h-14 w-14 shrink-0 rounded-lg object-cover"
-    : "h-14 w-14 shrink-0 rounded object-cover";
+  const imgBox = "h-14 w-14 shrink-0 rounded object-cover";
   const appBox = grid
     ? "inline-flex h-14 w-14 shrink-0 items-center justify-center"
     : "inline-flex h-14 w-14 shrink-0 items-center justify-center";
@@ -1376,6 +1379,7 @@ function FinderListIcon({ row, folderPreview, tileSize = "list" }) {
       : null;
 
   const [imgFailed, setImgFailed] = useState(false);
+  const previewDecodeKey = `${desktopUiScale}`;
   useEffect(() => {
     setImgFailed(false);
   }, [row.id, folderPreviewHref, fileImageHref]);
@@ -1393,6 +1397,7 @@ function FinderListIcon({ row, folderPreview, tileSize = "list" }) {
       <>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
+          key={`${folderPreviewHref}|${previewDecodeKey}`}
           src={folderPreviewHref}
           alt=""
           className={imgBox}
@@ -1407,6 +1412,7 @@ function FinderListIcon({ row, folderPreview, tileSize = "list" }) {
       <>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
+          key={`${fileImageHref}|${previewDecodeKey}`}
           src={fileImageHref}
           alt=""
           className={imgBox}
@@ -1418,11 +1424,7 @@ function FinderListIcon({ row, folderPreview, tileSize = "list" }) {
 
   if (row.kind === "file" && fileVideoHref) {
     return (
-      <FinderFileVideoThumb
-        href={fileVideoHref}
-        file={row.file}
-        tileSize={tileSize}
-      />
+      <FinderFileVideoThumb href={fileVideoHref} file={row.file} />
     );
   }
 
@@ -1459,9 +1461,35 @@ function blockArrowScrollOnRow(e, isDesktopKb) {
   }
 }
 
-/** Wie OSWindow: Hover-Rahmen 10 %, Auswahl 50 %; inaktiv kein sichtbarer Rand. Text & Previews bleiben voll. */
-const FINDER_LIST_ROW_FRAME =
-  "rounded border border-solid border-transparent mm-os-paint-stroke-w bg-white shadow-none transition-[border-color] duration-200 ease-out hover:border-black/10 aria-selected:border-black/50 hover:aria-selected:border-black/50";
+/**
+ * Vollständige Klassenstrings (nicht bauen mit `+`) — sonst fehlt die Regel in Tailwind JIT.
+ * Mischung mit `white` statt `transparent`: sichtbar auf `bg-white` + robustere `color-mix`-Darstellung.
+ */
+const FINDER_HOVER_DESKTOP_25 =
+  "hover:bg-[color-mix(in_srgb,var(--mm-desktop-bg)_25%,white)]";
+const FINDER_SELECTED_DESKTOP_25 =
+  "bg-[color-mix(in_srgb,var(--mm-desktop-bg)_25%,white)]";
+/** Wie `FINDER_HOVER_DESKTOP_25`, nur bei `aria-selected` (Listen mit Rahmen, gleiche Fläche wie Hover). */
+const FINDER_ARIA_SELECTED_DESKTOP_25 =
+  "aria-selected:bg-[color-mix(in_srgb,var(--mm-desktop-bg)_25%,white)]";
+const FINDER_HOVER_DESKTOP_25_MD =
+  "md:hover:bg-[color-mix(in_srgb,var(--mm-desktop-bg)_25%,white)]";
+
+/**
+ * Auswahl: Rand 50 %; Hover: nur Füllung (Desktop-BG 25 %), kein weiterer Sichtbar-Rand.
+ * inaktiv: transparenter Rand (Strich-Dicke bleibt für Layout). Text & Previews bleiben voll.
+ */
+const FINDER_LIST_ROW_FRAME = [
+  "rounded border border-solid border-transparent mm-os-paint-stroke-w-half bg-white shadow-none",
+  "transition-[border-color,background-color] duration-200 ease-out",
+  FINDER_HOVER_DESKTOP_25,
+  FINDER_ARIA_SELECTED_DESKTOP_25,
+  "aria-selected:border-black/50",
+].join(" ");
+
+/** Content-Vorschau: 1,5× `h-14 w-14` (3,5 rem) der linken Projekte — 5,25 rem. */
+const FINDER_ASSET_STREAM_THUMB_FRAME =
+  "flex h-[5.25rem] w-[5.25rem] shrink-0 overflow-hidden rounded bg-zinc-100";
 
 /** Stream: große, durchlaufende Zeilen (Platzhalter — weiter ausbaubar). */
 function FinderAssetStream({
@@ -1504,7 +1532,7 @@ function FinderAssetStream({
             }
             className={`flex w-full min-w-0 items-center gap-2 px-2 py-1.5 text-left ${FINDER_LIST_ROW_FRAME}`}
           >
-            <div className="flex h-14 w-14 shrink-0 overflow-hidden rounded bg-zinc-100">
+            <div className={FINDER_ASSET_STREAM_THUMB_FRAME}>
               <AssetFileListThumb
                 fillContainer
                 href={fileHref(basePath, dir, row.fullPath)}
@@ -1552,18 +1580,16 @@ function FinderProjectsColumn({
                     ? openOrFocus(row.appId)
                     : finderOpenProject(row.appId)
                 }
-                className={`flex w-full min-w-0 items-center gap-2 px-2 py-1.5 text-left text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-1 ${FINDER_LIST_ROW_FRAME} ${
-                  active
-                    ? "font-semibold text-zinc-900"
-                    : "text-zinc-800"
-                }`}
+                className={`flex w-full min-w-0 items-center gap-2 px-2 py-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-1 ${FINDER_LIST_ROW_FRAME}`}
               >
                 <FinderListIcon
                   row={row}
                   folderPreview={folderPreview}
                   tileSize="list"
                 />
-                <span className="min-w-0 flex-1 truncate">{row.primary}</span>
+                <span className="min-w-0 flex-1 truncate text-sm font-medium text-zinc-900">
+                  {row.primary}
+                </span>
               </button>
             </li>
           );
@@ -1602,9 +1628,9 @@ function FinderProjectsMobileTilePicker({
                     ? openOrFocus(row.appId)
                     : finderOpenProject(row.appId)
                 }
-                className={`flex min-h-[6.25rem] flex-col items-center justify-start gap-1.5 rounded-lg border-2 border-transparent px-1 py-2 text-center transition-colors hover:bg-zinc-100 ${
+                className={`flex min-h-[6.25rem] flex-col items-center justify-center gap-1.5 rounded border-2 border-transparent px-1 py-2 text-center transition-colors duration-200 ease-out ${FINDER_HOVER_DESKTOP_25} ${
                   active
-                    ? "border-black/25 bg-zinc-100"
+                    ? "border-black/25 " + FINDER_SELECTED_DESKTOP_25
                     : ""
                 }`}
               >
@@ -2024,8 +2050,10 @@ function FinderView({ unifiedParentScroll = false }) {
                   setSelectedIndex(index);
                   openHit(row);
                 }}
-                className={`flex w-full min-w-0 items-center gap-3 px-2 py-2.5 text-left transition-colors hover:bg-zinc-100 ${
-                  isDesktopKb && index === selectedIndex ? "bg-zinc-100" : ""
+                className={`flex w-full min-w-0 items-center gap-3 px-2 py-2.5 text-left transition-colors duration-200 ease-out ${FINDER_HOVER_DESKTOP_25} ${
+                  isDesktopKb && index === selectedIndex
+                    ? FINDER_SELECTED_DESKTOP_25
+                    : ""
                 }`}
               >
                 <FinderListIcon row={row} folderPreview={folderPreview} />
@@ -2077,7 +2105,7 @@ function FinderView({ unifiedParentScroll = false }) {
               setSelectedIndex(index);
               openHit(row);
             }}
-            className={`flex ${browseTileMinH} flex-col items-center justify-start ${browseTileGap} rounded-lg border-0 px-1.5 py-2 text-center transition-colors hover:bg-zinc-100`}
+            className={`flex ${browseTileMinH} flex-col items-center justify-center ${browseTileGap} rounded border-0 px-1.5 py-2 text-center transition-colors duration-200 ease-out ${FINDER_HOVER_DESKTOP_25}`}
           >
             <FinderListIcon
               row={row}
@@ -2433,8 +2461,10 @@ function AssetSubfolderView({
                       setSelectedIndex(index);
                       toggleFolderCollapsed(row.folderKey);
                     }}
-                    className={`flex w-full min-w-0 items-center gap-2 rounded py-0.5 text-left font-medium text-zinc-800 md:hover:bg-zinc-100 ${
-                      isDesktopKb && index === selectedIndex ? "bg-zinc-100" : ""
+                    className={`flex w-full min-w-0 items-center gap-2 rounded py-0.5 text-left font-medium text-zinc-800 transition-colors duration-200 ease-out ${FINDER_HOVER_DESKTOP_25_MD} ${
+                      isDesktopKb && index === selectedIndex
+                        ? FINDER_SELECTED_DESKTOP_25
+                        : ""
                     }`}
                   >
                     <span className="min-w-0 truncate">{row.name}</span>
@@ -2461,8 +2491,10 @@ function AssetSubfolderView({
                       basePath: row.basePath,
                     });
                   }}
-                  className={`flex w-full min-w-0 items-center gap-2 rounded px-1 py-1 text-left text-zinc-900 underline decoration-zinc-400 md:hover:bg-zinc-100 md:hover:decoration-zinc-900 ${
-                    isDesktopKb && index === selectedIndex ? "bg-zinc-100" : ""
+                  className={`flex w-full min-w-0 items-center gap-2 rounded px-1 py-1 text-left text-zinc-900 underline decoration-zinc-400 transition-colors duration-200 ease-out ${FINDER_HOVER_DESKTOP_25_MD} md:hover:decoration-zinc-900 ${
+                    isDesktopKb && index === selectedIndex
+                      ? FINDER_SELECTED_DESKTOP_25
+                      : ""
                   }`}
                 >
                   <AssetFileListThumb
