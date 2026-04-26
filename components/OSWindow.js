@@ -431,7 +431,7 @@ export function OSWindow({ win }) {
 
   return (
     <div
-      className={`absolute flex flex-col overflow-hidden border-[2.25px] border-black bg-white shadow-none ${
+      className={`absolute flex flex-col overflow-hidden mm-os-paint-stroke bg-white shadow-none ${
         win.maximized ? "rounded-none" : "rounded-lg"
       }`}
       style={style}
@@ -495,7 +495,7 @@ export function OSWindow({ win }) {
         win.appId === "finder" ? (
           <div className="relative z-20 shrink-0 overflow-hidden transition-[height,min-height] duration-[var(--mm-library-motion-duration)] ease-[var(--mm-library-motion-easing)] h-10 has-[#finder-search]:h-[2.875rem] has-[#finder-search]:min-h-[2.875rem]">
             <header
-              className="box-border flex h-full min-h-0 w-full cursor-default items-center overflow-hidden border-b-[2.25px] border-black bg-[var(--mm-desktop-bg)] pl-3 pr-2 has-[#finder-search]:[&_img]:scale-[1.15] has-[#finder-search]:[&_img]:origin-center"
+              className="box-border flex h-full min-h-0 w-full cursor-default items-center overflow-hidden border-0 border-solid border-black mm-os-paint-stroke-b bg-[var(--mm-desktop-bg)] pl-3 pr-2 has-[#finder-search]:[&_img]:scale-[1.15] has-[#finder-search]:[&_img]:origin-center"
               onMouseDown={onFinderHeaderMouseDown}
             >
               <div className="flex h-full w-10 shrink-0 items-center justify-center pl-2">
@@ -581,7 +581,7 @@ export function OSWindow({ win }) {
           </div>
         ) : isWidgetChromeAsset ? null : (
           <header
-            className="flex h-10 shrink-0 cursor-default items-center gap-2 border-b-[2.25px] border-black bg-[#050508] pl-0 pr-3 font-sans"
+            className="flex h-10 shrink-0 cursor-default items-center gap-2 border-0 border-solid border-black mm-os-paint-stroke-b bg-[#050508] pl-0 pr-3 font-sans"
             onMouseDown={onBarMouseDown}
           >
             <div
@@ -682,7 +682,7 @@ export function OSWindow({ win }) {
                       className={`truncate text-sm leading-tight ${
                         win.appId === "media"
                           ? "font-semibold leading-[1.3] tracking-[0.01em] text-white [text-shadow:0_2px_0_rgba(0,0,0,0.5)]"
-                          : "font-medium text-zinc-900 dark:text-zinc-100"
+                          : "font-medium text-zinc-900"
                       }`}
                     >
                       {win.title}
@@ -699,7 +699,7 @@ export function OSWindow({ win }) {
                           className={
                             win.appId === "media"
                               ? "text-zinc-400"
-                              : "text-zinc-600 dark:text-zinc-400"
+                              : "text-zinc-600"
                           }
                         >
                           /web/{mobileAssetFolderChromeDir}
@@ -718,7 +718,7 @@ export function OSWindow({ win }) {
                     ? "bg-[#050508]"
                     : win.appId === "finder"
                       ? "pt-[max(0.75rem,env(safe-area-inset-top,0px))]"
-                      : "border-t border-zinc-100/80 dark:border-zinc-700/80"
+                      : "border-t border-zinc-100/80"
                 }`}
               >
                 <AppContent

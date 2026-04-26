@@ -13,20 +13,27 @@ import {
 import { APPS, getDefaultDesktopIconPositions, webAssetAppId } from "@/lib/apps";
 import {
   clampDesktopWidgetsToLayer,
-  DESKTOP_WIDGETS_STORAGE_KEY,
+  computeDefaultWidgetStackLayerPosition,
+  DESKTOP_STACK_WIDGET_IDS,
   getDefaultDesktopWidgets,
-  loadDesktopWidgets,
+  syncDefaultStackWidgetPositions,
 } from "@/lib/desktopWidgets";
-import {
-  migrateDesktopIconPositions,
-  migrateNotesText,
-} from "@/lib/webAssetIds";
+import { migrateNotesText } from "@/lib/webAssetIds";
 import { getMentionToken } from "@/lib/noteRefs";
 import {
-  DESKTOP_WIDGET_FRAME_PX,
+  DESKTOP_ASSET_WIDGET_CHROME_FULLSCREEN_PAD_PX,
+  DESKTOP_FINDER_START_EDGE_PX,
+  getAssetWidgetFrameSidePx,
   getFinderDesktopMaxSidePx,
 } from "@/lib/desktopWidgetFrame";
 import { clampAspectWindowBounds } from "@/lib/osWindowBounds";
+import {
+  applyDesktopUiDocumentVars,
+  getDesktopUiScaleFromDims,
+  getLastDesktopUiScale,
+  scaleLayoutPx,
+  setLastDesktopUiScale,
+} from "@/lib/desktopUiScale";
 
 /** Höhe des Site-Headers (kompaktes Logo + Padding); Näherung für Fenster-Layout */
 const SITE_HEADER_H = 270;
@@ -60,24 +67,46 @@ export function isMobileViewport() {
   return window.innerWidth <= MOBILE_LAYOUT_MAX_WIDTH_PX;
 }
 
+function getLayoutUiScale() {
+  if (typeof window === "undefined" || isMobileViewport()) return 1;
+  return getLastDesktopUiScale();
+}
+
+/** Kompaktes Media-Fenster (Video zu): Breite ≙ min, Höhe = Titelleiste + Transport — skaliert auf Desktop. */
+function getMediaCompactWindowSize() {
+  if (isMobileViewport()) {
+    return { w: MIN_WIN_W, h: MEDIA_COMPACT_TOTAL_H };
+  }
+  const s = getLayoutUiScale();
+  return {
+    w: scaleLayoutPx(MIN_WIN_W, s),
+    h: scaleLayoutPx(OS_TITLEBAR_H, s) + scaleLayoutPx(MEDIA_COMPACT_CLIENT_H, s),
+  };
+}
+
 /**
  * Grenzen im Koordinatensystem von OSWindow (relativ zu `[data-mm-desktop-layer]`).
  * Nutzt gemessene Layer-Größe statt `innerHeight - SITE_HEADER`, damit Resize nicht künstlich kleiner bleibt.
  */
 export function getDesktopWindowLayoutLimits() {
-  const inset = WINDOW_DESKTOP_INSET;
+  const s = getLayoutUiScale();
+  const inset = scaleLayoutPx(WINDOW_DESKTOP_INSET, s);
+  const minWinW = scaleLayoutPx(MIN_WIN_W, s);
+  const minWinH = scaleLayoutPx(MIN_WIN_H, s);
   if (typeof window === "undefined") {
     const desktopH = 900;
     const layerTop = SITE_HEADER_H;
     const minLayerY = inset - layerTop;
     const maxBottomLayer = desktopH - inset;
-    const maxWinH = Math.max(MIN_WIN_H, maxBottomLayer - minLayerY);
+    const maxWinH = Math.max(minWinH, maxBottomLayer - minLayerY);
     return {
       desktopW: 1920,
       desktopH,
       inset,
+      minWinW,
+      minWinH,
       minLayerY,
-      innerW: Math.max(MIN_WIN_W, 1920 - 2 * inset),
+      innerW: Math.max(minWinW, 1920 - 2 * inset),
       maxWinH,
       maxBottomLayer,
     };
@@ -86,13 +115,15 @@ export function getDesktopWindowLayoutLimits() {
   /** Viewport-Oberkante + inset ≙ Layer-Koordinate: Fenster nicht an Header-Linie blockieren. */
   const minLayerY = inset - layerTop;
   const maxBottomLayer = desktopH - inset;
-  const maxWinH = Math.max(MIN_WIN_H, maxBottomLayer - minLayerY);
+  const maxWinH = Math.max(minWinH, maxBottomLayer - minLayerY);
   return {
     desktopW,
     desktopH,
     inset,
+    minWinW,
+    minWinH,
     minLayerY,
-    innerW: Math.max(MIN_WIN_W, desktopW - 2 * inset),
+    innerW: Math.max(minWinW, desktopW - 2 * inset),
     maxWinH,
     maxBottomLayer,
   };
@@ -114,21 +145,23 @@ export function getDesktopLayerFullscreenRect() {
     const desktopH = 900;
     const layerTop = SITE_HEADER_H;
     const desktopW = 1920;
+    const minH = scaleLayoutPx(MIN_WIN_H, 1);
     return {
       x: 0,
       y: -layerTop,
       w: desktopW,
-      h: Math.max(MIN_WIN_H, layerTop + desktopH),
+      h: Math.max(minH, layerTop + desktopH),
     };
   }
   const { w: desktopW, h: desktopH, layerTop } = getDesktopContentRect();
   const vh = getVisualViewportHeight();
   const hFromLayer = layerTop + desktopH;
+  const minH = scaleLayoutPx(MIN_WIN_H, getLayoutUiScale());
   return {
     x: 0,
     y: -layerTop,
     w: desktopW,
-    h: Math.max(MIN_WIN_H, hFromLayer, vh),
+    h: Math.max(minH, hFromLayer, vh),
   };
 }
 
@@ -162,16 +195,20 @@ function getMobileFinderHomeCardBounds() {
 }
 
 /** Gleichmäßiger Rand zum Layer-Rand für Finder-Widget-Asset-Vollbild (animiert wie Fenster-Bounds). */
-export const ASSET_WIDGET_CHROME_FULLSCREEN_PAD = 20;
+export const ASSET_WIDGET_CHROME_FULLSCREEN_PAD =
+  DESKTOP_ASSET_WIDGET_CHROME_FULLSCREEN_PAD_PX;
 
 export function getDesktopAssetWidgetChromeFullscreenBounds() {
   const fs = getDesktopLayerFullscreenRect();
-  const p = ASSET_WIDGET_CHROME_FULLSCREEN_PAD;
+  const s = getLayoutUiScale();
+  const p = scaleLayoutPx(DESKTOP_ASSET_WIDGET_CHROME_FULLSCREEN_PAD_PX, s);
+  const minW = scaleLayoutPx(MIN_WIN_W, s);
+  const minH = scaleLayoutPx(MIN_WIN_H, s);
   return {
     x: p,
     y: fs.y + p,
-    w: Math.max(MIN_WIN_W, fs.w - 2 * p),
-    h: Math.max(MIN_WIN_H, fs.h - 2 * p),
+    w: Math.max(minW, fs.w - 2 * p),
+    h: Math.max(minH, fs.h - 2 * p),
   };
 }
 
@@ -184,7 +221,8 @@ export function getDesktopAssetWidgetChromeFullscreenBounds() {
  * @returns {{ finder: { x: number, y: number } | null, asset: { x: number, y: number } }}
  */
 function getDesktopFinderWidgetChromeSplitBounds(finderSize, assetSize) {
-  const pad = ASSET_WIDGET_CHROME_FULLSCREEN_PAD;
+  const s = getLayoutUiScale();
+  const pad = scaleLayoutPx(DESKTOP_ASSET_WIDGET_CHROME_FULLSCREEN_PAD_PX, s);
   const limits = getDesktopWindowLayoutLimits();
   const fs = getDesktopLayerFullscreenRect();
   const { desktopW, desktopH, minLayerY } = limits;
@@ -201,7 +239,7 @@ function getDesktopFinderWidgetChromeSplitBounds(finderSize, assetSize) {
 
   let finderY = Math.max(minLayerY, desktopH - finderSize.h - pad);
   const finderX = pad;
-  const gap = 8;
+  const gap = scaleLayoutPx(8, s);
   if (assetY + assetSize.h > finderY - gap) {
     const nextAssetY = finderY - assetSize.h - gap;
     if (nextAssetY >= minLayerY) {
@@ -222,7 +260,7 @@ function getDesktopFinderWidgetChromeSplitBounds(finderSize, assetSize) {
 
 /**
  * Gemessene Größe des `relative`-Desktop-Layers (Fenster-Positionierungs-Container).
- * Wird von DesktopShell per ResizeObserver gesetzt — gleiche Basis für x und y wie in CSS.
+ * Wird per {@link syncDesktopLayerMetrics} (ResizeObserver im `DesktopProvider`) aktualisiert.
  */
 const desktopLayerMetrics = { w: 0, h: 0, top: SITE_HEADER_H };
 
@@ -233,6 +271,13 @@ export function syncDesktopLayerMetrics(el) {
   desktopLayerMetrics.w = r.width;
   desktopLayerMetrics.h = r.height;
   desktopLayerMetrics.top = r.top;
+  const s = getDesktopUiScaleFromDims(
+    r.width,
+    r.height,
+    window.innerWidth
+  );
+  setLastDesktopUiScale(s);
+  applyDesktopUiDocumentVars(document.documentElement);
 }
 
 /**
@@ -270,23 +315,15 @@ export function getDesktopContentRect() {
  */
 function getInitialDesktopMediaWindowPosition() {
   const fs = getDesktopLayerFullscreenRect();
-  const p = ASSET_WIDGET_CHROME_FULLSCREEN_PAD;
+  const s = getLayoutUiScale();
+  const p = scaleLayoutPx(DESKTOP_ASSET_WIDGET_CHROME_FULLSCREEN_PAD_PX, s);
   return { x: p, y: fs.y + p };
 }
 
 const DesktopContext = createContext(null);
 
-const DARK_MODE_STORAGE_KEY = "mm-os-dark";
 const FOLDER_PREVIEW_STORAGE_KEY = "mm-os-folder-preview";
-const DESKTOP_ICONS_POS_KEY = "mm-os-desktop-icons";
-/** Einmalig: gespeicherte Schreibtisch-Positionen verwerfen, damit das Layout aus lib/apps.js greift. */
-const DESKTOP_FOLDER_GRID_VERSION = 5;
-const DESKTOP_FOLDER_GRID_KEY = "mm-os-desktop-folder-grid-v";
 const NOTES_TEXT_KEY = "mm-os-notes-text";
-const WINDOWS_STATE_KEY = "mm-os-windows-v1";
-
-const WINDOWS_PERSIST_DEBOUNCE_MS = 400;
-const DESKTOP_WIDGETS_PERSIST_DEBOUNCE_MS = 400;
 
 function centerWindow(size) {
   if (typeof window === "undefined") {
@@ -302,15 +339,31 @@ function centerWindow(size) {
 }
 
 /**
- * Desktop: Start-Position unten links — 4× {@link ASSET_WIDGET_CHROME_FULLSCREEN_PAD}
- * (Split-Layout bei geöffnetem Content: je 1× Pad).
+ * Desktop: Start-Position unten links — gleiches Randmaß wie {@link DESKTOP_FINDER_START_EDGE_PX}.
  */
 function getInitialDesktopFinderPosition(size) {
-  const edge = ASSET_WIDGET_CHROME_FULLSCREEN_PAD * 4;
+  const s = getLayoutUiScale();
+  const edge = scaleLayoutPx(DESKTOP_FINDER_START_EDGE_PX, s);
   const { desktopH, minLayerY } = getDesktopWindowLayoutLimits();
   return {
     x: edge,
     y: Math.max(minLayerY, desktopH - size.h - edge),
+  };
+}
+
+/**
+ * @param {string} appId
+ */
+function getScaledAppDefaultSize(appId) {
+  const def = APPS[appId];
+  if (!def?.defaultSize) return { w: 520, h: 520 };
+  if (isMobileViewport()) {
+    return { w: def.defaultSize.w, h: def.defaultSize.h };
+  }
+  const s = getLastDesktopUiScale();
+  return {
+    w: scaleLayoutPx(def.defaultSize.w, s),
+    h: scaleLayoutPx(def.defaultSize.h, s),
   };
 }
 
@@ -332,15 +385,16 @@ function createInitialFinderWindow() {
       mobileImmersive: false,
     };
   }
-  const pos = getInitialDesktopFinderPosition(def.defaultSize);
+  const defSize = getScaledAppDefaultSize("finder");
+  const pos = getInitialDesktopFinderPosition(defSize);
   return {
     id,
     appId: "finder",
     title: def.title,
     x: pos.x,
     y: pos.y,
-    w: def.defaultSize.w,
-    h: def.defaultSize.h,
+    w: defSize.w,
+    h: defSize.h,
     z: baseZ,
     minimized: false,
     maximized: false,
@@ -381,8 +435,11 @@ function clampFloatingDesktopIconPositions(positions, layerW, layerH, layerTop) 
   if (layerW <= 0 || layerH <= 0 || !positions || typeof positions !== "object") {
     return positions;
   }
-  const maxX = Math.max(0, layerW - DESKTOP_FLOAT_ICON_W);
-  const maxY = Math.max(0, layerH - DESKTOP_FLOAT_ICON_H);
+  const s = isMobileViewport() ? 1 : getLastDesktopUiScale();
+  const floatW = scaleLayoutPx(DESKTOP_FLOAT_ICON_W, s);
+  const floatH = scaleLayoutPx(DESKTOP_FLOAT_ICON_H, s);
+  const maxX = Math.max(0, layerW - floatW);
+  const maxY = Math.max(0, layerH - floatH);
   const minY = -layerTop;
   const out = { ...positions };
   for (const key of Object.keys(out)) {
@@ -421,41 +478,12 @@ function clampFloatingDesktopIconPositions(positions, layerW, layerH, layerTop) 
   return out;
 }
 
-function loadDesktopIconPositions() {
+/** Desktop-Icons: immer Standard aus `lib/apps`, an den Layer geklemmt — kein localStorage. */
+function getClampedDefaultDesktopIconPositions() {
   const defaults = getDefaultDesktopIconPositions();
   if (typeof window === "undefined") return defaults;
-  try {
-    const raw = localStorage.getItem(DESKTOP_ICONS_POS_KEY);
-    if (!raw) return defaults;
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object") return defaults;
-    let migrated = migrateDesktopIconPositions(parsed);
-    if (JSON.stringify(migrated) !== JSON.stringify(parsed)) {
-      try {
-        localStorage.setItem(DESKTOP_ICONS_POS_KEY, JSON.stringify(migrated));
-      } catch {
-        /* ignore */
-      }
-    }
-    const gridVer = Number(localStorage.getItem(DESKTOP_FOLDER_GRID_KEY)) || 0;
-    if (gridVer < DESKTOP_FOLDER_GRID_VERSION) {
-      migrated = {};
-      try {
-        localStorage.setItem(
-          DESKTOP_FOLDER_GRID_KEY,
-          String(DESKTOP_FOLDER_GRID_VERSION)
-        );
-        localStorage.setItem(DESKTOP_ICONS_POS_KEY, JSON.stringify(migrated));
-      } catch {
-        /* ignore */
-      }
-    }
-    const merged = { ...defaults, ...migrated };
-    const { w, h, layerTop } = getDesktopContentRect();
-    return clampFloatingDesktopIconPositions(merged, w, h, layerTop);
-  } catch {
-    return defaults;
-  }
+  const { w, h, layerTop } = getDesktopContentRect();
+  return clampFloatingDesktopIconPositions(defaults, w, h, layerTop);
 }
 
 function clampWindowsToViewport(windows) {
@@ -468,8 +496,13 @@ function clampWindowsToViewport(windows) {
     maxWinH,
     maxBottomLayer,
     minLayerY,
+    minWinW,
+    minWinH,
   } = getDesktopWindowLayoutLimits();
-  const px = MEDIA_MINIMIZE_INSET_X;
+  const s = getLayoutUiScale();
+  const mediaPxX = scaleLayoutPx(MEDIA_MINIMIZE_INSET_X, s);
+  const mediaPxY = scaleLayoutPx(MEDIA_MINIMIZE_INSET_Y, s);
+  const { w: mCompactW, h: mCompactH } = getMediaCompactWindowSize();
 
   let list = windows.map((win) => {
     if (!isMobileViewport() && win.mobileImmersive && win.prevBounds) {
@@ -555,13 +588,13 @@ function clampWindowsToViewport(windows) {
     }
     let { x, y, w, h } = win;
     if (win.appId === "media" && win.mediaVideoCollapsed) {
-      w = MEDIA_COMPACT_W;
-      h = MEDIA_COMPACT_TOTAL_H;
-      x = Math.max(inset, Math.min(x, desktopW - w - px));
-      y = Math.max(minLayerY, Math.min(y, desktopH - h - inset));
+      w = mCompactW;
+      h = mCompactH;
+      x = Math.max(inset, Math.min(x, desktopW - w - mediaPxX));
+      y = Math.max(minLayerY, Math.min(y, desktopH - h - mediaPxY));
     } else {
-      w = Math.max(MIN_WIN_W, Math.min(w, innerW));
-      h = Math.max(MIN_WIN_H, Math.min(h, maxWinH));
+      w = Math.max(minWinW, Math.min(w, innerW));
+      h = Math.max(minWinH, Math.min(h, maxWinH));
       if (win.appId === "finder") {
         h = Math.min(h, getFinderDesktopMaxSidePx(innerW));
       }
@@ -576,7 +609,8 @@ function clampWindowsToViewport(windows) {
 
 export function DesktopProvider({ children }) {
   const [windows, setWindows] = useState([]);
-  const [darkMode, setDarkModeState] = useState(false);
+  /** Invalidiert UI, die `getLastDesktopUiScale` / `getDesktopWindowLayoutLimits` nutzt (wenn sich der Layer ändert). */
+  const [desktopUiScale, setDesktopUiScale] = useState(1);
   const [folderPreview, setFolderPreviewState] = useState(true);
   const [desktopIconPositions, setDesktopIconPositions] = useState(() =>
     getDefaultDesktopIconPositions()
@@ -584,11 +618,6 @@ export function DesktopProvider({ children }) {
   const [desktopWidgets, setDesktopWidgets] = useState(() =>
     getDefaultDesktopWidgets()
   );
-  const skipDesktopIconPersist = useRef(true);
-  const skipWindowsPersist = useRef(true);
-  const windowsPersistTimerRef = useRef(null);
-  const skipDesktopWidgetsPersist = useRef(true);
-  const desktopWidgetsPersistTimerRef = useRef(null);
   const skipNotesPersist = useRef(true);
   const zCounter = useRef(20);
   /** Ein Notiz-Dokument (Absätze durch \\n\\n); ältere Absätze werden in der UI durchgestrichen. */
@@ -614,9 +643,6 @@ export function DesktopProvider({ children }) {
 
   useEffect(() => {
     try {
-      if (localStorage.getItem(DARK_MODE_STORAGE_KEY) === "1") {
-        setDarkModeState(true);
-      }
       if (localStorage.getItem(FOLDER_PREVIEW_STORAGE_KEY) === "0") {
         setFolderPreviewState(false);
       }
@@ -626,37 +652,64 @@ export function DesktopProvider({ children }) {
   }, []);
 
   useEffect(() => {
-    document.documentElement.classList.toggle("dark", darkMode);
-  }, [darkMode]);
-
-  useEffect(() => {
-    setDesktopIconPositions(loadDesktopIconPositions());
+    setDesktopIconPositions(getClampedDefaultDesktopIconPositions());
   }, []);
 
   useEffect(() => {
+    const limits = getDesktopWindowLayoutLimits();
+    const fs = getDesktopLayerFullscreenRect();
     const { w, h, layerTop } = getDesktopContentRect();
+    if (w <= 0 || h <= 0) return;
+    const stackPos = computeDefaultWidgetStackLayerPosition(
+      w,
+      h,
+      limits.minLayerY,
+      fs.y
+    );
+    const stackIdSet = new Set(DESKTOP_STACK_WIDGET_IDS);
+    const placed = getDefaultDesktopWidgets().map((wig) => {
+      if (wig.kind === "slideshow" && stackIdSet.has(wig.id)) {
+        return { ...wig, desktop: { x: stackPos.x, y: stackPos.y } };
+      }
+      return wig;
+    });
+    const merged = syncDefaultStackWidgetPositions(placed);
     setDesktopWidgets(
-      clampDesktopWidgetsToLayer(loadDesktopWidgets(), w, h, layerTop)
+      clampDesktopWidgetsToLayer(
+        merged,
+        w,
+        h,
+        layerTop,
+        limits.minLayerY
+      )
     );
   }, []);
 
-  /** Voller Seiten-Reload: immer Standard-Desktop (Finder-Startposition), kein Wiederherstellen aus localStorage. */
+  /** Voller Seiten-Reload: Fenster + Schreibtisch-Layout immer Standard (kein localStorage). */
   useEffect(() => {
     zCounter.current = 21;
     setWindows([createInitialFinderWindow()]);
   }, []);
 
   /** Viewport / Layer: Fenster begrenzen; Mobile = fullscreen, Desktop inkl. minimierter Media-Position. */
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (typeof window === "undefined") return undefined;
-    const onResize = () => {
+    const el = document.querySelector("[data-mm-desktop-layer]");
+    if (!el) return undefined;
+    const run = () => {
+      syncDesktopLayerMetrics(el);
+      setDesktopUiScale(getLastDesktopUiScale());
       setWindows((prev) => clampWindowsToViewport(prev));
     };
-    window.addEventListener("resize", onResize);
-    window.visualViewport?.addEventListener("resize", onResize);
+    run();
+    const ro = new ResizeObserver(run);
+    ro.observe(el);
+    window.addEventListener("resize", run);
+    window.visualViewport?.addEventListener("resize", run);
     return () => {
-      window.removeEventListener("resize", onResize);
-      window.visualViewport?.removeEventListener("resize", onResize);
+      ro.disconnect();
+      window.removeEventListener("resize", run);
+      window.visualViewport?.removeEventListener("resize", run);
     };
   }, []);
 
@@ -674,10 +727,12 @@ export function DesktopProvider({ children }) {
       finderProjectAppId === null && finderTabAppIds.length === 0;
     const gridSquareMode = classicHome;
 
-    const expandPx =
+    const s = getLayoutUiScale();
+    const expandBase =
       finderClassicSearchExpanded || finderProjectSearchStripExpanded
         ? FINDER_TITLEBAR_EXPAND_PX
         : 0;
+    const expandPx = scaleLayoutPx(expandBase, s);
 
     const prevExpand = finderTitlebarExpandAppliedRef.current;
     const dh = expandPx - prevExpand;
@@ -692,15 +747,15 @@ export function DesktopProvider({ children }) {
         return prev;
       }
 
-      const { innerW, maxBottomLayer, minLayerY, desktopW, inset } =
+      const { innerW, maxBottomLayer, minLayerY, desktopW, inset, minWinW, minWinH } =
         getDesktopWindowLayoutLimits();
       const maxSide = getFinderDesktopMaxSidePx(innerW);
+      const defH = getScaledAppDefaultSize("finder").h;
 
       let nh = win.h + dh;
-      nh = Math.max(MIN_WIN_H, Math.min(nh, maxSide));
+      nh = Math.max(minWinH, Math.min(nh, maxSide));
       /** Mindesthöhe wie Default-Größe (bis maxSide), damit der Finder nach kleinen persistierten Maßen wieder „normal“ wirkt. */
-      const defFinder = APPS.finder;
-      nh = Math.max(nh, Math.min(defFinder.defaultSize.h, maxSide));
+      nh = Math.max(nh, Math.min(defH, maxSide));
       const actualDh = nh - win.h;
       let ny = win.y - actualDh;
 
@@ -710,7 +765,7 @@ export function DesktopProvider({ children }) {
       let targetW = gridSquareMode
         ? Math.min(hCore, innerW)
         : Math.min(Math.round((hCore * 10) / 8), innerW);
-      targetW = Math.max(MIN_WIN_W, targetW);
+      targetW = Math.max(minWinW, targetW);
 
       const x = Math.max(inset, Math.min(win.x, desktopW - targetW - inset));
       ny = Math.max(minLayerY, Math.min(ny, maxBottomLayer - hTotal));
@@ -737,58 +792,8 @@ export function DesktopProvider({ children }) {
     finderTabAppIds,
     finderClassicSearchExpanded,
     finderProjectSearchStripExpanded,
+    desktopUiScale,
   ]);
-
-  useEffect(() => {
-    if (skipWindowsPersist.current) {
-      skipWindowsPersist.current = false;
-      return;
-    }
-    if (windowsPersistTimerRef.current) {
-      clearTimeout(windowsPersistTimerRef.current);
-    }
-    windowsPersistTimerRef.current = setTimeout(() => {
-      windowsPersistTimerRef.current = null;
-      try {
-        localStorage.setItem(WINDOWS_STATE_KEY, JSON.stringify(windows));
-      } catch {
-        /* ignore */
-      }
-    }, WINDOWS_PERSIST_DEBOUNCE_MS);
-    return () => {
-      if (windowsPersistTimerRef.current) {
-        clearTimeout(windowsPersistTimerRef.current);
-        windowsPersistTimerRef.current = null;
-      }
-    };
-  }, [windows]);
-
-  useEffect(() => {
-    if (skipDesktopWidgetsPersist.current) {
-      skipDesktopWidgetsPersist.current = false;
-      return;
-    }
-    if (desktopWidgetsPersistTimerRef.current) {
-      clearTimeout(desktopWidgetsPersistTimerRef.current);
-    }
-    desktopWidgetsPersistTimerRef.current = setTimeout(() => {
-      desktopWidgetsPersistTimerRef.current = null;
-      try {
-        localStorage.setItem(
-          DESKTOP_WIDGETS_STORAGE_KEY,
-          JSON.stringify(desktopWidgets)
-        );
-      } catch {
-        /* ignore */
-      }
-    }, DESKTOP_WIDGETS_PERSIST_DEBOUNCE_MS);
-    return () => {
-      if (desktopWidgetsPersistTimerRef.current) {
-        clearTimeout(desktopWidgetsPersistTimerRef.current);
-        desktopWidgetsPersistTimerRef.current = null;
-      }
-    };
-  }, [desktopWidgets]);
 
   useEffect(() => {
     try {
@@ -820,21 +825,6 @@ export function DesktopProvider({ children }) {
     }
   }, [notesText]);
 
-  useEffect(() => {
-    if (skipDesktopIconPersist.current) {
-      skipDesktopIconPersist.current = false;
-      return;
-    }
-    try {
-      localStorage.setItem(
-        DESKTOP_ICONS_POS_KEY,
-        JSON.stringify(desktopIconPositions)
-      );
-    } catch {
-      /* ignore */
-    }
-  }, [desktopIconPositions]);
-
   const setDesktopIconPosition = useCallback((appId, x, y) => {
     setDesktopIconPositions((prev) => ({ ...prev, [appId]: { x, y } }));
   }, []);
@@ -858,18 +848,6 @@ export function DesktopProvider({ children }) {
     setDesktopWidgets((prev) =>
       prev.map((w) => (set.has(w.id) ? { ...w, desktop: { x, y } } : w))
     );
-  }, []);
-
-  const setDarkMode = useCallback((value) => {
-    setDarkModeState((prev) => {
-      const next = typeof value === "function" ? value(prev) : value;
-      try {
-        localStorage.setItem(DARK_MODE_STORAGE_KEY, next ? "1" : "0");
-      } catch {
-        /* ignore */
-      }
-      return next;
-    });
   }, []);
 
   const setFolderPreview = useCallback((value) => {
@@ -1029,6 +1007,7 @@ export function DesktopProvider({ children }) {
           ];
         }
         const pos = getInitialDesktopMediaWindowPosition();
+        const m = getMediaCompactWindowSize();
         return [
           ...prev,
           {
@@ -1037,8 +1016,8 @@ export function DesktopProvider({ children }) {
             title: def.title,
             x: pos.x,
             y: pos.y,
-            w: MEDIA_COMPACT_W,
-            h: MEDIA_COMPACT_TOTAL_H,
+            w: m.w,
+            h: m.h,
             z: zCounter.current,
             minimized: false,
             maximized: false,
@@ -1072,7 +1051,8 @@ export function DesktopProvider({ children }) {
           },
         ];
       }
-      const pos = centerWindow(def.defaultSize);
+      const dSize = getScaledAppDefaultSize(appId);
+      const pos = centerWindow(dSize);
       return [
         ...prev,
         {
@@ -1081,8 +1061,8 @@ export function DesktopProvider({ children }) {
           title: def.title,
           x: pos.x,
           y: pos.y,
-          w: def.defaultSize.w,
-          h: def.defaultSize.h,
+          w: dSize.w,
+          h: dSize.h,
           z: zCounter.current,
           minimized: false,
           maximized: false,
@@ -1189,7 +1169,7 @@ export function DesktopProvider({ children }) {
           const finderWin = prev.find(
             (w) => w.appId === "finder" && !w.minimized
           );
-          const W = DESKTOP_WIDGET_FRAME_PX;
+          const W = getAssetWidgetFrameSidePx();
           const split = getDesktopFinderWidgetChromeSplitBounds(
             finderWin ? { w: finderWin.w, h: finderWin.h } : null,
             { w: W, h: W }
@@ -1225,7 +1205,8 @@ export function DesktopProvider({ children }) {
             },
           ];
         }
-        const pos = centerWindow(def.defaultSize);
+        const dSize = getScaledAppDefaultSize("assetFile");
+        const pos = centerWindow(dSize);
         return [
           ...prev,
           {
@@ -1234,8 +1215,8 @@ export function DesktopProvider({ children }) {
             title: file,
             x: pos.x,
             y: pos.y,
-            w: def.defaultSize.w,
-            h: def.defaultSize.h,
+            w: dSize.w,
+            h: dSize.h,
             z: zCounter.current,
             minimized: false,
             maximized: false,
@@ -1335,7 +1316,7 @@ export function DesktopProvider({ children }) {
           const finderWin = prev.find(
             (w) => w.appId === "finder" && !w.minimized
           );
-          const W = DESKTOP_WIDGET_FRAME_PX;
+          const W = getAssetWidgetFrameSidePx();
           const split = getDesktopFinderWidgetChromeSplitBounds(
             finderWin ? { w: finderWin.w, h: finderWin.h } : null,
             { w: W, h: W }
@@ -1371,7 +1352,8 @@ export function DesktopProvider({ children }) {
             },
           ];
         }
-        const pos = centerWindow(def.defaultSize);
+        const dSize = getScaledAppDefaultSize("assetFile");
+        const pos = centerWindow(dSize);
         return [
           ...prev,
           {
@@ -1380,8 +1362,8 @@ export function DesktopProvider({ children }) {
             title: file,
             x: pos.x,
             y: pos.y,
-            w: def.defaultSize.w,
-            h: def.defaultSize.h,
+            w: dSize.w,
+            h: dSize.h,
             z: zCounter.current,
             minimized: false,
             maximized: false,
@@ -1395,7 +1377,7 @@ export function DesktopProvider({ children }) {
     []
   );
 
-  /** Finder: Asset als 680×680-Widget oben rechts; Finder wandert unten links ({@link openAssetFileWindow} `fromFinder`). */
+  /** Finder: Asset-Widget oben rechts; Finder unten links ({@link openAssetFileWindow} `fromFinder`, Kantenlänge skaliert). */
   const finderOpenProjectFile = useCallback(
     ({ dir, file, basePath = "/web" }) => {
       if (!dir || !file) return;
@@ -1497,31 +1479,32 @@ export function DesktopProvider({ children }) {
             h: w.h,
           });
           const pos = getInitialDesktopMediaWindowPosition();
+          const m = getMediaCompactWindowSize();
           return {
             ...w,
             mediaVideoCollapsed: true,
-            w: MEDIA_COMPACT_W,
-            h: MEDIA_COMPACT_TOTAL_H,
+            w: m.w,
+            h: m.h,
             x: pos.x,
             y: pos.y,
           };
         }
         const saved = mediaPreCollapseBoundsRef.current.get(id);
-        const fallback = APPS.media.defaultSize;
+        const fallback = getScaledAppDefaultSize("media");
+        const { minWinW, minWinH, desktopW, inset, maxBottomLayer, minLayerY } =
+          getDesktopWindowLayoutLimits();
         const rw =
           saved && typeof saved.w === "number" && Number.isFinite(saved.w)
-            ? Math.max(MIN_WIN_W, saved.w)
+            ? Math.max(minWinW, saved.w)
             : fallback.w;
         const rh =
           saved && typeof saved.h === "number" && Number.isFinite(saved.h)
-            ? Math.max(MIN_WIN_H, saved.h)
+            ? Math.max(minWinH, saved.h)
             : fallback.h;
         // Untere rechte Ecke des kompakten Fensters beibehalten → Größe wächst nach links oben.
         let rx = w.x + w.w - rw;
         let ry = w.y + w.h - rh;
         if (typeof window !== "undefined") {
-          const { desktopW, inset, maxBottomLayer, minLayerY } =
-            getDesktopWindowLayoutLimits();
           rx = Math.max(inset, Math.min(rx, desktopW - rw - inset));
           ry = Math.max(minLayerY, Math.min(ry, maxBottomLayer - rh));
         }
@@ -1661,19 +1644,21 @@ export function DesktopProvider({ children }) {
         const { w: dW, h: dH } = getDesktopContentRect();
         const px = MEDIA_MINIMIZE_INSET_X;
         if (win.appId === "media" && win.mediaVideoCollapsed) {
-          w = MEDIA_COMPACT_W;
-          h = MEDIA_COMPACT_TOTAL_H;
-          const ins = WINDOW_DESKTOP_INSET;
-          const { minLayerY } = getDesktopWindowLayoutLimits();
+          const m = getMediaCompactWindowSize();
+          w = m.w;
+          h = m.h;
+          const { inset: ins, minLayerY } = getDesktopWindowLayoutLimits();
           x = Math.max(ins, Math.min(x, dW - w - px));
           y = Math.max(minLayerY, Math.min(y, dH - h - ins));
         } else {
           const limits = getDesktopWindowLayoutLimits();
+          const { minWinW, minWinH } = limits;
+          const tb = scaleLayoutPx(OS_TITLEBAR_H, getLayoutUiScale());
           const ca = win.contentAspect;
           const rw =
             ca && ca.rw > 0 && ca.rh > 0 ? ca.rw : w;
           const rh =
-            ca && ca.rw > 0 && ca.rh > 0 ? ca.rh : Math.max(1, h - OS_TITLEBAR_H);
+            ca && ca.rw > 0 && ca.rh > 0 ? ca.rh : Math.max(1, h - tb);
           const o = clampAspectWindowBounds(
             x,
             y,
@@ -1681,9 +1666,9 @@ export function DesktopProvider({ children }) {
             h,
             rw,
             rh,
-            OS_TITLEBAR_H,
-            MIN_WIN_W,
-            MIN_WIN_H,
+            tb,
+            minWinW,
+            minWinH,
             limits
           );
           x = o.x;
@@ -1732,19 +1717,21 @@ export function DesktopProvider({ children }) {
       return;
     }
 
-    const ins = WINDOW_DESKTOP_INSET;
-    const { innerW, maxWinH } = getDesktopWindowLayoutLimits();
+    const limits = getDesktopWindowLayoutLimits();
+    const { innerW, maxWinH, minWinW, minWinH, inset: insL } = limits;
+    const tb = scaleLayoutPx(OS_TITLEBAR_H, getLayoutUiScale());
+    const min120 = scaleLayoutPx(120, getLayoutUiScale());
     const maxCW = innerW;
-    const maxCH = Math.max(120, maxWinH - OS_TITLEBAR_H - ins);
-    const minCW = MIN_WIN_W;
-    const minCH = Math.max(MIN_WIN_H - OS_TITLEBAR_H, 120);
+    const maxCH = Math.max(min120, maxWinH - tb - insL);
+    const minCW = minWinW;
+    const minCH = Math.max(minWinH - tb, min120);
 
     let cw = intrinsicW;
     let ch = intrinsicH;
 
-    let s = Math.min(1, maxCW / cw, maxCH / ch);
-    cw *= s;
-    ch *= s;
+    let s0 = Math.min(1, maxCW / cw, maxCH / ch);
+    cw *= s0;
+    ch *= s0;
 
     let t = Math.max(1, minCW / cw, minCH / ch);
     cw *= t;
@@ -1757,8 +1744,8 @@ export function DesktopProvider({ children }) {
     cw = Math.max(minCW, Math.round(cw));
     ch = Math.max(minCH, Math.round(ch));
 
-    const totalW = Math.max(MIN_WIN_W, cw);
-    const totalH = Math.max(MIN_WIN_H, ch + OS_TITLEBAR_H);
+    const totalW = Math.max(minWinW, cw);
+    const totalH = Math.max(minWinH, ch + tb);
 
     setWindows((prev) =>
       prev.map((win) => {
@@ -1823,8 +1810,6 @@ export function DesktopProvider({ children }) {
       desktopWidgets,
       setDesktopWidgetPosition,
       setDesktopWidgetPositionsForIds,
-      darkMode,
-      setDarkMode,
       folderPreview,
       setFolderPreview,
       notesText,
@@ -1856,12 +1841,14 @@ export function DesktopProvider({ children }) {
       menuBarHeight: 0,
       siteHeaderHeight: SITE_HEADER_H,
       dockHeight: 0,
-      minWindowW: MIN_WIN_W,
-      minWindowH: MIN_WIN_H,
-      osTitlebarH: OS_TITLEBAR_H,
+      minWindowW: scaleLayoutPx(MIN_WIN_W, desktopUiScale),
+      minWindowH: scaleLayoutPx(MIN_WIN_H, desktopUiScale),
+      osTitlebarH: scaleLayoutPx(OS_TITLEBAR_H, desktopUiScale),
+      desktopUiScale,
     }),
     [
       windows,
+      desktopUiScale,
       openOrFocus,
       openAssetFileWindow,
       toggleAssetFileWindow,
@@ -1883,8 +1870,6 @@ export function DesktopProvider({ children }) {
       desktopWidgets,
       setDesktopWidgetPosition,
       setDesktopWidgetPositionsForIds,
-      darkMode,
-      setDarkMode,
       folderPreview,
       setFolderPreview,
       notesText,

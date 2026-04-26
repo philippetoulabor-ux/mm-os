@@ -1,9 +1,19 @@
 {
-  "generatedAt": "2026-04-15T07:17:15.769Z",
+  "generatedAt": "2026-04-25T22:01:18.720Z",
   "webRoot": "public/web",
-  "totalFiles": 92,
-  "totalBytes": 105801984,
+  "totalFiles": 95,
+  "totalBytes": 1272294514,
   "topLargest": [
+    {
+      "path": "worldd2023/worldd.video.mp4",
+      "bytes": 1134587683,
+      "kind": "video"
+    },
+    {
+      "path": "worldd2023/worldd.video(sped up).mp4",
+      "bytes": 26233292,
+      "kind": "video"
+    },
     {
       "path": "LuckyStar_candle/ls-candle-zeitraffer.mp4",
       "bytes": 17190822,
@@ -95,6 +105,11 @@
       "kind": "image"
     },
     {
+      "path": "folder/translucent-folder1.1.webp",
+      "bytes": 1825354,
+      "kind": "image"
+    },
+    {
       "path": "grillz/star+1-t.webp",
       "bytes": 1686504,
       "kind": "image"
@@ -130,6 +145,11 @@
       "kind": "image"
     },
     {
+      "path": "folder/translucent-folder1.3.webp",
+      "bytes": 1057456,
+      "kind": "image"
+    },
+    {
       "path": "threads/smiley-threads/smiley-lamp-3.webp",
       "bytes": 1016396,
       "kind": "image"
@@ -155,8 +175,28 @@
       "kind": "image"
     },
     {
+      "path": "folder/translucent-folder1.2.webp",
+      "bytes": 892316,
+      "kind": "image"
+    },
+    {
+      "path": "folder/translucent-folder1.4.webp",
+      "bytes": 881228,
+      "kind": "image"
+    },
+    {
+      "path": "folder/translucent-folder1.5.webp",
+      "bytes": 854066,
+      "kind": "image"
+    },
+    {
       "path": "threads/coloring-threads/coloring-threads-1.webp",
       "bytes": 798504,
+      "kind": "image"
+    },
+    {
+      "path": "folder/translucent-folder1.6.webp",
+      "bytes": 795388,
       "kind": "image"
     },
     {
@@ -305,11 +345,6 @@
       "kind": "image"
     },
     {
-      "path": "step/fräsform fusion render.pdf",
-      "bytes": 171515,
-      "kind": "other"
-    },
-    {
       "path": "step/fräsform fusion render.webp",
       "bytes": 141200,
       "kind": "image"
@@ -335,18 +370,8 @@
       "kind": "image"
     },
     {
-      "path": "step/IMG_2372.webp",
-      "bytes": 87414,
-      "kind": "image"
-    },
-    {
       "path": "threads/woven-threads/weaving-3.jpg",
       "bytes": 85327,
-      "kind": "image"
-    },
-    {
-      "path": "step/IMG_2369.webp",
-      "bytes": 83722,
       "kind": "image"
     },
     {
@@ -355,28 +380,8 @@
       "kind": "image"
     },
     {
-      "path": "step/IMG_2371.webp",
-      "bytes": 81514,
-      "kind": "image"
-    },
-    {
       "path": "threads/woven-threads/weaving-4.jpg",
       "bytes": 80939,
-      "kind": "image"
-    },
-    {
-      "path": "step/IMG_2373.webp",
-      "bytes": 76692,
-      "kind": "image"
-    },
-    {
-      "path": "step/IMG_2368.webp",
-      "bytes": 73776,
-      "kind": "image"
-    },
-    {
-      "path": "step/IMG_2370.webp",
-      "bytes": 67012,
       "kind": "image"
     },
     {
@@ -397,11 +402,6 @@
     {
       "path": "clay/DSCF5192.webp",
       "bytes": 63408,
-      "kind": "image"
-    },
-    {
-      "path": "threads/woven-threads/weaving-2.jpg",
-      "bytes": 57372,
       "kind": "image"
     }
   ]

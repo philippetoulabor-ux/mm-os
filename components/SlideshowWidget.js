@@ -104,6 +104,7 @@ export function WidgetChromeArrowButton({ dir, label, onClick, disabled }) {
  *   stackNavigation?: { onNext: () => void, onPrev: () => void, locked?: boolean } | null,
  *   stackDeckLayer?: boolean,
  *   stackMediaReveal?: { popped: boolean, fromScale: number, durationMs: number, easing: string } | null,
+ *   blockClickAfterDragRef?: import('react').MutableRefObject<boolean> | null,
  * }} props
  */
 export function SlideshowWidget({
@@ -113,6 +114,7 @@ export function SlideshowWidget({
   stackNavigation = null,
   stackDeckLayer = false,
   stackMediaReveal = null,
+  blockClickAfterDragRef = null,
 }) {
   const { finderOpenProjectFile } = useDesktop();
   const basePath = widget.basePath ?? "/web";
@@ -195,7 +197,7 @@ export function SlideshowWidget({
     setVideoProgress(Math.min(1, v.currentTime / v.duration));
   }, []);
 
-  /** Auto-Advance nur wenn der 5s-Balken fertig ist — gleiche Zeitbasis wie die CSS-Animation (kein setInterval-Drift). */
+  /** Auto-Advance nur wenn der Fortschrittsbalken fertig ist — gleiche Zeitbasis wie die CSS-Animation (kein setInterval-Drift). */
   const handleSegmentFillEnd = useCallback(
     (e) => {
       const names = String(e.animationName || "")
@@ -253,6 +255,26 @@ export function SlideshowWidget({
     });
   }, [currentFile, widget.assetDir, basePath, finderOpenProjectFile]);
 
+  const onRootClick = useCallback(
+    (e) => {
+      if (stackDeckLayer) return;
+      const t = e.target;
+      if (!(t instanceof Element) || t.closest("[data-mm-widget-no-drag]"))
+        return;
+      const block = blockClickAfterDragRef;
+      if (block?.current) {
+        block.current = false;
+        return;
+      }
+      openCurrentInFinder();
+    },
+    [
+      stackDeckLayer,
+      blockClickAfterDragRef,
+      openCurrentInFinder,
+    ]
+  );
+
   const rootDrag =
     stackDeckLayer || !(layout === "desktop" && dragHandleProps)
       ? {}
@@ -292,7 +314,7 @@ export function SlideshowWidget({
       }
     : null;
 
-  const mediaAndFinder = (
+  const mediaLayer = (
     <>
       {src ? (
         prevIndex != null ? (
@@ -328,25 +350,12 @@ export function SlideshowWidget({
           Keine Bilder oder Videos in diesem Ordner (Manifest).
         </div>
       )}
-
-      {src && deckChrome ? (
-        <button
-          type="button"
-          data-mm-widget-no-drag
-          aria-label="Aktuelles Medium im Finder und Inhaltfenster öffnen"
-          className="absolute inset-0 z-[12] cursor-pointer border-0 bg-transparent p-0 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-black"
-          onClick={(e) => {
-            e.stopPropagation();
-            openCurrentInFinder();
-          }}
-        />
-      ) : null}
     </>
   );
 
   return (
     <div
-      className={`relative flex flex-col overflow-hidden rounded-lg border-[2.25px] border-black bg-white shadow-none ${
+      className={`relative flex flex-col overflow-hidden rounded-lg mm-os-paint-stroke bg-white shadow-none ${
         stackDeckLayer ? "pointer-events-none" : ""
       } ${
         isMobile
@@ -357,6 +366,7 @@ export function SlideshowWidget({
             : "h-full w-full md:cursor-grab md:active:cursor-grabbing"
       }`}
       {...rootDrag}
+      onClick={onRootClick}
     >
       {deckChrome ? (
       <div className="absolute left-0 right-0 top-0 z-20 w-full px-1.5 pt-1">
@@ -407,10 +417,10 @@ export function SlideshowWidget({
             className="absolute inset-0 overflow-hidden"
             style={stackMediaRevealStyle}
           >
-            {mediaAndFinder}
+            {mediaLayer}
           </div>
         ) : (
-          mediaAndFinder
+          mediaLayer
         )}
 
         {deckChrome ? (

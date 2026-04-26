@@ -114,11 +114,11 @@ function AssetFileListThumb({ href, file, fillContainer = false }) {
   const videoRef = useRef(null);
 
   const mediaBox = fillContainer
-    ? "h-full w-full min-h-0 min-w-0 shrink-0 rounded border border-zinc-200 object-cover dark:border-zinc-600"
-    : "h-11 w-11 shrink-0 rounded border border-zinc-200 object-cover dark:border-zinc-600";
+    ? "h-full w-full min-h-0 min-w-0 shrink-0 rounded border border-zinc-200 object-cover"
+    : "h-11 w-11 shrink-0 rounded border border-zinc-200 object-cover";
   const extBox = fillContainer
-    ? "flex h-full w-full min-h-0 min-w-0 shrink-0 items-center justify-center overflow-hidden rounded border border-zinc-200 bg-zinc-100 px-1 dark:border-zinc-600 dark:bg-zinc-800"
-    : "flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded border border-zinc-200 bg-zinc-100 px-1 dark:border-zinc-600 dark:bg-zinc-800";
+    ? "flex h-full w-full min-h-0 min-w-0 shrink-0 items-center justify-center overflow-hidden rounded border border-zinc-200 bg-zinc-100 px-1"
+    : "flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded border border-zinc-200 bg-zinc-100 px-1";
 
   useEffect(() => {
     const v = videoRef.current;
@@ -168,7 +168,7 @@ function AssetFileListThumb({ href, file, fillContainer = false }) {
     <span className={extBox} aria-hidden>
       {ext ? (
         <span
-          className={`max-w-full truncate text-center font-mono font-semibold leading-tight text-zinc-600 dark:text-zinc-300 ${
+          className={`max-w-full truncate text-center font-mono font-semibold leading-tight text-zinc-600 ${
             fillContainer ? "text-xs" : "text-[15px]"
           }`}
         >
@@ -1325,11 +1325,11 @@ function FinderFileFormatThumb({ file, tileSize = "list" }) {
   const ext = fileExtensionDisplay(file);
   const grid = tileSize === "grid";
   const box = grid
-    ? "flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded border border-zinc-200 bg-zinc-100 px-0.5 dark:border-zinc-600 dark:bg-zinc-800"
-    : "flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded border border-zinc-200 bg-zinc-100 px-0.5 dark:border-zinc-600 dark:bg-zinc-800";
+    ? "flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded border border-zinc-200 bg-zinc-100 px-0.5"
+    : "flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded border border-zinc-200 bg-zinc-100 px-0.5";
   const extClass = grid
-    ? "max-w-full truncate text-center font-mono text-[13.5px] font-semibold leading-tight text-zinc-600 dark:text-zinc-300"
-    : "max-w-full truncate text-center font-mono text-[13px] font-semibold leading-tight text-zinc-600 dark:text-zinc-300";
+    ? "max-w-full truncate text-center font-mono text-[13.5px] font-semibold leading-tight text-zinc-600"
+    : "max-w-full truncate text-center font-mono text-[13px] font-semibold leading-tight text-zinc-600";
   const fallbackIcon = grid ? "text-base leading-none" : "text-xl leading-none";
   return (
     <span className={box} aria-hidden>
@@ -1461,7 +1461,7 @@ function blockArrowScrollOnRow(e, isDesktopKb) {
 
 /** Wie OSWindow: Hover-Rahmen 10 %, Auswahl 50 %; inaktiv kein sichtbarer Rand. Text & Previews bleiben voll. */
 const FINDER_LIST_ROW_FRAME =
-  "rounded border-[2.25px] border-transparent bg-white shadow-none transition-[border-color] duration-200 ease-out hover:border-black/10 aria-selected:border-black/50 hover:aria-selected:border-black/50 dark:bg-zinc-900/30 dark:aria-selected:border-black/50 dark:hover:aria-selected:border-black/50";
+  "rounded border border-solid border-transparent mm-os-paint-stroke-w bg-white shadow-none transition-[border-color] duration-200 ease-out hover:border-black/10 aria-selected:border-black/50 hover:aria-selected:border-black/50";
 
 /** Stream: große, durchlaufende Zeilen (Platzhalter — weiter ausbaubar). */
 function FinderAssetStream({
@@ -1532,7 +1532,7 @@ function FinderProjectsColumn({
   openOrFocus,
 }) {
   return (
-    <div className="flex max-h-[min(40vh,280px)] min-h-0 w-full shrink-0 flex-col bg-white dark:bg-zinc-900/40 md:max-h-none md:h-full md:w-[13.5rem] md:min-w-[12rem] md:max-w-[15rem]">
+    <div className="flex max-h-[min(40vh,280px)] min-h-0 w-full shrink-0 flex-col bg-white md:max-h-none md:h-full md:w-[13.5rem] md:min-w-[12rem] md:max-w-[15rem]">
       <ul
         role="listbox"
         aria-label="Projekte"
@@ -1552,10 +1552,10 @@ function FinderProjectsColumn({
                     ? openOrFocus(row.appId)
                     : finderOpenProject(row.appId)
                 }
-                className={`flex w-full min-w-0 items-center gap-2 px-2 py-1.5 text-left text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-1 dark:focus-visible:ring-zinc-500 ${FINDER_LIST_ROW_FRAME} ${
+                className={`flex w-full min-w-0 items-center gap-2 px-2 py-1.5 text-left text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-1 ${FINDER_LIST_ROW_FRAME} ${
                   active
-                    ? "font-semibold text-zinc-900 dark:text-zinc-100"
-                    : "text-zinc-800 dark:text-zinc-200"
+                    ? "font-semibold text-zinc-900"
+                    : "text-zinc-800"
                 }`}
               >
                 <FinderListIcon
@@ -1581,7 +1581,7 @@ function FinderProjectsMobileTilePicker({
   openOrFocus,
 }) {
   return (
-    <div className="flex max-h-[min(44vh,320px)] min-h-0 w-full shrink-0 flex-col border-b border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900/40">
+    <div className="flex max-h-[min(44vh,320px)] min-h-0 w-full shrink-0 flex-col border-b border-zinc-200 bg-white">
       <div
         role="grid"
         aria-label="Projekte"
@@ -1602,9 +1602,9 @@ function FinderProjectsMobileTilePicker({
                     ? openOrFocus(row.appId)
                     : finderOpenProject(row.appId)
                 }
-                className={`flex min-h-[6.25rem] flex-col items-center justify-start gap-1.5 rounded-lg border-2 border-transparent px-1 py-2 text-center transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800/60 ${
+                className={`flex min-h-[6.25rem] flex-col items-center justify-start gap-1.5 rounded-lg border-2 border-transparent px-1 py-2 text-center transition-colors hover:bg-zinc-100 ${
                   active
-                    ? "border-black/25 bg-zinc-100 dark:border-white/20 dark:bg-zinc-800/80"
+                    ? "border-black/25 bg-zinc-100"
                     : ""
                 }`}
               >
@@ -1613,7 +1613,7 @@ function FinderProjectsMobileTilePicker({
                   folderPreview={folderPreview}
                   tileSize="grid"
                 />
-                <span className="line-clamp-2 w-full max-w-[9rem] text-center text-[11px] font-medium leading-tight text-zinc-900 dark:text-zinc-100">
+                <span className="line-clamp-2 w-full max-w-[9rem] text-center text-[11px] font-medium leading-tight text-zinc-900">
                   {row.primary}
                 </span>
               </button>
@@ -1984,7 +1984,7 @@ function FinderView({ unifiedParentScroll = false }) {
   const browseTileMinH = unifiedParentScroll ? "min-h-[6.25rem]" : "min-h-[7.5rem]";
   const browseTileGap = unifiedParentScroll ? "gap-1.5" : "gap-2";
   const browseLabelCls = unifiedParentScroll
-    ? "line-clamp-2 w-full max-w-[9rem] text-center text-[11px] font-medium leading-tight text-zinc-900 dark:text-zinc-100"
+    ? "line-clamp-2 w-full max-w-[9rem] text-center text-[11px] font-medium leading-tight text-zinc-900"
     : "line-clamp-2 w-full max-w-[10rem] text-center text-xs font-medium leading-tight text-zinc-900";
 
   const leftPaneScroll =
@@ -2077,7 +2077,7 @@ function FinderView({ unifiedParentScroll = false }) {
               setSelectedIndex(index);
               openHit(row);
             }}
-            className={`flex ${browseTileMinH} flex-col items-center justify-start ${browseTileGap} rounded-lg border-0 px-1.5 py-2 text-center transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800/60`}
+            className={`flex ${browseTileMinH} flex-col items-center justify-start ${browseTileGap} rounded-lg border-0 px-1.5 py-2 text-center transition-colors hover:bg-zinc-100`}
           >
             <FinderListIcon
               row={row}
@@ -2118,7 +2118,7 @@ function FinderView({ unifiedParentScroll = false }) {
         });
       }}
       placeholder="search"
-      className="min-w-0 flex-1 border-0 bg-transparent text-sm text-zinc-900 outline-none placeholder:text-zinc-400 dark:text-zinc-100 [&::-webkit-search-cancel-button]:hidden [&::-moz-search-clear]:hidden"
+      className="min-w-0 flex-1 border-0 bg-transparent text-sm text-zinc-900 outline-none placeholder:text-zinc-400 [&::-webkit-search-cancel-button]:hidden [&::-moz-search-clear]:hidden"
       autoComplete="off"
       spellCheck={false}
     />
@@ -2195,12 +2195,12 @@ function FinderView({ unifiedParentScroll = false }) {
         <>
           {(finderProjectSearchStripExpanded || unifiedParentScroll) &&
           !finderSearchInTitlebarDesktop ? (
-            <div className="flex shrink-0 flex-col gap-2 border-b-2 border-black bg-white px-2 py-2 dark:bg-zinc-900/50">
+            <div className="flex shrink-0 flex-col gap-2 border-b-2 border-black bg-white px-2 py-2">
               <div className="flex w-full min-w-0 flex-1">
                 <label htmlFor="finder-search" className="sr-only">
                   Apps und Dateien durchsuchen
                 </label>
-                <div className="group/finder-search flex w-full min-w-0 items-center gap-2 rounded-sm border border-zinc-300 bg-white px-2 py-1.5 focus-within:ring-2 focus-within:ring-zinc-400 focus-within:ring-offset-0 dark:border-zinc-600 dark:bg-zinc-800/90">
+                <div className="group/finder-search flex w-full min-w-0 items-center gap-2 rounded-sm border border-zinc-300 bg-white px-2 py-1.5 focus-within:ring-2 focus-within:ring-zinc-400 focus-within:ring-offset-0">
                   {!unifiedParentScroll ? (
                     <button
                       type="button"
@@ -2218,7 +2218,7 @@ function FinderView({ unifiedParentScroll = false }) {
                         src="/web/buttons/lupe.svg"
                         alt=""
                         aria-hidden
-                        className="pointer-events-none h-4 w-4 shrink-0 opacity-50 transition-[opacity,transform] duration-200 ease-out group-focus-within/finder-search:opacity-100 group-hover:scale-[1.15] group-hover:opacity-100 dark:opacity-60 dark:group-focus-within/finder-search:opacity-100"
+                        className="pointer-events-none h-4 w-4 shrink-0 opacity-50 transition-[opacity,transform] duration-200 ease-out group-focus-within/finder-search:opacity-100 group-hover:scale-[1.15] group-hover:opacity-100"
                         draggable={false}
                       />
                     </button>
@@ -2228,7 +2228,7 @@ function FinderView({ unifiedParentScroll = false }) {
                       src="/web/buttons/lupe.svg"
                       alt=""
                       aria-hidden
-                      className="h-4 w-4 shrink-0 opacity-50 dark:opacity-60"
+                      className="h-4 w-4 shrink-0 opacity-50"
                       draggable={false}
                     />
                   )}

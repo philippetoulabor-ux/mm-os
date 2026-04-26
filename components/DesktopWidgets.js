@@ -10,38 +10,40 @@ import {
 } from "react";
 import { useDesktop } from "@/context/DesktopContext";
 import { SlideshowWidget } from "@/components/SlideshowWidget";
+import { scaleLayoutPx } from "@/lib/desktopUiScale";
+import { DESKTOP_WIDGET_STACK_OFFSET_PX as STACK_OFFSET_PX } from "@/lib/desktopWidgets";
 
-const WIDGET_W = 340;
-const WIDGET_H = WIDGET_W;
-/** Hintere Karten: Versatz nach oben/rechts (wie Referenz-UI). */
-const STACK_OFFSET_PX = 14;
-/** Stapel-Wechsel: kurzer Hub — vordere Karte weicht seitlich leicht aus. */
-const STACK_DEAL_EXIT_MS = 155;
-/** Gleichmäßige Weg-Geschwindigkeit (Bezier-Kurven wirken oft „langsam–schnell“). */
+const WIDGET_BASE = 340;
+/** Hintere Karten: Versatz; skaliert mit `desktopUiScale` aus Context. */
+const STACK_DEAL_EXIT_MS = 235;
 const STACK_DEAL_EASE_TRANSFORM = "linear";
-/** Medien-Inhalt: aus der Mitte „explodieren“ (scale), kein Opacity-Fade. */
-const STACK_DEAL_REAR_REVEAL_MS = 165;
-const STACK_DEAL_FRONT_REVEAL_MS = 195;
+const STACK_DEAL_REAR_REVEAL_MS = 225;
+const STACK_DEAL_FRONT_REVEAL_MS = 680;
 const STACK_DEAL_REVEAL_FROM_SCALE = 0.12;
-/** Leichter Überschwung am Ende (Out-Back-artig). */
 const STACK_DEAL_REVEAL_EASE = "cubic-bezier(0.175, 0.88, 0.32, 1.12)";
-const STACK_DEAL_FLY_X = 32;
-const STACK_DEAL_FLY_Y = -7;
+const STACK_DEAL_FLY_X_BASE = 32;
 
-function stackPadForWidgetIds(widgetIds, desktopWidgets) {
+function stackPadForWidgetIds(widgetIds, desktopWidgets, stackOffPx) {
   const w0 = desktopWidgets.find((x) => x.id === widgetIds[0]);
   if (!w0 || w0.kind !== "slideshow") return 0;
   const key = desktopPositionKey(w0);
   const n = desktopWidgets.filter(
     (x) => x.kind === "slideshow" && desktopPositionKey(x) === key
   ).length;
-  /* Visuell nur eine Kachel hinter dem vorderen Widget — ein Versatz. */
-  return n > 1 ? STACK_OFFSET_PX : 0;
+  return n > 1 ? stackOffPx : 0;
 }
 
-function widgetToPixelPosition(pos, containerWidth, containerHeight) {
+function widgetToPixelPosition(pos, containerWidth, containerHeight, tileW, tileH) {
   const w = containerWidth > 0 ? containerWidth : 1200;
   const h = containerHeight > 0 ? containerHeight : 800;
+  if (
+    typeof pos?.x === "number" &&
+    Number.isFinite(pos.x) &&
+    typeof pos?.y === "number" &&
+    Number.isFinite(pos.y)
+  ) {
+    return { x: pos.x, y: pos.y };
+  }
   if (
     typeof pos?.xp === "number" &&
     Number.isFinite(pos.xp) &&
@@ -49,8 +51,8 @@ function widgetToPixelPosition(pos, containerWidth, containerHeight) {
     Number.isFinite(pos.yp)
   ) {
     return {
-      x: Math.max(0, pos.xp * w - WIDGET_W / 2),
-      y: Math.max(0, pos.yp * h - WIDGET_H / 2),
+      x: Math.max(0, pos.xp * w - tileW / 2),
+      y: Math.max(0, pos.yp * h - tileH / 2),
     };
   }
   return { x: pos?.x ?? 80, y: pos?.y ?? 80 };
@@ -99,7 +101,7 @@ function groupDesktopWidgets(widgets) {
 function WidgetStackBackPlate() {
   return (
     <div
-      className="relative h-full w-full overflow-hidden rounded-lg border-[2.25px] border-black bg-white shadow-none"
+      className="relative h-full w-full overflow-hidden rounded-lg mm-os-paint-stroke bg-white shadow-none"
       aria-hidden
     />
   );
@@ -110,16 +112,24 @@ function WidgetStackBackPlate() {
  *   widgets: import('@/lib/desktopWidgets').DesktopSlideshowWidget[],
  *   layout: 'desktop' | 'mobile',
  *   pos?: { x: number, y: number },
- *   layerTopPx?: number,
+ *   tileW: number,
+ *   stackOff: number,
+ *   dealFlyX: number,
+ *   dealFlyY: number,
  *   onPointerDownStack?: (e: React.PointerEvent, ids: string[]) => void,
+ *   blockClickAfterDragRef?: React.MutableRefObject<boolean>,
  * }} props
  */
 function WidgetStack({
   widgets,
   layout,
   pos,
-  layerTopPx = 0,
+  tileW,
+  stackOff,
+  dealFlyX,
+  dealFlyY,
   onPointerDownStack,
+  blockClickAfterDragRef,
 }) {
   const { desktopWidgetStacksCollapsed } = useDesktop();
   const [frontIndex, setFrontIndex] = useState(0);
@@ -190,9 +200,9 @@ function WidgetStack({
   const ids = useMemo(() => widgets.map((w) => w.id), [widgets]);
 
   const isDesktop = layout === "desktop";
-  /** Nur eine Kachel hinter dem aktiven Widget (nächstes im Zyklus); gleicher Versatz wie früher bei 2 Ebenen. */
+  const tileH = tileW;
   const showBack = n > 1;
-  const stackPad = showBack ? STACK_OFFSET_PX : 0;
+  const stackPad = showBack ? stackOff : 0;
   const frontWidget = widgets[frontIndex];
   /** Nur während exit: die eintreffende Karte (Ruhe: hintere Kachel bleibt leer). */
   const rearIncomingWidget =
@@ -241,9 +251,9 @@ function WidgetStack({
   const outerStyle = isDesktop
     ? {
         left: pos?.x ?? 0,
-        top: (pos?.y ?? 0) + layerTopPx - stackPad,
-        width: WIDGET_W + stackPad,
-        height: WIDGET_H + stackPad,
+        top: (pos?.y ?? 0) - stackPad,
+        width: tileW + stackPad,
+        height: tileH + stackPad,
       }
     : showBack
       ? {
@@ -263,8 +273,8 @@ function WidgetStack({
   const innerStyle = isDesktop
     ? {
         position: "relative",
-        width: WIDGET_W + stackPad,
-        height: stackPad + WIDGET_H,
+        width: tileW + stackPad,
+        height: stackPad + tileH,
       }
     : { position: "relative", width: "100%", height: "100%" };
 
@@ -273,7 +283,7 @@ function WidgetStack({
       return { transform: "none", transition: "none" };
     }
     const flySign = dealDir === 1 ? 1 : -1;
-    const exitTransform = `translate(${STACK_OFFSET_PX + flySign * STACK_DEAL_FLY_X}px, ${-STACK_OFFSET_PX + STACK_DEAL_FLY_Y}px)`;
+    const exitTransform = `translate(${stackOff + flySign * dealFlyX}px, ${-stackOff + dealFlyY}px)`;
     if (stackDealPhase === "idle") {
       return { transform: "none", transition: "none" };
     }
@@ -282,10 +292,10 @@ function WidgetStack({
       transition: `transform ${STACK_DEAL_EXIT_MS}ms ${STACK_DEAL_EASE_TRANSFORM}`,
       willChange: "transform",
     };
-  }, [stackDealPhase, dealDir, reduceStackMotion]);
+  }, [stackDealPhase, dealDir, reduceStackMotion, stackOff, dealFlyX, dealFlyY]);
 
   const stackRearMotionStyle = useMemo(() => {
-    const tucked = `translate(${STACK_OFFSET_PX}px, ${-STACK_OFFSET_PX}px)`;
+    const tucked = `translate(${stackOff}px, ${-stackOff}px)`;
     if (reduceStackMotion) {
       return { transform: tucked, transition: "none" };
     }
@@ -297,7 +307,7 @@ function WidgetStack({
       transition: `transform ${STACK_DEAL_EXIT_MS}ms ${STACK_DEAL_EASE_TRANSFORM}`,
       willChange: "transform",
     };
-  }, [stackDealPhase, reduceStackMotion]);
+  }, [stackDealPhase, reduceStackMotion, stackOff]);
 
   const stackFrontPointerEvents =
     stackDealPhase !== "idle" ? "none" : "auto";
@@ -334,8 +344,8 @@ function WidgetStack({
                 ? {
                     top: stackPad,
                     zIndex: 99,
-                    width: WIDGET_W,
-                    height: WIDGET_H,
+                    width: tileW,
+                    height: tileH,
                   }
                 : {
                     zIndex: 99,
@@ -369,8 +379,8 @@ function WidgetStack({
               ? {
                   top: stackPad,
                   zIndex: 100,
-                  width: WIDGET_W,
-                  height: WIDGET_H,
+                  width: tileW,
+                  height: tileH,
                   pointerEvents: stackFrontPointerEvents,
                 }
               : {
@@ -391,6 +401,7 @@ function WidgetStack({
               layout={layout}
               stackNavigation={stackNavigation}
               stackMediaReveal={frontStackMediaReveal}
+              blockClickAfterDragRef={blockClickAfterDragRef}
               dragHandleProps={
                 isDesktop && onPointerDownStack
                   ? {
@@ -408,7 +419,23 @@ function WidgetStack({
 
 /** Mobile: Slideshow über dem Icon-Raster — in DesktopIcons als erste Zeile einbinden. */
 export function DesktopWidgetsMobile() {
-  const { desktopWidgets } = useDesktop();
+  const { desktopWidgets, desktopUiScale } = useDesktop();
+  const tileW = useMemo(
+    () => scaleLayoutPx(WIDGET_BASE, desktopUiScale),
+    [desktopUiScale]
+  );
+  const stackOffM = useMemo(
+    () => scaleLayoutPx(STACK_OFFSET_PX, desktopUiScale),
+    [desktopUiScale]
+  );
+  const dealFlyX = useMemo(
+    () => scaleLayoutPx(STACK_DEAL_FLY_X_BASE, desktopUiScale),
+    [desktopUiScale]
+  );
+  const dealFlyY = useMemo(
+    () => -Math.abs(scaleLayoutPx(7, desktopUiScale)),
+    [desktopUiScale]
+  );
   const groups = useMemo(
     () => groupDesktopWidgets(desktopWidgets),
     [desktopWidgets]
@@ -428,6 +455,10 @@ export function DesktopWidgetsMobile() {
             key={group.map((w) => w.id).join("|")}
             widgets={group}
             layout="mobile"
+            tileW={tileW}
+            stackOff={stackOffM}
+            dealFlyX={dealFlyX}
+            dealFlyY={dealFlyY}
           />
         )
       )}
@@ -440,7 +471,24 @@ export function DesktopWidgets() {
     desktopWidgets,
     setDesktopWidgetPositionsForIds,
     desktopWidgetStacksCollapsed,
+    desktopUiScale,
   } = useDesktop();
+  const widgetW = useMemo(
+    () => scaleLayoutPx(WIDGET_BASE, desktopUiScale),
+    [desktopUiScale]
+  );
+  const stackOffD = useMemo(
+    () => scaleLayoutPx(STACK_OFFSET_PX, desktopUiScale),
+    [desktopUiScale]
+  );
+  const dealFlyXd = useMemo(
+    () => scaleLayoutPx(STACK_DEAL_FLY_X_BASE, desktopUiScale),
+    [desktopUiScale]
+  );
+  const dealFlyYd = useMemo(
+    () => -Math.abs(scaleLayoutPx(7, desktopUiScale)),
+    [desktopUiScale]
+  );
   const [layerMetrics, setLayerMetrics] = useState({
     top: 0,
     w: 0,
@@ -448,6 +496,8 @@ export function DesktopWidgets() {
   });
   const desktopRef = useRef(null);
   const dragRef = useRef(null);
+  /** Nach Drag kein „Klick“ zum Öffnen — gleiches Muster wie {@link DesktopIcons} / `DesktopIconTile`. */
+  const blockClickRef = useRef(false);
 
   const groups = useMemo(
     () => groupDesktopWidgets(desktopWidgets),
@@ -472,18 +522,18 @@ export function DesktopWidgets() {
   }, []);
 
   const clamp = useCallback(
-    (x, y) => {
+    (x, y, stackPadX = 0) => {
       const { w, h, top: layerTop } = layerMetrics;
       if (w <= 0 || h <= 0) return { x, y };
-      const maxX = Math.max(0, w - WIDGET_W);
-      const maxY = Math.max(0, h - WIDGET_H);
+      const maxX = Math.max(0, w - widgetW - stackPadX);
+      const maxY = Math.max(0, h - widgetW);
       const minY = -layerTop;
       return {
         x: Math.max(0, Math.min(x, maxX)),
         y: Math.max(minY, Math.min(y, maxY)),
       };
     },
-    [layerMetrics]
+    [layerMetrics, widgetW]
   );
 
   useEffect(() => {
@@ -493,21 +543,22 @@ export function DesktopWidgets() {
       const el = desktopRef.current;
       if (!el) return;
       const rect = el.getBoundingClientRect();
-      const { top: layerTop } = layerMetrics;
       const nxCont = e.clientX - rect.left - d.offX;
       const nyCont = e.clientY - rect.top - d.offY;
       const nxLayer = nxCont;
-      const nyLayer = nyCont - layerTop;
+      const nyLayer = nyCont;
       if (
         Math.abs(e.clientX - d.startClientX) > 8 ||
         Math.abs(e.clientY - d.startClientY) > 8
       ) {
         d.didDrag = true;
       }
-      const c = clamp(nxLayer, nyLayer);
+      const c = clamp(nxLayer, nyLayer, d.stackPad);
       setDesktopWidgetPositionsForIds(d.widgetIds, c.x, c.y);
     };
     const onUp = () => {
+      const d = dragRef.current;
+      if (d?.didDrag) blockClickRef.current = true;
       dragRef.current = null;
     };
     window.addEventListener("pointermove", onMove);
@@ -523,6 +574,7 @@ export function DesktopWidgets() {
   const onPointerDown = useCallback(
     (e, widgetIds) => {
       if (e.button !== 0) return;
+      blockClickRef.current = false;
       const t = e.target;
       if (t instanceof Element && t.closest("[data-mm-widget-no-drag]")) {
         return;
@@ -533,12 +585,22 @@ export function DesktopWidgets() {
       if (!w) return;
       const raw = w.desktop;
       const rect = el.getBoundingClientRect();
-      const pos = widgetToPixelPosition(raw, layerMetrics.w, layerMetrics.h);
-      const { top: layerTop } = layerMetrics;
-      const stackPad = stackPadForWidgetIds(widgetIds, desktopWidgets);
-      const topPx = pos.y + layerTop - stackPad;
+      const pos = widgetToPixelPosition(
+        raw,
+        layerMetrics.w,
+        layerMetrics.h,
+        widgetW,
+        widgetW
+      );
+      const stackPad = stackPadForWidgetIds(
+        widgetIds,
+        desktopWidgets,
+        stackOffD
+      );
+      const topPx = pos.y - stackPad;
       dragRef.current = {
         widgetIds,
+        stackPad,
         offX: e.clientX - rect.left - pos.x,
         offY: e.clientY - rect.top - topPx,
         startClientX: e.clientX,
@@ -547,10 +609,8 @@ export function DesktopWidgets() {
       };
       e.preventDefault();
     },
-    [desktopWidgets, layerMetrics]
+    [desktopWidgets, layerMetrics, widgetW, stackOffD]
   );
-
-  const layerTopPx = layerMetrics.top;
 
   const stackCollapseCls = desktopWidgetStacksCollapsed
     ? "pointer-events-none scale-0 opacity-0"
@@ -559,18 +619,16 @@ export function DesktopWidgets() {
   return (
     <div
       ref={desktopRef}
-      className="pointer-events-none absolute left-0 right-0 z-[2] hidden md:block overflow-visible"
-      style={{
-        top: layerTopPx ? -layerTopPx : 0,
-        height: layerTopPx ? `calc(100% + ${layerTopPx}px)` : "100%",
-      }}
+      className="pointer-events-none absolute inset-0 z-[2] hidden md:block overflow-visible"
     >
       {groups.map((group) => {
         const raw = group[0].desktop;
         const pos = widgetToPixelPosition(
           raw,
           layerMetrics.w,
-          layerMetrics.h
+          layerMetrics.h,
+          widgetW,
+          widgetW
         );
         const key = group.map((w) => w.id).join("|");
 
@@ -582,14 +640,15 @@ export function DesktopWidgets() {
               className={`pointer-events-auto absolute origin-center transition-[transform,opacity] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${stackCollapseCls}`}
               style={{
                 left: pos.x,
-                top: pos.y + layerTopPx,
-                width: WIDGET_W,
-                height: WIDGET_H,
+                top: pos.y,
+                width: widgetW,
+                height: widgetW,
               }}
             >
               <SlideshowWidget
                 widget={w}
                 layout="desktop"
+                blockClickAfterDragRef={blockClickRef}
                 dragHandleProps={{
                   onPointerDown: (e) => onPointerDown(e, [w.id]),
                 }}
@@ -604,8 +663,12 @@ export function DesktopWidgets() {
             widgets={group}
             layout="desktop"
             pos={pos}
-            layerTopPx={layerTopPx}
+            tileW={widgetW}
+            stackOff={stackOffD}
+            dealFlyX={dealFlyXd}
+            dealFlyY={dealFlyYd}
             onPointerDownStack={onPointerDown}
+            blockClickAfterDragRef={blockClickRef}
           />
         );
       })}

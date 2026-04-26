@@ -5,6 +5,9 @@
 /* Plain CSS in @layer base — avoids @apply + custom props edge cases in some setups */
 @layer base {
   :root {
+    /* `syncDesktopLayerMetrics`: 14" typ. minDim ≤ REF → s=1; größere Fläche → s>1 (Linien + md+ Rem). */
+    --mm-ui-scale: 1;
+    --mm-paint-stroke: calc(2.5px * var(--mm-ui-scale, 1));
     --mm-desktop-bg: #d9d9d9;
     --mm-shell-text: #18181b;
     /* Mindesthöhe Kachel: Desktop-Icon (2,5rem) + knapper Abstand + 2 Zeilen Label */
@@ -16,11 +19,6 @@
     --mm-library-motion-easing: cubic-bezier(0.25, 0.46, 0.45, 0.94);
     /* Mobile Safari: Abstand zur Browser-UI (wird per visualViewport gesetzt) */
     --mm-vv-bottom-inset: 0px;
-  }
-
-  html.dark {
-    --mm-desktop-bg: #27272a;
-    --mm-shell-text: #e4e4e7;
   }
 
   html {
@@ -44,9 +42,28 @@
   }
 }
 
+/* Größerer Desktop: `s` wächst mit min(Layer), gleiche relative Größigkeit wie 14" bei s=1. */
+@media (min-width: 768px) {
+  html {
+    font-size: calc(1.125 * 1rem * var(--mm-ui-scale, 1));
+  }
+}
+
 @layer utilities {
   .text-balance {
     text-wrap: balance;
+  }
+  .mm-os-paint-stroke {
+    box-sizing: border-box;
+    border-style: solid;
+    border-color: #000;
+    border-width: var(--mm-paint-stroke, 2.5px);
+  }
+  .mm-os-paint-stroke-b {
+    border-bottom-width: var(--mm-paint-stroke, 2.5px);
+  }
+  .mm-os-paint-stroke-w {
+    border-width: var(--mm-paint-stroke, 2.5px);
   }
 }
 

@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef } from "react";
+import { useEffect, useLayoutEffect } from "react";
 import {
   DesktopProvider,
   isMobileViewport,
-  syncDesktopLayerMetrics,
   useDesktop,
 } from "@/context/DesktopContext";
 import { DesktopIcons } from "@/components/DesktopIcons";
@@ -59,7 +58,6 @@ function DesktopLayers() {
 }
 
 function DesktopShellInner() {
-  const layerRef = useRef(null);
   const { closeTopVisibleWindow } = useDesktop();
   useSyncVisualViewportInsets();
 
@@ -91,20 +89,6 @@ function DesktopShellInner() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [closeTopVisibleWindow]);
 
-  useLayoutEffect(() => {
-    const el = layerRef.current;
-    if (!el) return undefined;
-    const run = () => syncDesktopLayerMetrics(el);
-    run();
-    const ro = new ResizeObserver(run);
-    ro.observe(el);
-    window.addEventListener("resize", run);
-    return () => {
-      ro.disconnect();
-      window.removeEventListener("resize", run);
-    };
-  }, []);
-
   return (
     <div
       className="flex min-h-0 w-full min-h-[100dvh] min-h-[100svh] flex-1 flex-col overflow-x-hidden md:min-h-[max(100dvh,800px)]"
@@ -116,7 +100,6 @@ function DesktopShellInner() {
       <SiteHeader />
       {/* overflow-visible: Fenster dürfen mit negativem top in den Header bis zur Viewport-Kante */}
       <div
-        ref={layerRef}
         data-mm-desktop-layer
         className="relative z-10 min-h-0 flex-1 overflow-visible"
       >

@@ -118,7 +118,7 @@ function DesktopIconTile({
   };
 
   const gridLabel = (
-    <span className="w-full min-w-0 max-w-full break-normal text-center font-medium leading-tight text-zinc-800 [font-size:calc(0.165*var(--mm-mobile-grid-icon))] dark:text-zinc-100">
+    <span className="w-full min-w-0 max-w-full break-normal text-center font-medium leading-tight text-zinc-800 [font-size:calc(0.165*var(--mm-mobile-grid-icon))]">
       {desktopLabelBreakable(item.label)}
     </span>
   );
@@ -137,7 +137,7 @@ function DesktopIconTile({
     return (
       <button
         type="button"
-        className="pointer-events-auto flex min-h-0 w-full max-w-[6rem] flex-col items-center justify-start rounded-xl px-0.5 py-1.5 text-center outline-none transition-colors active:bg-black/10 [gap:calc(0.09*var(--mm-mobile-grid-icon))] min-[400px]:px-1 min-[400px]:py-2 dark:active:bg-white/15"
+        className="pointer-events-auto flex min-h-0 w-full max-w-[6rem] flex-col items-center justify-start rounded-xl px-0.5 py-1.5 text-center outline-none transition-colors active:bg-black/10 [gap:calc(0.09*var(--mm-mobile-grid-icon))] min-[400px]:px-1 min-[400px]:py-2"
         style={{ "--mm-mobile-grid-icon": MOBILE_GRID_ICON_REM }}
         onClick={onClick}
       >
@@ -155,9 +155,9 @@ function DesktopIconTile({
       onPointerDown={onPointerDown}
       onClick={onClick}
     >
-      <span className="inline-flex max-w-full flex-col items-center gap-1.5 rounded px-1.5 py-1.5 transition-colors duration-200 ease-out group-hover:bg-black/5 group-active:bg-black/10 dark:group-hover:bg-white/10 dark:group-active:bg-white/15">
+      <span className="inline-flex max-w-full flex-col items-center gap-1.5 rounded px-1.5 py-1.5 transition-colors duration-200 ease-out group-hover:bg-black/5 group-active:bg-black/10">
         {iconWrap}
-        <span className="w-full min-w-0 max-w-full shrink-0 break-normal text-center text-[0.6875rem] font-semibold leading-tight text-zinc-800 dark:text-zinc-100">
+        <span className="w-full min-w-0 max-w-full shrink-0 break-normal text-center text-[0.6875rem] font-semibold leading-tight text-zinc-800">
           {desktopLabelBreakable(item.label)}
         </span>
       </span>
