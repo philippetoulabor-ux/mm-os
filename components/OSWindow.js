@@ -8,6 +8,7 @@ import {
   useDesktop,
 } from "@/context/DesktopContext";
 import { AppContent } from "@/components/AppContent";
+import { WidgetChromeArrowButton } from "@/components/SlideshowWidget";
 import { APPS } from "@/lib/apps";
 import { clampAspectWindowBounds } from "@/lib/osWindowBounds";
 
@@ -537,7 +538,9 @@ export function OSWindow({ win }) {
     <div
       ref={win.appId === "finder" && isMobile ? finderShellRef : undefined}
       className={`absolute flex flex-col overflow-hidden mm-os-paint-stroke bg-white shadow-none ${
-        win.maximized ? "rounded-none" : "rounded-lg"
+        win.maximized && !(isMobile && win.mobileImmersive)
+          ? "rounded-none"
+          : "rounded-lg"
       }`}
       style={style}
       onClickCapture={onShellClickCapture}
@@ -761,39 +764,47 @@ export function OSWindow({ win }) {
                 ? finderMobileScrollRef
                 : undefined
             }
-            className={`flex min-h-0 flex-1 flex-col pb-[max(0.5rem,calc(env(safe-area-inset-bottom,0px)+var(--mm-vv-bottom-inset,0px)))] ${
+            className={`flex min-h-0 flex-1 flex-col ${
+              win.appId !== "finder"
+                ? "pb-0"
+                : "pb-[max(0.5rem,calc(env(safe-area-inset-bottom,0px)+var(--mm-vv-bottom-inset,0px)))]"
+            } ${
               win.appId === "finder" && !win.finderMobileExpanded
                 ? "overflow-hidden"
                 : "overflow-y-auto overflow-x-hidden overscroll-y-contain [-webkit-overflow-scrolling:touch]"
             }`}
           >
-            <div className="flex min-h-full flex-col">
+            <div className="flex min-h-full w-full flex-1 flex-col">
+              <div
+                className={`flex min-h-0 flex-1 flex-col ${
+                  win.appId === "media"
+                    ? "bg-[#050508]"
+                    : win.appId === "finder" && !win.finderMobileExpanded
+                      ? "pt-[max(0.75rem,env(safe-area-inset-top,0px))]"
+                      : win.appId === "finder"
+                        ? ""
+                        : "pt-[max(0.5rem,env(safe-area-inset-top,0px))]"
+                }`}
+              >
+                <AppContent
+                  unifiedParentScroll
+                  finderMobileAllowsScroll={
+                    win.appId !== "finder" || !!win.finderMobileExpanded
+                  }
+                  appId={win.appId}
+                  assetFile={win.assetFile}
+                  windowId={win.id}
+                />
+              </div>
               {win.appId !== "finder" ? (
                 <div
-                  className={`flex min-h-[4.5rem] w-full shrink-0 items-center gap-2 px-4 pt-[max(1.125rem,env(safe-area-inset-top,0px))] pb-3 ${
-                    win.appId === "media" ? "bg-[#050508]" : ""
+                  className={`flex w-full min-w-0 items-center gap-2 z-20 shrink-0 border-t-2 border-black px-2 pb-[max(0.5rem,calc(env(safe-area-inset-bottom,0px)+var(--mm-vv-bottom-inset,0px)))] pt-2 ${
+                    win.appId === "media"
+                      ? "bg-[#050508]"
+                      : "bg-white"
                   }`}
                 >
-                  <div className="flex shrink-0 items-center">
-                    <button
-                      type="button"
-                      aria-label="Zurück zum Finder-Projekt"
-                      title="Zurück zum Finder-Projekt"
-                      className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center self-center rounded-full bg-transparent transition duration-200 ease-out md:hover:opacity-90 active:scale-95 active:opacity-100"
-                      onMouseDown={(e) => e.stopPropagation()}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        closeWindow(win.id);
-                        focusFinderWindow();
-                      }}
-                    >
-                      <span
-                        className="block h-4 w-4 shrink-0 rounded-full transition-colors duration-200 ease-out bg-[rgb(255,0,0)]"
-                        aria-hidden
-                      />
-                    </button>
-                  </div>
-                  <div className="min-w-0 flex-1 px-1 text-center">
+                  <div className="min-w-0 flex-1 px-1 text-left">
                     <p
                       className={`truncate text-sm leading-tight ${
                         win.appId === "media"
@@ -805,7 +816,7 @@ export function OSWindow({ win }) {
                     </p>
                     {mobileAssetFolderChromeDir ? (
                       <p
-                        className={`mt-0.5 truncate text-center text-xs ${
+                        className={`mt-0.5 truncate text-xs ${
                           win.appId === "media"
                             ? "text-zinc-400"
                             : "text-zinc-500"
@@ -823,32 +834,27 @@ export function OSWindow({ win }) {
                       </p>
                     ) : null}
                   </div>
-                  <div className="h-11 w-11 shrink-0" aria-hidden />
+                  <div
+                    className="flex h-11 w-11 shrink-0 items-center justify-center self-center"
+                    onMouseDown={(e) => e.stopPropagation()}
+                  >
+                    <WidgetChromeArrowButton
+                      dir="left"
+                      label="Zurück zum Finder-Projekt"
+                      opaqueAlways
+                      onClick={() => {
+                        /** Nach dem Event — Fenster unmountet; vermeidet Click-/Portal-Warnungen wie im Finder. */
+                        queueMicrotask(() => {
+                          closeWindow(win.id);
+                          focusFinderWindow();
+                        });
+                      }}
+                    />
+                  </div>
                 </div>
               ) : (
                 <span className="sr-only">{win.title}</span>
               )}
-              <div
-                className={`flex min-h-0 flex-1 flex-col ${
-                  win.appId === "media"
-                    ? "bg-[#050508]"
-                    : win.appId === "finder" && !win.finderMobileExpanded
-                      ? "pt-[max(0.75rem,env(safe-area-inset-top,0px))]"
-                    : win.appId === "finder"
-                      ? ""
-                      : "border-t border-zinc-100/80"
-                }`}
-              >
-                <AppContent
-                  unifiedParentScroll
-                  finderMobileAllowsScroll={
-                    win.appId !== "finder" || !!win.finderMobileExpanded
-                  }
-                  appId={win.appId}
-                  assetFile={win.assetFile}
-                  windowId={win.id}
-                />
-              </div>
             </div>
           </div>
         ) : (

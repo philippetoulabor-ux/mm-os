@@ -271,10 +271,10 @@ function getMobileFinderHomeCardBounds() {
 }
 
 /**
- * Mobile: Finder bis an den sichtbaren Layer-Rand — gleiches Außenmaß wie
- * {@link WINDOW_DESKTOP_INSET} auf allen Seiten (wie Kartenmodus links/rechts).
+ * Mobile: Vollbild-Karte (Finder expanded, Media, Datei, Ordner-Apps) —
+ * gleicher Außenrand {@link WINDOW_DESKTOP_INSET} auf allen Seiten wie Finder-Kartenmodus.
  */
-function getMobileFinderExpandedBounds() {
+export function getMobileImmersiveCardBounds() {
   const fs = getDesktopLayerFullscreenRect();
   const { inset, minWinW, minWinH } = getDesktopWindowLayoutLimits();
   const p = inset;
@@ -284,6 +284,10 @@ function getMobileFinderExpandedBounds() {
     w: Math.max(minWinW, fs.w - 2 * p),
     h: Math.max(minWinH, fs.h - 2 * p),
   };
+}
+
+function getMobileFinderExpandedBounds() {
+  return getMobileImmersiveCardBounds();
 }
 
 /** Gleichmäßiger Rand zum Layer-Rand für Finder-Widget-Asset-Vollbild (animiert wie Fenster-Bounds). */
@@ -667,7 +671,7 @@ function clampWindowsToViewport(windows) {
           finderMobileExpanded: expanded,
         };
       }
-      const fs = getDesktopLayerFullscreenRect();
+      const cardBounds = getMobileImmersiveCardBounds();
       if (win.appId === "media" && win.mediaVideoCollapsed) {
         const def = APPS.media;
         const pos = centerWindow(def.defaultSize);
@@ -684,7 +688,7 @@ function clampWindowsToViewport(windows) {
         return {
           ...win,
           mediaVideoCollapsed: false,
-          ...fs,
+          ...cardBounds,
           maximized: true,
           prevBounds: pb,
           mobileImmersive: true,
@@ -696,7 +700,7 @@ function clampWindowsToViewport(windows) {
           : { x: win.x, y: win.y, w: win.w, h: win.h };
       return {
         ...win,
-        ...fs,
+        ...cardBounds,
         maximized: true,
         prevBounds: pb,
         mobileImmersive: true,
@@ -1178,14 +1182,14 @@ export function DesktopProvider({ children }) {
             w: def.defaultSize.w,
             h: def.defaultSize.h,
           };
-          const fs = getDesktopLayerFullscreenRect();
+          const cardBounds = getMobileImmersiveCardBounds();
           return [
             ...prev,
             {
               id,
               appId,
               title: def.title,
-              ...fs,
+              ...cardBounds,
               z: zCounter.current,
               minimized: false,
               maximized: true,
@@ -1224,14 +1228,14 @@ export function DesktopProvider({ children }) {
           w: def.defaultSize.w,
           h: def.defaultSize.h,
         };
-        const fs = getDesktopLayerFullscreenRect();
+        const cardBounds = getMobileImmersiveCardBounds();
         return [
           ...prev,
           {
             id,
             appId,
             title: def.title,
-            ...fs,
+            ...cardBounds,
             z: zCounter.current,
             minimized: false,
             maximized: true,
@@ -1337,14 +1341,14 @@ export function DesktopProvider({ children }) {
             w: def.defaultSize.w,
             h: def.defaultSize.h,
           };
-          const fs = getDesktopLayerFullscreenRect();
+          const cardBounds = getMobileImmersiveCardBounds();
           return [
             ...prev,
             {
               id,
               appId: def.id,
               title: file,
-              ...fs,
+              ...cardBounds,
               z: zCounter.current,
               minimized: false,
               maximized: true,
@@ -1484,14 +1488,14 @@ export function DesktopProvider({ children }) {
             w: def.defaultSize.w,
             h: def.defaultSize.h,
           };
-          const fs = getDesktopLayerFullscreenRect();
+          const cardBounds = getMobileImmersiveCardBounds();
           return [
             ...prev,
             {
               id,
               appId: def.id,
               title: file,
-              ...fs,
+              ...cardBounds,
               z: zCounter.current,
               minimized: false,
               maximized: true,
@@ -1730,7 +1734,9 @@ export function DesktopProvider({ children }) {
         }
         const pb = { x: w.x, y: w.y, w: w.w, h: w.h };
         if (typeof window === "undefined") return w;
-        const fs = getDesktopLayerFullscreenRect();
+        const fs = isMobileViewport()
+          ? getMobileImmersiveCardBounds()
+          : getDesktopLayerFullscreenRect();
         return {
           ...w,
           maximized: true,
@@ -1883,13 +1889,13 @@ export function DesktopProvider({ children }) {
     const lockAspectForResize = options?.lockAspectForResize !== false;
 
     if (isMobileViewport()) {
-      const fs = getDesktopLayerFullscreenRect();
+      const cardBounds = getMobileImmersiveCardBounds();
       setWindows((prev) =>
         prev.map((win) => {
           if (win.id !== id) return win;
           return {
             ...win,
-            ...fs,
+            ...cardBounds,
             maximized: true,
             mobileImmersive: true,
             prevBounds: win.prevBounds ?? {
