@@ -11,7 +11,11 @@ import { AppIcon } from "@/components/AppIcon";
 import { DesktopWidgetsMobile } from "@/components/DesktopWidgets";
 import { APPS, DESKTOP_ICONS } from "@/lib/apps";
 import { getWebAssetFolderPreviewHref } from "@/lib/webAssetFolderPreview";
-import { isMobileViewport, useDesktop } from "@/context/DesktopContext";
+import {
+  getMobileHomeLayoutSnapshot,
+  isMobileViewport,
+  useDesktop,
+} from "@/context/DesktopContext";
 
 /** Bounds fürs Drag-Clamping — an max. Kachelbreite/-höhe mit mehrzeiligem Label angepasst */
 const ICON_W = 200;
@@ -167,12 +171,8 @@ function DesktopIconTile({
   );
 }
 
-/** Erwartete Höhe des Slideshow-/Widget-Stacks (Kachel + Stapel-Versatz); Abgleich mit Mobile-Widgets. */
+/** Erwartete Höhe des Slideshow-/Widget-Stacks (Kachel + Stapel-Versatz); Startwert bis Snapshot. */
 const MOBILE_WIDGET_STACK_SLOT_MIN_PX = 228;
-/** Abstand Slideshow-Band → Finder-Oberkante (Layer-px); großzügig, damit es nicht „klebt“. */
-const MOBILE_WIDGET_BAND_PAD_FINDER_PX = 48;
-/** Kleiner Abstand unter dem Logo zum Widget-Band. */
-const MOBILE_WIDGET_BAND_PAD_LOGO_PX = 6;
 
 export function DesktopIcons() {
   const {
@@ -197,58 +197,27 @@ export function DesktopIcons() {
   const dragRef = useRef(null);
   const blockClickRef = useRef(false);
 
-  const finderWin = windows.find(
-    (w) => w.appId === "finder" && !w.minimized
-  );
-
   useLayoutEffect(() => {
-    const syncMobileWidgetBand = () => {
+    const run = () => {
       if (!isMobileViewport()) return;
-      const layer = document.querySelector("[data-mm-desktop-layer]");
-      const logo = document.querySelector("#logo-container");
-      if (!layer || !logo) return;
-      const lr = layer.getBoundingClientRect();
-      const gr = logo.getBoundingClientRect();
-      const stackSlotH = MOBILE_WIDGET_STACK_SLOT_MIN_PX;
-      const fY =
-        finderWin && typeof finderWin.y === "number" && Number.isFinite(finderWin.y)
-          ? finderWin.y
-          : Math.max(
-              stackSlotH + MOBILE_WIDGET_BAND_PAD_FINDER_PX,
-              Math.round(lr.height * 0.42)
-            );
-      /** Logo sitzt im Site-Header oberhalb des Layers; gleiche Viewport-Messung in allen Browsern. */
-      const logoBottomLayer = gr.bottom - lr.top;
-      const yLo = Math.max(0, logoBottomLayer + MOBILE_WIDGET_BAND_PAD_LOGO_PX);
-      const yHi = fY - MOBILE_WIDGET_BAND_PAD_FINDER_PX;
-      const inner = yHi - yLo;
-      let bandTop;
-      let height;
-      if (inner > 0) {
-        /** Slot-Höhe begrenzen, freien Raum Logo↔Finder gleichmäßig verteilen (Safari-Verhalten in allen Browsern). */
-        height = Math.max(48, Math.min(stackSlotH, inner));
-        const slack = inner - height;
-        bandTop = yLo + Math.max(0, slack / 2);
-      } else {
-        bandTop = Math.max(0, fY - stackSlotH);
-        height = Math.max(48, fY - bandTop);
-      }
+      const snap = getMobileHomeLayoutSnapshot();
+      if (!snap) return;
       setMobileWidgetBand((prev) =>
-        prev.top === bandTop && prev.height === height
+        prev.top === snap.bandTop && prev.height === snap.bandHeight
           ? prev
-          : { top: bandTop, height }
+          : { top: snap.bandTop, height: snap.bandHeight }
       );
     };
-    syncMobileWidgetBand();
-    window.addEventListener("resize", syncMobileWidgetBand);
-    window.visualViewport?.addEventListener("resize", syncMobileWidgetBand);
-    window.visualViewport?.addEventListener("scroll", syncMobileWidgetBand);
+    run();
+    window.addEventListener("resize", run);
+    window.visualViewport?.addEventListener("resize", run);
+    window.visualViewport?.addEventListener("scroll", run);
     return () => {
-      window.removeEventListener("resize", syncMobileWidgetBand);
-      window.visualViewport?.removeEventListener("resize", syncMobileWidgetBand);
-      window.visualViewport?.removeEventListener("scroll", syncMobileWidgetBand);
+      window.removeEventListener("resize", run);
+      window.visualViewport?.removeEventListener("resize", run);
+      window.visualViewport?.removeEventListener("scroll", run);
     };
-  }, [finderWin?.y, finderWin?.id, layerMetrics.w, layerMetrics.h, layerMetrics.top]);
+  }, [layerMetrics.w, layerMetrics.h, layerMetrics.top, windows]);
 
   useLayoutEffect(() => {
     const layer = document.querySelector("[data-mm-desktop-layer]");

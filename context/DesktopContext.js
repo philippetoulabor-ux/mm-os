@@ -67,6 +67,9 @@ const MOBILE_LAYOUT_MAX_WIDTH_PX = 767;
  */
 /** Passend zu `MOBILE_WIDGET_STACK_SLOT_MIN_PX` in `DesktopIcons.js` (Slideshow + Rand). */
 const MOBILE_HOME_SLIDESHOW_BAND_EST_PX = 228;
+/** Abgleich `DesktopIcons.js` — ein gemeinsamer Snapshot vermeidet Safari/Chrome-Unterschiede. */
+const MOBILE_BAND_PAD_LOGO_PX = 6;
+const MOBILE_BAND_PAD_FINDER_PX = 48;
 
 export function isMobileViewport() {
   if (typeof window === "undefined") return false;
@@ -188,6 +191,55 @@ export function getDesktopLayerFullscreenRect() {
 }
 
 /**
+ * Mobile Home: eine geometrische Quelle für Band + Finder (Logo- und Layer-Messung, kein zweiter
+ * DOM-Pfad über den Stack) — gleiche Abstände Safari/Chrome/Brave.
+ * @returns {null | { bandTop: number, bandHeight: number, stackBottomInLayer: number, finderBounds: { x: number, y: number, w: number, h: number } }}
+ */
+export function getMobileHomeLayoutSnapshot() {
+  if (typeof window === "undefined" || !isMobileViewport()) return null;
+  const layer = document.querySelector("[data-mm-desktop-layer]");
+  const logo = document.querySelector("#logo-container");
+  if (!layer || !logo) return null;
+
+  const { w: desktopW } = getDesktopContentRect();
+  const { inset, maxBottomLayer } = getDesktopWindowLayoutLimits();
+  const innerW = Math.max(MIN_WIN_W, desktopW - 2 * inset);
+
+  const lr = layer.getBoundingClientRect();
+  const gr = logo.getBoundingClientRect();
+  const logoBottomLayer = Math.max(0, Math.round(gr.bottom - lr.top));
+  const T0 = logoBottomLayer + MOBILE_BAND_PAD_LOGO_PX;
+  const maxFinderTop = maxBottomLayer - MIN_WIN_H;
+  /** Vertikaler Raum für Band zwischen Logo und Finder-Oberkante (mit Finder-Pad). */
+  const U = Math.max(0, maxFinderTop - MOBILE_BAND_PAD_FINDER_PX - T0);
+
+  let bandH = Math.min(
+    MOBILE_HOME_SLIDESHOW_BAND_EST_PX,
+    Math.max(48, U)
+  );
+  if (bandH > U) bandH = Math.max(0, U);
+  const bandTop = T0 + (U - bandH) / 2;
+  const stackBottomInLayer = bandTop + bandH;
+
+  let finderTop = stackBottomInLayer + MOBILE_BAND_PAD_FINDER_PX;
+  finderTop = Math.min(finderTop, maxFinderTop);
+  finderTop = Math.max(inset, finderTop);
+  const h = Math.max(MIN_WIN_H, maxBottomLayer - finderTop);
+
+  return {
+    bandTop,
+    bandHeight: bandH,
+    stackBottomInLayer,
+    finderBounds: {
+      x: inset,
+      y: finderTop,
+      w: innerW,
+      h,
+    },
+  };
+}
+
+/**
  * Mobile-Home: Finder als Karte unter dem Slideshow-/Widget-Stapel,
  * volle Breite zwischen den Rändern (`inset` links wie rechts),
  * unten derselbe Mindestabstand `inset` — kein Vollbild (nur Viewports ≤767px).
@@ -201,29 +253,21 @@ function getMobileFinderHomeCardBounds() {
       h: 420,
     };
   }
+  const snap = getMobileHomeLayoutSnapshot();
+  if (snap) return snap.finderBounds;
+
   const { w: desktopW } = getDesktopContentRect();
   const { inset, maxBottomLayer } = getDesktopWindowLayoutLimits();
   const innerW = Math.max(MIN_WIN_W, desktopW - 2 * inset);
-  /** Sichtbarer Abstand Slideshow/Stapel → Finder (abgestimmt mit `MOBILE_WIDGET_BAND_PAD_FINDER_PX` in DesktopIcons). */
-  const gapBelowWidget = 48;
-  /** Gemessene Stack-Unterkante in Layer-px; sonst Legacy-Schätzung (Bandhöhe als Offset von oben). */
-  const measuredBottom = getMobileWidgetStackBottomInLayerPx();
-  const topFromMeasured =
-    measuredBottom != null
-      ? measuredBottom + gapBelowWidget
-      : MOBILE_HOME_SLIDESHOW_BAND_EST_PX + gapBelowWidget;
-  let top = Math.max(inset, topFromMeasured);
-  /** Finder muss in den Layer passen (min. Höhe). */
-  top = Math.min(top, maxBottomLayer - MIN_WIN_H);
-  top = Math.max(inset, top);
-  /** `maxBottomLayer` = `desktopH - inset` — Kartenunterkante bündig, wie bei x/w für links/rechts. */
+  const top = Math.max(
+    inset,
+    Math.min(
+      maxBottomLayer - MIN_WIN_H,
+      MOBILE_HOME_SLIDESHOW_BAND_EST_PX + MOBILE_BAND_PAD_FINDER_PX
+    )
+  );
   const h = Math.max(MIN_WIN_H, maxBottomLayer - top);
-  return {
-    x: inset,
-    y: top,
-    w: innerW,
-    h,
-  };
+  return { x: inset, y: top, w: innerW, h };
 }
 
 /** Gleichmäßiger Rand zum Layer-Rand für Finder-Widget-Asset-Vollbild (animiert wie Fenster-Bounds). */
@@ -297,8 +341,7 @@ function getDesktopFinderWidgetChromeSplitBounds(finderSize, assetSize) {
 const desktopLayerMetrics = { w: 0, h: 0, top: SITE_HEADER_H };
 
 /**
- * Mobile Home: Unterkante `[data-mm-mobile-widget-stack]` in Layer-Koordinaten (px von Layer-Oberkante).
- * Wird von {@link syncMobileHomeLayoutMetrics} gesetzt; `getMobileFinderHomeCardBounds` nutzt das statt fester Schätzwerte.
+ * Mobile Home: Band-Unterkante in Layer-Px (aus {@link getMobileHomeLayoutSnapshot}).
  */
 const mobileHomeLayoutMetrics = {
   /** @type {number | null} */
@@ -312,28 +355,17 @@ export function getMobileWidgetStackBottomInLayerPx() {
   return v != null && Number.isFinite(v) && v > WINDOW_DESKTOP_INSET ? v : null;
 }
 
-/** Misst den Mobile-Slideshow-/Widget-Stack relativ zum Desktop-Layer (nur Viewport ≤767px). */
+/** Siehe {@link getMobileHomeLayoutSnapshot}. */
 export function syncMobileHomeLayoutMetrics() {
   if (typeof window === "undefined" || !isMobileViewport()) {
     mobileHomeLayoutMetrics.stackBottomInLayer = null;
     return;
   }
-  const layer = document.querySelector("[data-mm-desktop-layer]");
-  const stack = document.querySelector("[data-mm-mobile-widget-stack]");
-  if (!layer || !stack) {
-    mobileHomeLayoutMetrics.stackBottomInLayer = null;
-    return;
-  }
-  /** Sichtbare Kachel (WidgetStack) statt äußerem Band-Wrapper — Chrome misst sonst oft zu knapp zum Finder. */
-  const face = stack.querySelector("[data-mm-mobile-widget-stack-face]");
-  const faceR = face?.getBoundingClientRect();
-  const measureEl =
-    faceR && faceR.height >= 48 ? /** @type {Element} */ (face) : stack;
-  const lr = layer.getBoundingClientRect();
-  const sr = measureEl.getBoundingClientRect();
-  const bottom = Math.round(sr.bottom - lr.top);
+  const snap = getMobileHomeLayoutSnapshot();
   mobileHomeLayoutMetrics.stackBottomInLayer =
-    bottom > WINDOW_DESKTOP_INSET ? bottom : null;
+    snap && snap.stackBottomInLayer > WINDOW_DESKTOP_INSET
+      ? snap.stackBottomInLayer
+      : null;
 }
 
 /** @param {HTMLElement | null} el Desktop-Layer unter dem Site-Header */
@@ -787,18 +819,11 @@ export function DesktopProvider({ children }) {
     run();
     const ro = new ResizeObserver(run);
     ro.observe(el);
-    const stackEl = document.querySelector("[data-mm-mobile-widget-stack]");
-    const roStack =
-      stackEl && isMobileViewport()
-        ? new ResizeObserver(run)
-        : null;
-    if (stackEl && roStack) roStack.observe(stackEl);
     window.addEventListener("resize", run);
     window.visualViewport?.addEventListener("resize", run);
     window.visualViewport?.addEventListener("scroll", run);
     return () => {
       ro.disconnect();
-      roStack?.disconnect();
       window.removeEventListener("resize", run);
       window.visualViewport?.removeEventListener("resize", run);
       window.visualViewport?.removeEventListener("scroll", run);
