@@ -1712,18 +1712,7 @@ function FinderView({
     return FINDER_BROWSE_HOME_ROWS;
   }, [q, showSearch, unifiedParentScroll]);
 
-  /** Mobile Classic-Home, Finder zugeklappt: nur eine Zeile mit drei Kacheln (kein Abzeichnen weiterer Projekte). */
-  const mobileCollapsedHomeThreeTilesOnly =
-    unifiedParentScroll &&
-    !finderMobileAllowsScroll &&
-    finderProjectAppId === null &&
-    finderTabAppIds.length === 0 &&
-    !showSearch &&
-    !finderClassicSearchExpanded;
-
-  const displayRows = mobileCollapsedHomeThreeTilesOnly
-    ? rows.slice(0, 3)
-    : rows;
+  const displayRows = rows;
   rowsRef.current = displayRows;
 
   const browseGridMode =

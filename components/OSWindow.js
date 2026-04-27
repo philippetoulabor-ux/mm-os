@@ -784,9 +784,7 @@ export function OSWindow({ win }) {
               >
                 <AppContent
                   unifiedParentScroll
-                  finderMobileAllowsScroll={
-                    win.appId !== "finder" || !!win.finderMobileExpanded
-                  }
+                  finderMobileAllowsScroll
                   appId={win.appId}
                   assetFile={win.assetFile}
                   windowId={win.id}
