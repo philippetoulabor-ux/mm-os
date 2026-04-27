@@ -323,10 +323,10 @@ export function DesktopIcons() {
 
   return (
     <>
-      {/* Mobile: Slideshow vertikal zwischen Logo (unten) und Finder (oben) zentriert; z-30 */}
+      {/* Mobile: Slideshow-Oberkante auf Logo-Mitte — Band + Snapshot; z-30 */}
       <div
         data-mm-mobile-widget-stack
-        className="pointer-events-none absolute left-0 right-0 z-[30] flex flex-col justify-center md:hidden"
+        className="pointer-events-none absolute left-0 right-0 z-[30] flex flex-col justify-start md:hidden"
         style={{
           top: mobileWidgetBand.top,
           height: mobileWidgetBand.height,

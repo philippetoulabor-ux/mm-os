@@ -67,9 +67,9 @@ const MOBILE_LAYOUT_MAX_WIDTH_PX = 767;
  */
 /** Passend zu `MOBILE_WIDGET_STACK_SLOT_MIN_PX` in `DesktopIcons.js` (Slideshow + Rand). */
 const MOBILE_HOME_SLIDESHOW_BAND_EST_PX = 228;
-/** Abgleich `DesktopIcons.js` — ein gemeinsamer Snapshot vermeidet Safari/Chrome-Unterschiede. */
-const MOBILE_BAND_PAD_LOGO_PX = 6;
 const MOBILE_BAND_PAD_FINDER_PX = 48;
+/** `DesktopWidgetsMobile`-Wrapper `pt-0.5` — Oberkante Slideshow zeigt auf Logo-Mitte. */
+const MOBILE_WIDGET_ROW_PAD_TOP_PX = 2;
 
 export function isMobileViewport() {
   if (typeof window === "undefined") return false;
@@ -218,18 +218,19 @@ export function getMobileHomeLayoutSnapshot() {
 
   const lr = layer.getBoundingClientRect();
   const gr = logo.getBoundingClientRect();
-  const logoBottomLayer = Math.max(0, Math.round(gr.bottom - lr.top));
-  const T0 = logoBottomLayer + MOBILE_BAND_PAD_LOGO_PX;
+  /** Layer-Y der Logo-Mitte — Slideshow-Oberkante (nach Row-Pad) soll hier liegen. */
+  const logoCenterLayer = Math.round((gr.top + gr.bottom) / 2 - lr.top);
   const maxFinderTop = maxBottomLayer - MIN_WIN_H;
-  /** Vertikaler Raum für Band zwischen Logo und Finder-Oberkante (mit Finder-Pad). */
-  const U = Math.max(0, maxFinderTop - MOBILE_BAND_PAD_FINDER_PX - T0);
+  const maxStackBottom = maxFinderTop - MOBILE_BAND_PAD_FINDER_PX;
 
-  let bandH = Math.min(
-    MOBILE_HOME_SLIDESHOW_BAND_EST_PX,
-    Math.max(48, U)
-  );
-  if (bandH > U) bandH = Math.max(0, U);
-  const bandTop = T0 + (U - bandH) / 2;
+  const minBand = MOBILE_HOME_SLIDESHOW_BAND_EST_PX;
+  /** Nicht tiefer starten als nötig: sonst ragt {@link stackBottomInLayer} über den Finder hinaus. */
+  const bandTopMax = maxStackBottom - minBand;
+  let bandTop = logoCenterLayer - MOBILE_WIDGET_ROW_PAD_TOP_PX;
+  bandTop = Math.min(bandTop, bandTopMax);
+
+  const rawBandH = Math.max(0, maxStackBottom - bandTop);
+  const bandH = Math.min(MOBILE_HOME_SLIDESHOW_BAND_EST_PX, rawBandH);
   const stackBottomInLayer = bandTop + bandH;
 
   let finderTop = stackBottomInLayer + MOBILE_BAND_PAD_FINDER_PX;
