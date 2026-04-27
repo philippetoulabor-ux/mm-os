@@ -168,6 +168,10 @@ export function OSWindow({ win }) {
   /** Mobile: Titelleiste + gescrollter Inhalt — unabhängig vom Media-„Mini“-Modus (Desktop). */
   const useMobileUnifiedChrome = isMobile && win.appId !== "notes";
 
+  /** Mobile Finder: innere Liste erst bei Vollbild (`finderMobileExpanded`) scrollen — kein boolesches JSX-Shorthand. */
+  const finderMobileAllowsScroll =
+    win.appId !== "finder" || !!win.finderMobileExpanded;
+
   const appMeta = APPS[win.appId];
   const mobileAssetFolderChromeDir =
     useMobileUnifiedChrome && appMeta?.assetDir ? appMeta.assetDir : null;
@@ -784,7 +788,7 @@ export function OSWindow({ win }) {
               >
                 <AppContent
                   unifiedParentScroll
-                  finderMobileAllowsScroll
+                  finderMobileAllowsScroll={finderMobileAllowsScroll}
                   appId={win.appId}
                   assetFile={win.assetFile}
                   windowId={win.id}
