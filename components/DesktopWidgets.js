@@ -103,7 +103,7 @@ function groupDesktopWidgets(widgets) {
 function WidgetStackBackPlate() {
   return (
     <div
-      className="relative h-full w-full overflow-hidden rounded-lg mm-os-paint-stroke bg-white shadow-none"
+      className="relative h-full w-full overflow-hidden rounded-lg mm-os-paint-stroke bg-white shadow-[0_12px_36px_rgba(0,0,0,0.14)]"
       aria-hidden
     />
   );

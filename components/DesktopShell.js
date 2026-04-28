@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   DesktopProvider,
   isMobileViewport,
@@ -66,6 +66,75 @@ function DesktopLayers() {
 function DesktopShellInner() {
   const { closeTopVisibleWindow } = useDesktop();
   useSyncVisualViewportInsets();
+  const shellRef = useRef(null);
+  const [desktopBgMode, setDesktopBgMode] = useState("default"); // "default" | "alt"
+  const desktopBgModeRef = useRef(desktopBgMode);
+  const [desktopBgTarget, setDesktopBgTarget] = useState(null); // null | "default" | "alt"
+  const [revealActive, setRevealActive] = useState(false);
+  const revealTimerRef = useRef(0);
+
+  const ALT_BG_IMAGE = "url(/web/buttons/graupappe.webp)";
+
+  const syncBgRevealOrigin = useCallback(() => {
+    if (typeof window === "undefined") return;
+    const shell = shellRef.current;
+    if (!shell) return;
+    const logo = document.querySelector("#logo-container");
+    if (!(logo instanceof HTMLElement)) return;
+
+    const sr = shell.getBoundingClientRect();
+    const lr = logo.getBoundingClientRect();
+    const cx = lr.left + lr.width / 2 - sr.left;
+    const cy = lr.top + lr.height / 2 - sr.top;
+    const w = sr.width;
+    const h = sr.height;
+    const r = Math.ceil(
+      Math.max(
+        Math.hypot(cx - 0, cy - 0),
+        Math.hypot(cx - w, cy - 0),
+        Math.hypot(cx - 0, cy - h),
+        Math.hypot(cx - w, cy - h)
+      )
+    );
+
+    shell.style.setProperty("--mm-reveal-x", `${cx}px`);
+    shell.style.setProperty("--mm-reveal-y", `${cy}px`);
+    shell.style.setProperty("--mm-reveal-r", `${r}px`);
+  }, []);
+
+  useEffect(() => {
+    desktopBgModeRef.current = desktopBgMode;
+  }, [desktopBgMode]);
+
+  const onLogoClick = useCallback(() => {
+    if (typeof window === "undefined") return;
+    const shell = shellRef.current;
+    if (!shell) return;
+
+    window.clearTimeout(revealTimerRef.current);
+    syncBgRevealOrigin();
+
+    const curMode = desktopBgModeRef.current;
+    const nextMode = curMode === "alt" ? "default" : "alt";
+    setDesktopBgTarget(nextMode);
+    shell.style.setProperty(
+      "--mm-reveal-overlay-image",
+      nextMode === "alt" ? ALT_BG_IMAGE : "none"
+    );
+    shell.style.setProperty(
+      "--mm-reveal-overlay-color",
+      nextMode === "alt" ? "transparent" : "var(--mm-desktop-bg)"
+    );
+
+    // Always explode: start immediately on click (no rAF delay).
+    setRevealActive(true);
+
+    revealTimerRef.current = window.setTimeout(() => {
+      setDesktopBgMode(nextMode);
+      setRevealActive(false);
+      setDesktopBgTarget(null);
+    }, 720);
+  }, [syncBgRevealOrigin]);
 
   useLayoutEffect(() => {
     if (typeof window === "undefined") return;
@@ -95,15 +164,47 @@ function DesktopShellInner() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [closeTopVisibleWindow]);
 
+  useEffect(() => {
+    const shell = shellRef.current;
+    if (!shell) return undefined;
+
+    // Keep origin correct when layout changes; also keep base image in sync.
+    shell.style.setProperty(
+      "--mm-desktop-base-image",
+      desktopBgMode === "alt" ? ALT_BG_IMAGE : "none"
+    );
+
+    const onResize = () => syncBgRevealOrigin();
+    window.addEventListener("resize", onResize);
+    window.visualViewport?.addEventListener("resize", onResize);
+    window.visualViewport?.addEventListener("scroll", onResize);
+    return () => {
+      window.removeEventListener("resize", onResize);
+      window.visualViewport?.removeEventListener("resize", onResize);
+      window.visualViewport?.removeEventListener("scroll", onResize);
+    };
+  }, [desktopBgMode, syncBgRevealOrigin]);
+
   return (
     <div
+      ref={shellRef}
+      data-mm-desktop-shell
+      data-mm-bg-mode={desktopBgMode}
+      data-mm-bg-target={desktopBgTarget ?? undefined}
+      data-mm-reveal={revealActive ? "1" : "0"}
       className="flex min-h-0 w-full flex-1 flex-col overflow-x-hidden max-md:h-full max-md:max-h-full md:min-h-[max(100dvh,800px)]"
       style={{
+        "--mm-graupappe-image": ALT_BG_IMAGE,
         backgroundColor: "var(--mm-desktop-bg)",
+        backgroundImage:
+          desktopBgMode === "alt" ? ALT_BG_IMAGE : "none",
+        backgroundRepeat: "no-repeat",
+        backgroundPosition: "center",
+        backgroundSize: "cover",
         color: "var(--mm-shell-text)",
       }}
     >
-      <SiteHeader />
+      <SiteHeader onLogoClick={onLogoClick} />
       {/* overflow-visible: Fenster dürfen mit negativem top in den Header bis zur Viewport-Kante */}
       <div
         data-mm-desktop-layer

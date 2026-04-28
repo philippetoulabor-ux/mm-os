@@ -1514,7 +1514,7 @@ const FINDER_HOVER_DESKTOP_25_MD =
  * inaktiv: transparenter Rand (Strich-Dicke bleibt für Layout). Text & Previews bleiben voll.
  */
 const FINDER_LIST_ROW_FRAME = [
-  "rounded border border-solid border-transparent mm-os-paint-stroke-w-half bg-white shadow-none",
+  "mm-os-finder-row-frame rounded border border-solid border-transparent mm-os-paint-stroke-w-half bg-white shadow-none",
   "transition-[border-color,background-color] duration-200 ease-out",
   FINDER_HOVER_DESKTOP_25,
   FINDER_ARIA_SELECTED_DESKTOP_25,
@@ -1523,7 +1523,7 @@ const FINDER_LIST_ROW_FRAME = [
 
 /** Wie {@link FINDER_LIST_ROW_FRAME}, ohne Hover unter `md` (Mobile-Finder). */
 const FINDER_LIST_ROW_FRAME_MD = [
-  "rounded border border-solid border-transparent mm-os-paint-stroke-w-half bg-white shadow-none",
+  "mm-os-finder-row-frame rounded border border-solid border-transparent mm-os-paint-stroke-w-half bg-white shadow-none",
   "transition-[border-color,background-color] duration-200 ease-out",
   FINDER_HOVER_DESKTOP_25_MD,
   FINDER_ARIA_SELECTED_DESKTOP_25,
@@ -1608,7 +1608,7 @@ function FinderProjectsColumn({
   openOrFocus,
 }) {
   return (
-    <div className="flex max-h-[min(40vh,280px)] min-h-0 w-full shrink-0 flex-col bg-white md:max-h-none md:h-full md:w-[13.5rem] md:min-w-[12rem] md:max-w-[15rem]">
+    <div className="mm-os-finder-inner-surface flex max-h-[min(40vh,280px)] min-h-0 w-full shrink-0 flex-col bg-white md:max-h-none md:h-full md:w-[13.5rem] md:min-w-[12rem] md:max-w-[15rem]">
       <ul
         role="listbox"
         aria-label="Projekte"
@@ -2440,7 +2440,7 @@ function FinderView({
       <div
         ref={finderRootRef}
         data-mm-finder-root
-        className={`relative flex min-h-0 flex-col bg-white text-sm text-zinc-800 ${
+        className={`relative flex min-h-0 flex-col bg-transparent text-sm text-zinc-800 ${
           unifiedParentScroll
             ? "h-full min-h-0 w-full flex-1 overflow-hidden"
             : "h-full overflow-hidden"
@@ -2448,7 +2448,7 @@ function FinderView({
         onKeyDownCapture={runFinderListKeys}
       >
       {showClassicSearchBody && !unifiedParentScroll ? (
-        <div className="shrink-0 border-b-2 border-black bg-white px-3 py-2">
+        <div className="shrink-0 border-b-2 border-black bg-transparent px-3 py-2">
           {classicSearchStrip}
         </div>
       ) : null}
@@ -2462,7 +2462,7 @@ function FinderView({
         </div>
         {showClassicSearchBody && unifiedParentScroll ? (
           <div
-            className="relative z-20 flex shrink-0 items-center gap-2 bg-white mm-os-paint-stroke-t px-3 py-2 pb-[max(0.5rem,calc(env(safe-area-inset-bottom,0px)+var(--mm-vv-bottom-inset,0px)))]"
+            className="relative z-20 flex shrink-0 items-center gap-2 bg-transparent mm-os-paint-stroke-t px-3 py-2 pb-[max(0.5rem,calc(env(safe-area-inset-bottom,0px)+var(--mm-vv-bottom-inset,0px)))]"
           >
             <div className="min-w-0 flex-1">{classicSearchStrip}</div>
             {finderMobileExpandToggle}
@@ -2498,7 +2498,7 @@ function FinderView({
       ) : (
         <>
           {showProjectSearchBody && !unifiedParentScroll ? (
-            <div className="flex shrink-0 flex-col gap-2 border-b-2 border-black bg-white px-2 py-2">
+            <div className="flex shrink-0 flex-col gap-2 border-b-2 border-black bg-transparent px-2 py-2">
               {projectSearchStrip}
             </div>
           ) : null}

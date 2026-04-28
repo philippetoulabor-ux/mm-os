@@ -7,9 +7,10 @@
   :root {
     /* `syncDesktopLayerMetrics`: 14" typ. minDim ≤ REF → s=1; größere Fläche → s>1 (Linien + md+ Rem). */
     --mm-ui-scale: 1;
-    --mm-paint-stroke: calc(2.5px * var(--mm-ui-scale, 1));
-    /* Finder-Listen: dünnerer Rahmen als OSWindow (1,75px, skaliert) */
-    --mm-paint-stroke-half: calc(1.75px * var(--mm-ui-scale, 1));
+    /* Globale Rahmenstärke (OSWindow/Widgets etc.) */
+    --mm-paint-stroke: calc(2px * var(--mm-ui-scale, 1));
+    /* Finder-Listen: dünnerer Rahmen als OSWindow */
+    --mm-paint-stroke-half: calc(1.4px * var(--mm-ui-scale, 1));
     --mm-desktop-bg: #d9d9d9;
     --mm-shell-text: #18181b;
     /* Mindesthöhe Kachel: Desktop-Icon (2,5rem) + knapper Abstand + 2 Zeilen Label */
@@ -62,7 +63,7 @@
   .mm-os-paint-stroke {
     box-sizing: border-box;
     border-style: solid;
-    border-color: #000;
+    border-color: rgba(0, 0, 0, 0.08);
     border-width: var(--mm-paint-stroke, 2.5px);
   }
   .mm-os-paint-stroke-b {
@@ -72,7 +73,7 @@
   .mm-os-paint-stroke-t {
     box-sizing: border-box;
     border-top-style: solid;
-    border-top-color: #000;
+    border-top-color: rgba(0, 0, 0, 0.08);
     border-top-width: var(--mm-paint-stroke, 2.5px);
   }
   .mm-os-paint-stroke-w {
@@ -91,6 +92,197 @@ html {
 body {
   background-color: var(--mm-desktop-bg);
   color: var(--mm-shell-text);
+}
+
+/* Desktop: Alt-Background Reveal (Logo → radial explosion) */
+[data-mm-desktop-shell] {
+  position: relative;
+}
+
+[data-mm-desktop-shell]::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-color: var(--mm-reveal-overlay-color, transparent);
+  background-image: var(--mm-reveal-overlay-image, none);
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: cover;
+  clip-path: circle(0px at var(--mm-reveal-x, 50%) var(--mm-reveal-y, 50%));
+  transition: clip-path 700ms cubic-bezier(0.2, 0.9, 0.2, 1);
+  will-change: clip-path;
+}
+
+[data-mm-desktop-shell][data-mm-reveal="1"]::before {
+  clip-path: circle(var(--mm-reveal-r, 120vmax) at var(--mm-reveal-x, 50%) var(--mm-reveal-y, 50%));
+}
+
+/* Inhalt über dem Overlay halten */
+[data-mm-desktop-shell] > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* Graupappe-Mode: alle weißen Flächen -> kariertes Papier */
+[data-mm-desktop-shell][data-mm-bg-mode="alt"] .bg-white {
+  background-color: transparent !important;
+  background-image: url(/web/buttons/kariertespapier.webp) !important;
+  background-repeat: no-repeat !important;
+  background-position: center !important;
+  background-size: cover !important;
+}
+
+/* Graupappe-Mode: Rahmen/„Stroke“ voll deckend (wie die Striche im Scan) */
+[data-mm-desktop-shell][data-mm-bg-mode="alt"] {
+  --mm-alt-stroke-color: rgb(110, 110, 110);
+}
+
+[data-mm-desktop-shell][data-mm-bg-target="alt"] {
+  --mm-alt-stroke-color: rgb(110, 110, 110);
+}
+
+[data-mm-desktop-shell][data-mm-bg-mode="alt"] .mm-os-paint-stroke {
+  border-color: var(--mm-alt-stroke-color) !important;
+}
+
+[data-mm-desktop-shell][data-mm-bg-mode="alt"] .mm-os-paint-stroke-t {
+  border-top-color: var(--mm-alt-stroke-color) !important;
+}
+
+[data-mm-desktop-shell][data-mm-bg-mode="alt"] .mm-os-paint-stroke-b {
+  border-bottom-color: var(--mm-alt-stroke-color) !important;
+}
+
+/* Reveal-Phase (Target gesetzt): Rahmen sofort auf Ziel-Farbe (ohne Animation) */
+[data-mm-desktop-shell][data-mm-bg-target="alt"] .mm-os-paint-stroke {
+  border-color: var(--mm-alt-stroke-color) !important;
+}
+
+[data-mm-desktop-shell][data-mm-bg-target="alt"] .mm-os-paint-stroke-t {
+  border-top-color: var(--mm-alt-stroke-color) !important;
+}
+
+[data-mm-desktop-shell][data-mm-bg-target="alt"] .mm-os-paint-stroke-b {
+  border-bottom-color: var(--mm-alt-stroke-color) !important;
+}
+
+[data-mm-desktop-shell][data-mm-bg-target="default"] .mm-os-paint-stroke {
+  border-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+[data-mm-desktop-shell][data-mm-bg-target="default"] .mm-os-paint-stroke-t {
+  border-top-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+[data-mm-desktop-shell][data-mm-bg-target="default"] .mm-os-paint-stroke-b {
+  border-bottom-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+/* Graupappe-Mode: Finder-intern keine „Karten“-Container (Rows/Spalten) — Inhalte bleiben gleich. */
+[data-mm-desktop-shell][data-mm-bg-mode="alt"] .mm-os-finder-row-frame,
+[data-mm-desktop-shell][data-mm-bg-mode="alt"] .mm-os-finder-inner-surface {
+  background-color: transparent !important;
+  background-image: none !important;
+}
+
+/* Graupappe-Mode: beim Umschalten (Reveal/Target="alt") Finder-Karten nicht kurz „papiern“. */
+[data-mm-desktop-shell][data-mm-bg-target="alt"] .mm-os-finder-row-frame,
+[data-mm-desktop-shell][data-mm-bg-target="alt"] .mm-os-finder-inner-surface {
+  background-color: transparent !important;
+  background-image: none !important;
+}
+
+[data-mm-desktop-shell][data-mm-bg-target="alt"] .mm-os-finder-row-frame::before,
+[data-mm-desktop-shell][data-mm-bg-target="alt"] .mm-os-finder-inner-surface::before {
+  content: none !important;
+}
+
+/* Graupappe-Mode: alle Flächen mit `bg-[var(--mm-desktop-bg)]` -> Graupappe */
+[data-mm-desktop-shell][data-mm-bg-mode="alt"] .bg-\[var\(--mm-desktop-bg\)\] {
+  background-color: transparent !important;
+  background-image: var(--mm-graupappe-image, none) !important;
+  background-repeat: no-repeat !important;
+  background-position: center !important;
+  background-size: cover !important;
+}
+
+/* Während Reveal: Ziel-Look fährt wirklich mit (gleiche Clip-Animation wie Desktop) */
+[data-mm-desktop-shell][data-mm-bg-target] .bg-white,
+[data-mm-desktop-shell][data-mm-bg-target] .bg-\[var\(--mm-desktop-bg\)\] {
+  position: relative;
+}
+
+[data-mm-desktop-shell][data-mm-bg-target] .bg-white::before,
+[data-mm-desktop-shell][data-mm-bg-target] .bg-\[var\(--mm-desktop-bg\)\]::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  border-radius: inherit;
+  clip-path: circle(0px at var(--mm-reveal-x, 50%) var(--mm-reveal-y, 50%));
+  transition: clip-path 700ms cubic-bezier(0.2, 0.9, 0.2, 1);
+  will-change: clip-path;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+/* Wenn Reveal läuft: Clip fährt nach außen */
+[data-mm-desktop-shell][data-mm-bg-target][data-mm-reveal="1"] .bg-white::before,
+[data-mm-desktop-shell][data-mm-bg-target][data-mm-reveal="1"]
+  .bg-\[var\(--mm-desktop-bg\)\]::before {
+  clip-path: circle(var(--mm-reveal-r, 120vmax) at var(--mm-reveal-x, 50%) var(--mm-reveal-y, 50%));
+}
+
+/* Target = alt: weiß -> kariertes Papier */
+[data-mm-desktop-shell][data-mm-bg-target="alt"] .bg-white::before {
+  background-image: url(/web/buttons/kariertespapier.webp);
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: cover;
+}
+
+/* Target = alt: grau -> graupappe */
+[data-mm-desktop-shell][data-mm-bg-target="alt"] .bg-\[var\(--mm-desktop-bg\)\]::before {
+  background-image: var(--mm-graupappe-image, none);
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: cover;
+}
+
+/* Target = default: papier -> weiß */
+[data-mm-desktop-shell][data-mm-bg-target="default"] .bg-white::before {
+  background-color: #fff;
+}
+
+/* Target = default: graupappe -> flaches desktop-bg */
+[data-mm-desktop-shell][data-mm-bg-target="default"]
+  .bg-\[var\(--mm-desktop-bg\)\]::before {
+  background-color: var(--mm-desktop-bg);
+}
+
+/* Inhalt über dem Reveal-Overlay halten */
+[data-mm-desktop-shell][data-mm-bg-target] .bg-white > *,
+[data-mm-desktop-shell][data-mm-bg-target] .bg-\[var\(--mm-desktop-bg\)\] > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* Reveal-Phase: stabilisiert Widget-Media gegen Subpixel-Zucken */
+[data-mm-desktop-shell][data-mm-bg-target][data-mm-reveal="1"] .mm-reveal-stable-media {
+  transform: translateZ(0);
+  will-change: transform;
+  backface-visibility: hidden;
+}
+
+/* Slideshow: Transition-Layer als eigene Compositing-Schicht (gegen Y-Zucken) */
+[data-mm-desktop-shell][data-mm-bg-target][data-mm-reveal="1"] .mm-reveal-stable-slide {
+  transform: translateZ(0);
+  will-change: transform;
+  backface-visibility: hidden;
+  contain: paint;
 }
 
 /* Höhenkette Desktop (unverändert); Mobile überschreibt unten */

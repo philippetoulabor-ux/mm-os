@@ -35,7 +35,7 @@ function SlideshowSlideMedia({
       <video
         key={href}
         src={href}
-        className="absolute inset-0 h-full w-full object-contain"
+        className="absolute inset-0 h-full w-full object-contain mm-reveal-stable-media"
         muted
         playsInline
         autoPlay={videoActive}
@@ -52,7 +52,7 @@ function SlideshowSlideMedia({
       key={href}
       src={href}
       alt=""
-      className="absolute inset-0 h-full w-full object-contain"
+      className="absolute inset-0 h-full w-full object-contain mm-reveal-stable-media"
       draggable={false}
     />
   );
@@ -337,22 +337,22 @@ export function SlideshowWidget({
         prevIndex != null ? (
           <>
             <div
-              className="absolute inset-0 z-10 will-change-transform"
+              className="absolute inset-0 z-10 will-change-transform mm-reveal-stable-slide"
               style={{
                 transform: slideReady
-                  ? `translateX(${-direction * 100}%)`
-                  : "translateX(0)",
+                  ? `translate3d(${-direction * 100}%,0,0)`
+                  : "translate3d(0,0,0)",
                 transition: transitionCss,
               }}
             >
               {slideMedia(prevIndex, false)}
             </div>
             <div
-              className="absolute inset-0 z-[11] will-change-transform"
+              className="absolute inset-0 z-[11] will-change-transform mm-reveal-stable-slide"
               style={{
                 transform: slideReady
-                  ? "translateX(0)"
-                  : `translateX(${direction * 100}%)`,
+                  ? "translate3d(0,0,0)"
+                  : `translate3d(${direction * 100}%,0,0)`,
                 transition: transitionCss,
               }}
             >
@@ -360,7 +360,9 @@ export function SlideshowWidget({
             </div>
           </>
         ) : (
-          slideMedia(safeIndex, true)
+          <div className="absolute inset-0 mm-reveal-stable-slide">
+            {slideMedia(safeIndex, true)}
+          </div>
         )
       ) : (
         <div className="absolute inset-0 flex items-center justify-center p-4 text-center text-sm text-zinc-600">
@@ -372,7 +374,7 @@ export function SlideshowWidget({
 
   return (
     <div
-      className={`relative flex flex-col overflow-hidden rounded-lg mm-os-paint-stroke bg-white shadow-none ${
+      className={`relative flex flex-col overflow-hidden rounded-lg mm-os-paint-stroke bg-white shadow-[0_12px_36px_rgba(0,0,0,0.14)] ${
         stackDeckLayer ? "pointer-events-none" : ""
       } ${
         mobileHomeStripTile

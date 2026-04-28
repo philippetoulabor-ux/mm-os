@@ -168,10 +168,6 @@ export function OSWindow({ win }) {
   /** Mobile: Titelleiste + gescrollter Inhalt — unabhängig vom Media-„Mini“-Modus (Desktop). */
   const useMobileUnifiedChrome = isMobile && win.appId !== "notes";
 
-  /** Mobile Finder: innere Liste erst bei Vollbild (`finderMobileExpanded`) scrollen — kein boolesches JSX-Shorthand. */
-  const finderMobileAllowsScroll =
-    win.appId !== "finder" || !!win.finderMobileExpanded;
-
   const appMeta = APPS[win.appId];
   const mobileAssetFolderChromeDir =
     useMobileUnifiedChrome && appMeta?.assetDir ? appMeta.assetDir : null;
@@ -541,7 +537,7 @@ export function OSWindow({ win }) {
   return (
     <div
       ref={win.appId === "finder" && isMobile ? finderShellRef : undefined}
-      className={`absolute flex flex-col overflow-hidden mm-os-paint-stroke bg-white shadow-none ${
+      className={`absolute flex flex-col overflow-hidden mm-os-paint-stroke bg-white shadow-[0_12px_36px_rgba(0,0,0,0.14)] ${
         win.maximized && !(isMobile && win.mobileImmersive)
           ? "rounded-none"
           : "rounded-lg"
@@ -605,9 +601,9 @@ export function OSWindow({ win }) {
       ) : null}
       {!isMobile ? (
         win.appId === "finder" ? (
-          <div className="relative z-20 shrink-0 overflow-hidden transition-[height,min-height] duration-[var(--mm-library-motion-duration)] ease-[var(--mm-library-motion-easing)] h-10 has-[#finder-search]:h-[2.875rem] has-[#finder-search]:min-h-[2.875rem]">
+          <div className="relative z-20 shrink-0 overflow-hidden bg-transparent transition-[height,min-height] duration-[var(--mm-library-motion-duration)] ease-[var(--mm-library-motion-easing)] h-10 has-[#finder-search]:h-[2.875rem] has-[#finder-search]:min-h-[2.875rem]">
             <header
-              className="box-border flex h-full min-h-0 w-full cursor-default items-center overflow-hidden border-0 border-solid border-black mm-os-paint-stroke-b bg-[var(--mm-desktop-bg)] pl-3 pr-2 has-[#finder-search]:[&_img]:scale-[1.15] has-[#finder-search]:[&_img]:origin-center"
+              className="box-border flex h-full min-h-0 w-full cursor-default items-center overflow-hidden border-0 border-solid bg-transparent px-3 has-[#finder-search]:[&_img]:scale-[1.15] has-[#finder-search]:[&_img]:origin-center"
               onMouseDown={onFinderHeaderMouseDown}
             >
               <div className="flex h-full w-10 shrink-0 items-center justify-center pl-2">
@@ -693,7 +689,7 @@ export function OSWindow({ win }) {
           </div>
         ) : isWidgetChromeAsset ? null : (
           <header
-            className="flex h-10 shrink-0 cursor-default items-center gap-2 border-0 border-solid border-black mm-os-paint-stroke-b bg-[#050508] pl-0 pr-3 font-sans"
+            className="flex h-10 shrink-0 cursor-default items-center gap-2 border-0 border-solid border-white/10 mm-os-paint-stroke-b bg-[#050508] pl-0 pr-3 font-sans"
             onMouseDown={onBarMouseDown}
           >
             <div
@@ -788,7 +784,9 @@ export function OSWindow({ win }) {
               >
                 <AppContent
                   unifiedParentScroll
-                  finderMobileAllowsScroll={finderMobileAllowsScroll}
+                  finderMobileAllowsScroll={
+                    win.appId !== "finder" || !!win.finderMobileExpanded
+                  }
                   appId={win.appId}
                   assetFile={win.assetFile}
                   windowId={win.id}

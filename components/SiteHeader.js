@@ -8,10 +8,10 @@ const LogoViewer = dynamic(
   { ssr: false, loading: () => <div className="logo-placeholder" aria-hidden /> }
 );
 
-export function SiteHeader() {
+export function SiteHeader({ onLogoClick } = {}) {
   return (
     <header className="mm-os-site-header">
-      <LogoViewer config={logoConfig} />
+      <LogoViewer config={logoConfig} skipRouterClick onLogoClick={onLogoClick} />
     </header>
   );
 }

@@ -112,6 +112,8 @@ export default function LogoViewer({
   config = {},
   /** Kein `router.push` am Logo — z. B. wenn die Klickaktion von einem äußeren `<button>` kommt */
   skipRouterClick = false,
+  /** Optionaler Click-Handler (z. B. Desktop-Hintergrund toggeln) */
+  onLogoClick,
   /** `false` = kein `id` (zweites Logo im UI ohne Duplikat von `#logo-container`) */
   domId,
   className,
@@ -162,6 +164,8 @@ export default function LogoViewer({
     let disposed = false;
     let raf = 0;
     let ro = null;
+    let hovering = false;
+    let pressed = false;
 
     /** Klick-Hitbox ohne Transform — verhindert, dass Hover-Scale die Trefferfläche vergrößert und Ordner/Fenster darunter blockiert */
     const hitLayer = document.createElement("div");
@@ -189,11 +193,47 @@ export default function LogoViewer({
 
     hitLayer.appendChild(visualLayer);
 
-    const onEnter = () => (visualLayer.style.transform = "scale(1.06)");
-    const onLeave = () => (visualLayer.style.transform = "scale(1)");
-    const onClick = skipRouterClick ? null : () => router.push(opts.href);
+    const syncVisualScale = () => {
+      visualLayer.style.transform = pressed
+        ? "scale(0.97)"
+        : hovering
+          ? "scale(1.06)"
+          : "scale(1)";
+    };
+
+    const onEnter = () => {
+      hovering = true;
+      syncVisualScale();
+    };
+    const onLeave = () => {
+      hovering = false;
+      pressed = false;
+      syncVisualScale();
+    };
+    const onPointerDown = () => {
+      pressed = true;
+      syncVisualScale();
+    };
+    const onPointerUp = () => {
+      pressed = false;
+      syncVisualScale();
+    };
+    const onClick =
+      skipRouterClick && !onLogoClick
+        ? null
+        : () => {
+            try {
+              onLogoClick?.();
+            } catch {
+              /* ignore */
+            }
+            if (!skipRouterClick) router.push(opts.href);
+          };
     hitLayer.addEventListener("mouseenter", onEnter);
     hitLayer.addEventListener("mouseleave", onLeave);
+    hitLayer.addEventListener("pointerdown", onPointerDown);
+    hitLayer.addEventListener("pointerup", onPointerUp);
+    hitLayer.addEventListener("pointercancel", onPointerUp);
     if (onClick) hitLayer.addEventListener("click", onClick);
     container.appendChild(hitLayer);
     hitLayer.style.pointerEvents = widgetCollapseRef.current ? "none" : "";
@@ -307,8 +347,11 @@ export default function LogoViewer({
         if (disposed) return;
         if (opts.followMouse) {
           if (!mobileLayoutRef.current) {
-            curRotY += (mouseX * 0.6 - curRotY) * 0.06;
-            curRotX += (-mouseY * 0.3 - curRotX) * 0.06;
+            const targetY = hovering ? 0 : mouseX * 0.6;
+            const targetX = hovering ? 0 : -mouseY * 0.3;
+            const k = hovering ? 0.12 : 0.06;
+            curRotY += (targetY - curRotY) * k;
+            curRotX += (targetX - curRotX) * k;
           } else {
             curRotY += (0 - curRotY) * 0.12;
             curRotX += (0 - curRotX) * 0.12;
@@ -331,6 +374,9 @@ export default function LogoViewer({
       if (onMove) window.removeEventListener("mousemove", onMove);
       hitLayer.removeEventListener("mouseenter", onEnter);
       hitLayer.removeEventListener("mouseleave", onLeave);
+      hitLayer.removeEventListener("pointerdown", onPointerDown);
+      hitLayer.removeEventListener("pointerup", onPointerUp);
+      hitLayer.removeEventListener("pointercancel", onPointerUp);
       if (onClick) hitLayer.removeEventListener("click", onClick);
 
       if (mesh?.material) mesh.material.dispose();
@@ -345,7 +391,7 @@ export default function LogoViewer({
 
       if (hitLayer.parentNode) hitLayer.parentNode.removeChild(hitLayer);
     };
-  }, [opts, router, skipRouterClick]);
+  }, [opts, router, skipRouterClick, onLogoClick]);
 
   const rootId = domId === false ? undefined : domId ?? "logo-container";
   const stackCollapseCls = desktopWidgetStacksCollapsed
